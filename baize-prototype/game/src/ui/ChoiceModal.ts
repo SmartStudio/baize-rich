@@ -32,6 +32,8 @@ export interface ModalSpec {
   cardLabel?: string;
   /** Frames stacked into a 2× preview at the left (e.g. tile + decor for 购买灵田). */
   preview?: { tile: string; obj?: string };
+  /** false hides the "1. " key prefix when the label already is the number (灵兽引路). */
+  numbered?: boolean;
 }
 
 const PRIMARY = { fill: COLORS.gold, text: HEX.ink, hint: '#5A4A2A' };
@@ -75,12 +77,17 @@ export class ChoiceModal {
     const cols = side ? (n > 12 ? 2 : 1) : n > 16 ? 3 : n > 7 ? 2 : 1;
     const previewW = spec.preview ? 148 : 0;
     const pw = side ? RIGHT.w + 16 : (cols === 1 ? 460 : cols === 2 ? 620 : 760) + previewW;
-    const bh = hasHints ? 46 : side && n > 12 ? 26 : 32;
     const gap = 6;
     const rows = Math.ceil(n / cols);
-    const descH = spec.desc ? (spec.desc.length > 60 || spec.desc.includes('\n') ? 58 : 34) : 0;
+    const descText = spec.desc ? txt(s, 0, 0, spec.desc, { size: 13, color: HEX.ink, wrap: pw - 28 - previewW, lineSpacing: 3 }) : null;
+    const descH = descText ? Math.ceil(descText.height) + 10 : 0;
+    const footH = side ? 0 : 18;
+    const maxPh = side ? 712 - 68 : H - 40;
+    const fitBh = Math.floor((maxPh - 60 - footH - descH) / rows) - gap;
+    const bh = Math.max(hasHints ? 40 : 20, Math.min(hasHints ? 46 : side && n > 12 ? 26 : 32, fitBh));
+    const compact = bh < 30;
     const bodyH = Math.max(descH + rows * (bh + gap), spec.preview ? 136 : 0);
-    const ph = Math.min(H - 40, 44 + bodyH + 16 + (side ? 0 : 18));
+    const ph = Math.min(maxPh, 44 + bodyH + 16 + footH);
     const px = side ? RIGHT.x - 8 : Math.round((W - pw) / 2);
     const py = side ? Math.max(68, 712 - ph) : Math.round((H - ph) / 2);
     const layer = this.frame(px, py, pw, ph, !side);
@@ -94,7 +101,7 @@ export class ChoiceModal {
         layer.add(s.add.image(px + 80, py + 130, ok, of).setOrigin(0.5, 1).setScale(2));
       }
     }
-    if (spec.desc) layer.add(txt(s, cx, py + 30, spec.desc, { size: 13, color: HEX.ink, wrap: pw - 28 - previewW, lineSpacing: 3 }));
+    if (descText) layer.add(descText.setPosition(cx, py + 30));
     const bw = (pw - 28 - previewW - (cols - 1) * gap) / cols;
     const all: ModalOption[] = [...spec.options];
     if (spec.closable) all.push({ id: '__close', label: '返回' });
@@ -103,10 +110,10 @@ export class ChoiceModal {
       const r = Math.floor(i / cols);
       const bx = cx + c * (bw + gap);
       const by = py + 32 + descH + r * (bh + gap);
-      const num = i < 9 && o.id !== '__close' ? `${i + 1}. ` : '';
+      const num = i < 9 && o.id !== '__close' && spec.numbered !== false ? `${i + 1}. ` : '';
       const style = o.id === spec.defaultId ? PRIMARY : SECONDARY;
       const btn = new Button(s, bx, by, {
-        w: bw, h: bh, label: (o.icon ? '    ' : '') + num + o.label, hint: o.hint, size: side && n > 12 ? 11 : 13,
+        w: bw, h: bh, label: (o.icon ? '    ' : '') + num + o.label, hint: o.hint, size: compact ? 11 : 13,
         fill: style.fill, textColor: style.text, hintColor: style.hint,
       });
       btn.onClick(() => this.close(o.id === '__close' ? null : o.id));

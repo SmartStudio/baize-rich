@@ -2,9 +2,11 @@ import Phaser from 'phaser';
 import { DIFFICULTY_LABEL, PERSONALITY_LABEL, type Difficulty, type Personality } from '../ai/ai';
 import { defaultData } from '../core/data';
 import { HERO_IDS } from '../core/heroes';
+import { replayRecord, type GameRecord } from '../core/record';
 import type { HeroId } from '../core/types';
 import { addImg, setFrame } from '../ui/assets';
-import { randomSeed, urlParams, type SeatConfig } from '../ui/session';
+import { loadAutosave } from '../ui/saves';
+import { newSession, randomSeed, urlParams, type SeatConfig } from '../ui/session';
 import { COLORS, HEX, PLAYER_COLORS, PLAYER_HEX, panel, txt } from '../ui/theme';
 import { Button } from '../ui/widgets';
 
@@ -30,20 +32,46 @@ export class SetupScene extends Phaser.Scene {
       human: i === 0, hero, difficulty: 'normal', personality: PERSONAS[i % 3],
     }));
     txt(this, 640, 70, '白泽秘境大富翁', { size: 40, bold: true, color: HEX.gold, origin: [0.5, 0.5] });
-    txt(this, 640, 116, '凡人散修踏入白泽秘境 · 率先修至 10 点修为渡劫飞升', { size: 15, origin: [0.5, 0.5], color: HEX.dim });
+    const { winCultivation, rounds } = defaultData.config;
+    txt(this, 640, 116, `凡人散修踏入白泽秘境 · 率先修至 ${winCultivation} 点修为即刻飞升；否则第 ${rounds} 轮结束时修为最高者胜（同分比总资产）`, { size: 15, origin: [0.5, 0.5], color: HEX.dim });
     this.seats.forEach((_, i) => this.buildRow(i));
     const seedText = txt(this, 640, 600, '', { size: 13, color: HEX.dim, origin: [0.5, 0.5] });
     const refreshSeed = () => seedText.setText(`随机种子 ${this.seed}（点击更换）`);
     refreshSeed();
     seedText.setInteractive({ useHandCursor: true }).on('pointerdown', () => { this.seed = randomSeed(); refreshSeed(); });
-    new Button(this, 540, 625, { w: 200, h: 56, label: '开始游戏', size: 22, fill: 0x8a5a1e }).onClick(() => this.start());
-    txt(this, 640, 700, '快捷键：空格 掷骰/确认 · B 升级 · C 出符 · T 交易 · Enter 结束回合 · Esc 取消 · F 2 倍速', { size: 12, color: HEX.dim, origin: [0.5, 0.5] });
-    this.input.keyboard?.on('keydown-SPACE', () => this.start());
-    this.input.keyboard?.on('keydown-ENTER', () => this.start());
+    const saved = this.resumable();
+    new Button(this, saved ? 410 : 540, 625, { w: 200, h: 56, label: '开始游戏', size: 22, fill: 0x8a5a1e }).onClick(() => this.start());
+    if (saved) {
+      new Button(this, 650, 625, { w: 220, h: 56, label: '继续上局', size: 20, hint: saved.summary }).onClick(() => this.resume(saved.record));
+    }
+    txt(this, 640, 700, '快捷键：空格 掷骰/确认 · B 升级 · C 出符 · Enter 结束回合 · Esc 取消 · F 切换倍速 · S 下载对局记录', { size: 12, color: HEX.dim, origin: [0.5, 0.5] });
+    // With an unfinished save, the shortcut resumes it; starting over takes a click so a save is never lost by accident.
+    const quick = saved ? () => this.resume(saved.record) : () => this.start();
+    this.input.keyboard?.on('keydown-SPACE', quick);
+    this.input.keyboard?.on('keydown-ENTER', quick);
   }
 
   private start(): void {
-    this.scene.start('Game', { seed: this.seed, seats: this.seats, speed: 1 });
+    this.scene.start('Game', newSession(this.seed, this.seats, 1));
+  }
+
+  /** An unfinished autosave that still replays, with a one-line summary for the button. */
+  private resumable(): { record: GameRecord; summary: string } | null {
+    const record = loadAutosave();
+    if (!record || record.finished) return null;
+    let st;
+    try {
+      st = replayRecord(record).state;
+    } catch (e) {
+      console.info('[baize] 自动存档无法继续', e);
+      return null;
+    }
+    const humans = record.seats.filter((s) => s.human).length;
+    return { record, summary: `第 ${st.round}/${defaultData.config.rounds} 轮 · ${st.players[st.current].name} · 玩家 ${humans} 人` };
+  }
+
+  private resume(r: GameRecord): void {
+    this.scene.start('Game', { setup: r.setup, seats: r.seats, speed: 1, history: r.history });
   }
 
   private buildRow(i: number): void {

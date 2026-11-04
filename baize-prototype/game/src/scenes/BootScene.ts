@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { HERO_IDS } from '../core/heroes';
 import { ATLAS_KEY, ensureFrames } from '../ui/assets';
 import { HEX, txt } from '../ui/theme';
-import { randomSeed, urlParams, type SessionConfig } from '../ui/session';
+import { newSession, randomSeed, urlParams } from '../ui/session';
 
 /** Boot / Preload: loads the optional atlas, fills missing frames with placeholders. */
 export class BootScene extends Phaser.Scene {
@@ -23,15 +23,15 @@ export class BootScene extends Phaser.Scene {
     if (missing.length) console.info(`[baize] ${missing.length} art frames missing from atlas → placeholders`);
     const q = urlParams();
     if (q.get('auto') === '1') {
-      const session: SessionConfig = {
-        seed: Number(q.get('seed') ?? randomSeed()),
-        speed: Number(q.get('speed') ?? 2),
-        auto: true,
-        seats: HERO_IDS.map((hero, i) => ({
+      const session = newSession(
+        Number(q.get('seed') ?? randomSeed()),
+        HERO_IDS.map((hero, i) => ({
           human: false, hero, difficulty: 'normal' as const,
           personality: (['steady', 'aggressive', 'miser', 'steady'] as const)[i],
         })),
-      };
+        Number(q.get('speed') ?? 2),
+        true,
+      );
       this.scene.start('Game', session);
     } else {
       this.scene.start('Setup');

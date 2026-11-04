@@ -336,14 +336,14 @@ export class AIController implements Controller {
     // 1) 五雷符: demon kill or bounty / heavy buildings
     const thunder = find((v) => v.t === 'cast' && v.card === 'thunder');
     if (thunder && attacks && spare >= 2) {
-      const tg = this.bestThunderTarget(this.data.config.rules.thunderDemonDamage);
+      const tg = this.bestThunderTarget('thunder');
       if (tg && tg.value * this.persona.attack >= 250) return thunder.id;
     }
     // 2) ults with value > 300
     const ult = find((v) => v.t === 'ult');
     if (ult && spare >= this.data.config.ult.pillCost) {
       if (p.hero === 'magic' && attacks) {
-        const tg = this.bestThunderTarget(this.data.config.rules.magicUltDemonDamage);
+        const tg = this.bestThunderTarget('fivethunder');
         if (tg && tg.value * this.persona.attack > 300) return ult.id;
       }
       if (p.hero === 'alch') {
@@ -391,8 +391,9 @@ export class AIController implements Controller {
   }
 
   /** Best target for a thunder-type attack and its estimated value (stones). */
-  private bestThunderTarget(demonDmg: number): { target: Target; value: number } | null {
+  private bestThunderTarget(kind: 'thunder' | 'fivethunder'): { target: Target; value: number } | null {
     const st = this.st;
+    const demonDmg = kind === 'thunder' ? this.data.config.rules.thunderDemonDamage : this.data.config.rules.magicUltDemonDamage;
     let best: { target: Target; value: number } | null = null;
     const mult = this.me.divines.includes('subdue') ? this.data.config.rules.subdueDamageMult : 1;
     if (st.demon) {
@@ -407,7 +408,7 @@ export class AIController implements Controller {
       const t = st.tiles[tg.node];
       const price = this.board.node(tg.node).price!;
       let v = (nominalRent(this.data, price, t.level) - nominalRent(this.data, price, t.level - 1)) * Math.min(4, roundsLeft) * 0.5;
-      if (leader === t.owner && leader !== this.seat) v += this.data.config.rules.bountyCultivation * VALUE.cult;
+      if (kind === 'thunder' && leader === t.owner && leader !== this.seat) v += this.data.config.rules.bountyCultivation * VALUE.cult;
       if (!best || v > best.value) best = { target: tg, value: v };
     }
     return best;
@@ -519,7 +520,7 @@ export class AIController implements Controller {
     const real = c.options.filter((o) => o.value.t !== 'cancel');
     if (real.length === 0) return 'cancel';
     if (purpose === 'thunder' || purpose === 'fivethunder') {
-      const tg = this.bestThunderTarget(purpose === 'thunder' ? this.data.config.rules.thunderDemonDamage : this.data.config.rules.magicUltDemonDamage);
+      const tg = this.bestThunderTarget(purpose);
       if (!tg) return 'cancel';
       return tg.target.t === 'demon' ? 'demon' : tg.target.t === 'land' ? `land:${tg.target.node}` : 'cancel';
     }

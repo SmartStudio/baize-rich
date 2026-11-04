@@ -217,3 +217,25 @@ describe('win detection', () => {
     expect(r.state).toEqual(g.state);
   });
 });
+
+describe('balance rules (2026-11 phase 1)', () => {
+  it('later seats start with config.seatBonusStones on top of startStones', () => {
+    const g = newGame();
+    const cfg = g.data.config;
+    expect(g.state.players.map((p) => p.stones)).toEqual(cfg.seatBonusStones.map((b) => cfg.startStones + b));
+    expect(cfg.seatBonusStones).toEqual([0, 75, 150, 225]);
+  });
+
+  it('only the 五雷符 card earns the bounty; the 五雷正法 ult does not', () => {
+    for (const [kind, gain] of [['thunder', 1], ['fivethunder', 0]] as const) {
+      const g = newGame();
+      const st = g.state;
+      st.players[2].cultBase = 5;
+      st.tiles.R1 = { owner: 2, level: 2 };
+      const before = st.players[1].cultBase;
+      g.runFlow((g as any).attackLand(1, 'R1', kind), script({}));
+      expect(st.tiles.R1.level).toBe(1);
+      expect(st.players[1].cultBase).toBe(before + gain);
+    }
+  });
+});

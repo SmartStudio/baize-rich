@@ -205,7 +205,7 @@ export class Game {
       endReason: null,
       players: this.setup.players.map((sp, i) => ({
         seat: i, name: sp.name, hero: sp.hero, pos: this.board.startId, roadDir: 'in',
-        stones: cfg.startStones, pills: cfg.startPills, cultBase: 0, peakCult: 0, btEarned: 0, btUsed: 0,
+        stones: cfg.startStones + cfg.seatBonusStones[i], pills: cfg.startPills, cultBase: 0, peakCult: 0, btEarned: 0, btUsed: 0,
         hand: [], divines: [], tasks: [], seal: false, jailed: false, jailTurns: 0, bound: false,
         wardUntilRound: 0, tremorRound: 0, treasure: [], rentImmuneUntilTurn: -1, turnsTaken: 0, ultUses: 0,
         goldbodyReadyRound: 0, shrinkReadyRound: 0, gatherRound: 0, mazeAvailable: false, chooseRoll: false,
@@ -250,6 +250,9 @@ export class Game {
     try {
       for (const p of this.state.players) for (let k = 0; k < this.cfg.startHand; k++) this.drawSpell(p.seat, true);
       this.emit('gameStart', '白泽秘境开启，众散修踏入秘境。');
+      const bonus = this.state.players.filter((p) => this.cfg.seatBonusStones[p.seat] > 0)
+        .map((p) => `${this.pn(p.seat)} +${this.cfg.seatBonusStones[p.seat]}`);
+      if (bonus.length) this.emit('info', `后手补偿灵石：${bonus.join('，')}`);
       for (let r = 1; r <= this.cfg.rounds; r++) {
         this.state.round = r;
         yield* this.roundStart();
@@ -469,9 +472,9 @@ export class Game {
     }
   }
 
-  private ultLabel(seat: number): string {
+  private ultOption(seat: number): { id: 'ult'; label: string; value: { t: 'ult' }; hint: string } {
     const h = this.data.heroes.find((x) => x.id === this.state.players[seat].hero)!;
-    return `大招【${h.ult.name}】（${this.cfg.ult.pillCost} 灵丹）`;
+    return { id: 'ult', label: `大招【${h.ult.name}】（${this.cfg.ult.pillCost} 灵丹）`, value: { t: 'ult' }, hint: h.ult.desc };
   }
 
   private *preRollPhase(seat: number): Flow<'roll' | 'moved'> {
@@ -490,7 +493,7 @@ export class Game {
         if (card === 'discount' && t.discount) continue;
         opts.push({ id: `cast:${card}`, label: `${s.name}（${s.cost} 灵丹）`, value: { t: 'cast', card }, hint: s.desc });
       }
-      if (this.ultAvailable(seat, 'preroll')) opts.push({ id: 'ult', label: this.ultLabel(seat), value: { t: 'ult' } });
+      if (this.ultAvailable(seat, 'preroll')) opts.push(this.ultOption(seat));
       if (p.divines.includes('shrink') && this.state.round >= p.shrinkReadyRound && onRing) {
         opts.push({ id: 'shrink', label: '神通【缩地成寸】', value: { t: 'shrink' } });
       }
@@ -630,7 +633,7 @@ export class Game {
     if (node === ALTAR) {
       road = yield* this.ask({
         player: seat, kind: 'exitRoad', title: '离开白泽灵台', desc: `选择一条神道向外走（${remaining} 步）`,
-        options: ROAD_IDS.map((r) => ({ id: r, label: `${this.roadName(r)}（出口 ${this.nodeName(b.gateOf(r))}）`, value: r, node: b.roads[r].nodes[1] })),
+        options: ROAD_IDS.map((r) => ({ id: r, label: this.exitLabel(r), value: r, node: b.roads[r].nodes[1] })),
         ctx: { remaining },
       });
       mode = 'out';
@@ -687,7 +690,7 @@ export class Game {
             options: [
               { id: 'stop', label: '停留灵台', value: 'stop' as const },
               ...ROAD_IDS.map((r) => ({
-                id: r, label: `借道${this.roadName(r)}（出口 ${this.nodeName(b.gateOf(r))}）`, value: r, node: b.roads[r].nodes[1],
+                id: r, label: `借道 · ${this.exitLabel(r)}`, value: r, node: b.roads[r].nodes[1],
               })),
             ],
             defaultId: 'stop', ctx: { remaining },
@@ -748,6 +751,11 @@ export class Game {
 
   private roadName(r: RoadId): string {
     return { S: '南神道', W: '西神道', N: '北神道', E: '东神道' }[r];
+  }
+
+  private exitLabel(r: RoadId): string {
+    const gate = this.board.gateOf(r);
+    return `${this.roadName(r)} → ${gate} ${this.nodeName(gate)}`;
   }
 
   nodeLabel(id: NodeId): string {
@@ -1009,7 +1017,11 @@ export class Game {
     if (can) opts.push({ id: 'break', label: `突破（${cost} 灵丹）`, value: 'break' });
     opts.push({ id: 'calm', label: '静心（+1 灵丹，抽机缘）', value: 'calm' });
     opts.push({ id: 'leave', label: '离开', value: 'leave' });
-    const why = avail <= 0 ? '暂无突破机会' : p.divines.length >= this.cfg.maxDivine ? '神通已满' : !can ? `灵丹不足（需 ${cost}）` : `突破机会 ${avail} 次`;
+    const th = this.cfg.breakthroughThresholds;
+    const noChance = p.btEarned < th.length
+      ? `暂无突破机会（修为每达 ${th.join(' / ')} 各得 1 次，下一次在修为 ${th[p.btEarned]}）`
+      : '突破机会已用完';
+    const why = avail <= 0 ? noChance : p.divines.length >= this.cfg.maxDivine ? '神通已满' : !can ? `灵丹不足（需 ${cost}）` : `突破机会 ${avail} 次`;
     const ch = yield* this.ask({
       player: seat, kind: 'altar', title: '白泽灵台', desc: why, options: opts, defaultId: can ? 'break' : 'calm', ctx: { cost },
     });
@@ -1250,7 +1262,7 @@ export class Game {
         if (card === 'discount' && st.turn.discount) continue;
         opts.push({ id: `cast:${card}`, label: `${s.name}（${s.cost} 灵丹）`, value: { t: 'cast', card }, hint: s.desc });
       }
-      if (this.ultAvailable(seat, 'action')) opts.push({ id: 'ult', label: this.ultLabel(seat), value: { t: 'ult' } });
+      if (this.ultAvailable(seat, 'action')) opts.push(this.ultOption(seat));
       opts.push({ id: 'end', label: '结束回合', value: { t: 'end' } });
       const act = yield* this.ask({
         player: seat, kind: 'action', title: '行动阶段', desc: '升级 1 次、施放符箓、发动大招', options: opts, defaultId: 'end', forceAsk: true,
@@ -1417,7 +1429,7 @@ export class Game {
     if (yield* this.guard(owner, kind, attacker, node)) return;
     const leader = uniqueLeader(st, this.data);
     this.downgrade(node, `遭 ${this.pn(attacker)} 雷击`);
-    if (leader === owner && owner !== attacker) {
+    if (kind === 'thunder' && leader === owner && owner !== attacker) {
       this.emit('info', `${this.pn(attacker)} 击中修为第一者的洞府，获得悬赏`, { player: attacker });
       this.addCult(attacker, this.cfg.rules.bountyCultivation, '悬赏');
     }
