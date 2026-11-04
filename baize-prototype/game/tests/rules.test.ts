@@ -238,4 +238,16 @@ describe('balance rules (2026-11 phase 1)', () => {
       expect(st.players[1].cultBase).toBe(before + gain);
     }
   });
+
+  it('灵息 gives the magic hero a pill on a spring but not on a furnace', () => {
+    const g = newGame();
+    const magic = g.state.players[1];
+    const pills = (to: string) => {
+      const before = magic.pills;
+      (g as any).enterNode(1, 'R0', to, 1, false);
+      return magic.pills - before;
+    };
+    expect(pills('S2')).toBe(g.data.config.rules.magicPassivePills);
+    expect(pills('R6')).toBe(0);
+  });
 });
