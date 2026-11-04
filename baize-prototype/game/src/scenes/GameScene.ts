@@ -9,7 +9,7 @@ import { Game } from '../core/engine';
 import type { GameEvent } from '../core/events';
 import { toRecord, type GameRecord } from '../core/record';
 import { countOwned, cultivation, nominalRent, realmName, totalAssets } from '../core/rules';
-import type { GameState, NodeId } from '../core/types';
+import type { GameState, NodeId, RoadId } from '../core/types';
 import { BoardView } from '../ui/BoardView';
 import { ChoiceModal, type ModalOption, type ModalSpec } from '../ui/ChoiceModal';
 import { BOARD } from '../ui/layout';
@@ -75,7 +75,7 @@ export class GameScene extends Phaser.Scene {
     this.side = new SidePanel(this, this.engine);
     this.modal = new ChoiceModal(this);
     this.toastText = txt(this, BOARD.x + 288, BOARD.y + 590, '', { size: 13, color: HEX.gold, origin: [0.5, 0.5] }).setDepth(9000);
-    txt(this, BOARD.x + 288, 700, '空格 掷骰/确认 · B 升级 · C 出符 · Enter 结束回合 · Esc 取消 · F 2 倍速 · S 下载对局记录', { size: 11, color: HEX.dim, origin: [0.5, 0.5] });
+    txt(this, BOARD.x + 288, 700, '空格 掷骰/确认 · B 升级 · C 出符 · Enter 结束回合 · Esc 取消 · F 切换倍速 · S 下载对局记录', { size: 11, color: HEX.dim, origin: [0.5, 0.5] });
 
     this.side.btnRoll.onClick(() => this.mainAnswer('roll'));
     this.side.btnEnd.onClick(() => this.mainAnswer('end'));
@@ -287,9 +287,14 @@ export class GameScene extends Phaser.Scene {
     const g = this.engine;
     this.nodeOptions.clear();
     for (const o of c.options) if (o.node && !this.nodeOptions.has(o.node)) this.nodeOptions.set(o.node, o.id);
+    if (c.kind === 'exitRoad' || c.kind === 'altarPass') {
+      for (const o of c.options) if (o.id !== 'stop') this.nodeOptions.set(g.board.gateOf(o.id as RoadId), o.id);
+    }
     this.boardView.setClickable([...this.nodeOptions.keys()]);
     const p = g.state.players[c.player];
     let desc = c.desc ?? '';
+    if (this.nodeOptions.size > 9) desc += '\n也可直接点击棋盘上高亮的格子';
+    if (c.kind === 'heavenPick') this.cards.render({ ...this.shownState, current: c.player }, c.player);
     let preview: ModalSpec['preview'];
     if (c.kind === 'rentReact') desc += `（可用避劫符 ${p.hand.filter((x) => x === 'evade').length} 张）`;
     if (c.kind === 'guardReact') desc += `（可用金光符 ${p.hand.filter((x) => x === 'goldlight').length} 张）`;
@@ -307,7 +312,7 @@ export class GameScene extends Phaser.Scene {
       preview = { tile: `tile_land_${region}`, obj: `decor_${region}` };
     }
     const multiHuman = this.ais.filter((a) => a === null).length > 1;
-    const title = multiHuman ? `${p.name} · ${c.title}` : c.title;
+    const title = multiHuman || c.kind === 'heavenPick' ? `${p.name} · ${c.title}` : c.title;
     const cards = c.kind === 'divinePick' || c.kind === 'heavenPick';
     const options: ModalOption[] = c.options.map((o) => ({
       id: o.id, label: o.label, hint: o.hint,
@@ -319,6 +324,7 @@ export class GameScene extends Phaser.Scene {
       layout: cards ? 'cards' : 'list',
       cardFrame: c.kind === 'heavenPick' ? 'card_heaven' : 'card_divine',
       cardLabel: c.kind === 'heavenPick' ? '天赐' : '神通',
+      numbered: c.kind !== 'rollValue',
     });
     this.boardView.setClickable([]);
     this.nodeOptions.clear();
@@ -341,7 +347,8 @@ export class GameScene extends Phaser.Scene {
   private onKey(ev: KeyboardEvent): void {
     const k = ev.key;
     if (k === 'f' || k === 'F') {
-      this.speed = this.speed === 1 ? 2 : 1;
+      const speeds = [1, 2, 4, 8];
+      this.speed = speeds[(speeds.indexOf(this.speed) + 1) % speeds.length];
       this.top.render(this.shownState, this.speed);
       this.toast(`速度 ${this.speed}×`);
       return;
@@ -351,7 +358,6 @@ export class GameScene extends Phaser.Scene {
       if (this.modal.handleKey(key)) ev.preventDefault();
       return;
     }
-    if (k === 't' || k === 'T') { this.toast('交易功能暂未开放'); return; }
     if (k === 's' || k === 'S') { downloadRecord(this.record()); this.toast('已下载对局记录'); return; }
     if (!this.mainChoice) return;
     if (k === ' ') { ev.preventDefault(); this.mainAnswer('roll'); }
