@@ -1559,7 +1559,7 @@ export class Game {
     const p = st.players[seat];
     switch (id) {
       case 'chart':
-        this.drawSpell(seat);
+        for (let k = 0; k < this.cfg.rules.chartDraw; k++) this.drawSpell(seat);
         this.addCult(seat, this.cfg.rules.chartCultivation, '白泽图');
         return;
       case 'ward':

@@ -170,4 +170,17 @@ describe('rules config', () => {
       expect(p.pills).toBe(pills0 + gain);
     }
   });
+
+  it('rules.chartDraw sets how many talismans the 白泽图 blessing draws', () => {
+    const data = cloneData();
+    data.config.rules.chartDraw = 2;
+    for (const [g, drawn] of [[newGame(1), 1], [newGame(1, data), 2]] as const) {
+      const p = g.state.players[0];
+      p.hand = [];
+      const cult0 = p.cultBase;
+      g.runFlow((g as any).applyHeaven(0, 'chart'), script({}));
+      expect(p.hand.length).toBe(drawn);
+      expect(p.cultBase).toBe(cult0 + 1);
+    }
+  });
 });
