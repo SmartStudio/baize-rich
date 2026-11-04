@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "sim": "tsx src/sim/run.ts",
+    "sweep": "tsx src/sim/sweep.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "shots": "node scripts/screenshots.cjs"
   },
