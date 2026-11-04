@@ -7,12 +7,14 @@ import type { PendingChoice } from '../core/choices';
 import { defaultData } from '../core/data';
 import { Game } from '../core/engine';
 import type { GameEvent } from '../core/events';
+import { toRecord, type GameRecord } from '../core/record';
 import { countOwned, cultivation, nominalRent, realmName, totalAssets } from '../core/rules';
 import type { GameState, NodeId } from '../core/types';
 import { BoardView } from '../ui/BoardView';
 import { ChoiceModal, type ModalOption, type ModalSpec } from '../ui/ChoiceModal';
 import { BOARD } from '../ui/layout';
 import { PlayerCards } from '../ui/PlayerCards';
+import { downloadRecord, saveAutosave } from '../ui/saves';
 import type { SessionConfig } from '../ui/session';
 import { SidePanel } from '../ui/SidePanel';
 import { COLORS, HEX, txt } from '../ui/theme';
@@ -59,23 +61,21 @@ export class GameScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => { this.alive = false; });
     this.cameras.main.setBackgroundColor(COLORS.bg);
 
-    const heroName = (id: string) => defaultData.heroes.find((h) => h.id === id)!.name;
-    this.engine = new Game(
-      { seed: session.seed, players: session.seats.map((s, i) => ({ name: `P${i + 1}·${heroName(s.hero)}`, hero: s.hero })) },
-      defaultData,
-      { snapshots: true },
-    );
+    // Resuming replays the saved answers before any listener is attached, so nothing animates.
+    this.engine = session.history
+      ? Game.replay(session.setup, session.history, defaultData, { snapshots: true })
+      : new Game(session.setup, defaultData, { snapshots: true });
     (window as unknown as { __baize: Game }).__baize = this.engine; // debugging handle
-    this.ais = session.seats.map((s, i) => (s.human ? null : new AIController(this.engine, i, { difficulty: s.difficulty, personality: s.personality, seed: session.seed })));
+    this.ais = session.seats.map((s, i) => (s.human ? null : new AIController(this.engine, i, { difficulty: s.difficulty, personality: s.personality, seed: session.setup.seed })));
     const labels = session.seats.map((s) => (s.human ? '玩家' : `AI·${DIFFICULTY_LABEL[s.difficulty]}·${PERSONALITY_LABEL[s.personality]}`));
 
     this.top = new TopBar(this, this.engine);
-    this.boardView = new BoardView(this, this.engine.board, session.seats.map((s) => s.hero));
+    this.boardView = new BoardView(this, this.engine.board, session.setup.players.map((p) => p.hero));
     this.cards = new PlayerCards(this, this.engine, labels);
     this.side = new SidePanel(this, this.engine);
     this.modal = new ChoiceModal(this);
     this.toastText = txt(this, BOARD.x + 288, BOARD.y + 590, '', { size: 13, color: HEX.gold, origin: [0.5, 0.5] }).setDepth(9000);
-    txt(this, BOARD.x + 288, 700, '空格 掷骰/确认 · B 升级 · C 出符 · Enter 结束回合 · Esc 取消 · F 2 倍速', { size: 11, color: HEX.dim, origin: [0.5, 0.5] });
+    txt(this, BOARD.x + 288, 700, '空格 掷骰/确认 · B 升级 · C 出符 · Enter 结束回合 · Esc 取消 · F 2 倍速 · S 下载对局记录', { size: 11, color: HEX.dim, origin: [0.5, 0.5] });
 
     this.side.btnRoll.onClick(() => this.mainAnswer('roll'));
     this.side.btnEnd.onClick(() => this.mainAnswer('end'));
@@ -89,7 +89,9 @@ export class GameScene extends Phaser.Scene {
 
     this.engine.onEvent((e) => this.queue.push(e));
     this.shownState = this.engine.state;
-    this.engine.start();
+    if (session.history) this.showResumed();
+    else this.engine.start();
+    this.autosave();
     this.engine.state.players.forEach((p, i) => this.boardView.placeToken(i, p.pos));
     void this.loop();
   }
@@ -126,7 +128,24 @@ export class GameScene extends Phaser.Scene {
         if (!this.alive) return;
       }
       this.engine.answer(id);
+      this.autosave();
     }
+  }
+
+  private record(): GameRecord {
+    return toRecord(this.engine, this.session.seats);
+  }
+
+  private autosave(): void {
+    if (!this.session.auto) saveAutosave(this.record());
+  }
+
+  /** State that normally arrives through events (battle log, 白泽 on the board) for a replayed game. */
+  private showResumed(): void {
+    const st = this.engine.state;
+    for (const e of this.engine.log.slice(-3)) if (e.text) this.side.log(e.text);
+    this.side.log(`—— 已恢复上局：第 ${st.round} 轮 ——`);
+    if (st.manifested && st.round === this.engine.data.config.baizeManifestRound) this.boardView.showBaize(true);
   }
 
   private async drain(): Promise<void> {
@@ -197,6 +216,7 @@ export class GameScene extends Phaser.Scene {
     const g = this.engine;
     const st = g.state;
     return {
+      record: this.record(),
       state: structuredClone(st),
       ranking: g.ranking(),
       rows: st.players.map((_, i) => {
@@ -332,6 +352,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     if (k === 't' || k === 'T') { this.toast('交易功能暂未开放'); return; }
+    if (k === 's' || k === 'S') { downloadRecord(this.record()); this.toast('已下载对局记录'); return; }
     if (!this.mainChoice) return;
     if (k === ' ') { ev.preventDefault(); this.mainAnswer('roll'); }
     else if (k === 'Enter') this.mainAnswer('end');

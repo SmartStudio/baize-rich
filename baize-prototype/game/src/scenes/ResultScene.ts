@@ -1,10 +1,13 @@
 import Phaser from 'phaser';
+import type { GameRecord } from '../core/record';
 import type { GameState } from '../core/types';
 import { addImg } from '../ui/assets';
+import { downloadRecord } from '../ui/saves';
 import { COLORS, HEX, PLAYER_COLORS, PLAYER_HEX, panel, txt } from '../ui/theme';
 import { Button } from '../ui/widgets';
 
 export interface ResultData {
+  record: GameRecord;
   state: GameState;
   ranking: number[];
   rows: { cult: number; realm: string; assets: number; label: string }[];
@@ -33,6 +36,7 @@ export class ResultScene extends Phaser.Scene {
       txt(this, 430, y + 44, `修为 ${r.cult} · ${r.realm}    灵石 ${p.stones}    灵丹 ${p.pills}    总资产 ${r.assets}`, { size: 14 });
       txt(this, 430, y + 66, `突破 ${p.stats.breakthroughs} 次 · 神通 ${p.divines.length} · 收租 ${p.stats.rentCollected} · 任务 ${p.stats.tasksDone} · 破产 ${p.stats.bankruptcies}`, { size: 12, color: HEX.dim });
     });
-    new Button(this, 540, 600, { w: 200, h: 56, label: '再来一局', size: 22, fill: 0x8a5a1e }).onClick(() => this.scene.start('Setup'));
+    new Button(this, 410, 600, { w: 200, h: 56, label: '再来一局', size: 22, fill: 0x8a5a1e }).onClick(() => this.scene.start('Setup'));
+    new Button(this, 650, 600, { w: 220, h: 56, label: '下载对局记录', size: 20, hint: '可用 npm run replay 复盘' }).onClick(() => downloadRecord(d.record));
   }
 }

@@ -2,9 +2,11 @@ import Phaser from 'phaser';
 import { DIFFICULTY_LABEL, PERSONALITY_LABEL, type Difficulty, type Personality } from '../ai/ai';
 import { defaultData } from '../core/data';
 import { HERO_IDS } from '../core/heroes';
+import { replayRecord, type GameRecord } from '../core/record';
 import type { HeroId } from '../core/types';
 import { addImg, setFrame } from '../ui/assets';
-import { randomSeed, urlParams, type SeatConfig } from '../ui/session';
+import { loadAutosave } from '../ui/saves';
+import { newSession, randomSeed, urlParams, type SeatConfig } from '../ui/session';
 import { COLORS, HEX, PLAYER_COLORS, PLAYER_HEX, panel, txt } from '../ui/theme';
 import { Button } from '../ui/widgets';
 
@@ -36,14 +38,37 @@ export class SetupScene extends Phaser.Scene {
     const refreshSeed = () => seedText.setText(`随机种子 ${this.seed}（点击更换）`);
     refreshSeed();
     seedText.setInteractive({ useHandCursor: true }).on('pointerdown', () => { this.seed = randomSeed(); refreshSeed(); });
-    new Button(this, 540, 625, { w: 200, h: 56, label: '开始游戏', size: 22, fill: 0x8a5a1e }).onClick(() => this.start());
+    const saved = this.resumable();
+    new Button(this, saved ? 410 : 540, 625, { w: 200, h: 56, label: '开始游戏', size: 22, fill: 0x8a5a1e }).onClick(() => this.start());
+    if (saved) {
+      new Button(this, 650, 625, { w: 220, h: 56, label: '继续上局', size: 20, hint: saved.summary }).onClick(() => this.resume(saved.record));
+    }
     txt(this, 640, 700, '快捷键：空格 掷骰/确认 · B 升级 · C 出符 · T 交易 · Enter 结束回合 · Esc 取消 · F 2 倍速', { size: 12, color: HEX.dim, origin: [0.5, 0.5] });
     this.input.keyboard?.on('keydown-SPACE', () => this.start());
     this.input.keyboard?.on('keydown-ENTER', () => this.start());
   }
 
   private start(): void {
-    this.scene.start('Game', { seed: this.seed, seats: this.seats, speed: 1 });
+    this.scene.start('Game', newSession(this.seed, this.seats, 1));
+  }
+
+  /** An unfinished autosave that still replays, with a one-line summary for the button. */
+  private resumable(): { record: GameRecord; summary: string } | null {
+    const record = loadAutosave();
+    if (!record || record.finished) return null;
+    let st;
+    try {
+      st = replayRecord(record).state;
+    } catch (e) {
+      console.info('[baize] 自动存档无法继续', e);
+      return null;
+    }
+    const humans = record.seats.filter((s) => s.human).length;
+    return { record, summary: `第 ${st.round}/${defaultData.config.rounds} 轮 · ${st.players[st.current].name} · 玩家 ${humans} 人` };
+  }
+
+  private resume(r: GameRecord): void {
+    this.scene.start('Game', { setup: r.setup, seats: r.seats, speed: 1, history: r.history });
   }
 
   private buildRow(i: number): void {
