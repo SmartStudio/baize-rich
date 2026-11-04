@@ -14,6 +14,7 @@ npm run preview      # 预览生产构建
 npm test             # vitest 单元测试
 npm run sim -- --games 500 --seed 1            # AI 自对弈统计（可加 --difficulty easy|normal|hard，--verbose 打印第 1 局战报，--json 输出 JSON 报告）
 npm run sweep -- --param winCultivation --values 8,9,10   # 参数扫描：对 config.json 的任意数值路径，按多个种子各跑一批（可加 --seeds 1,2,3,4 --games 500 --json）
+npm run replay -- 对局记录.json                 # 无头复现一份对局记录，打印胜者、轮数与各席位修为/灵石/突破（加 --log 打印完整战报）
 npm run shots        # 需先 build：用 Playwright 打开构建产物、截图到 screenshots/ 并检查控制台错误
 ```
 
@@ -25,7 +26,14 @@ URL 参数：
 | `?seed=123` | 固定随机种子（设置界面与 auto 模式都生效） |
 | `?speed=1` | auto 模式的动画倍速 |
 
-快捷键（GDD §14）：空格 掷骰 / 确认，B 升级，C 出符，T 交易（未开放），Enter 结束回合，Esc 取消，F 切换 2 倍速；弹窗内数字键 1–9 直接选择。
+快捷键（GDD §14）：空格 掷骰 / 确认，B 升级，C 出符，T 交易（未开放），Enter 结束回合，Esc 取消，F 切换 2 倍速，S 下载对局记录；弹窗内数字键 1–9 直接选择。
+
+### 存档与对局记录
+
+- 对局记录（`src/core/record.ts` 的 `GameRecord`）= 开局设置 + 各席位控制方（玩家 / AI 难度与性格）+ 回答历史，外加记录格式版本和 `config.json` 的数据版本。`parseRecord()` 在读入时校验，数据版本不一致直接拒绝。
+- 自动存档：每回答一次决定，`GameScene` 就把记录写入 `localStorage`（键 `baize.autosave`）；`?auto=1` 的对局不存档。刷新后设置界面会出现「继续上局」，重放历史回到刷新前的同一个待决选择，不播放动画。
+- 下载：对局中按 S，或在结算界面点「下载对局记录」，得到 `baize-record-日期-seed种子.json`；用 `npm run replay -- 文件` 复盘。
+- 恢复后 AI 的内部随机数从头开始（只影响简单难度之后的决定），引擎状态与回答历史不受影响。
 
 ### 美术资源
 
@@ -47,11 +55,12 @@ src/
     choices.ts   决策接口：PendingChoice / Controller 类型
     events.ts    结构化事件（战报）
     rng.ts       种子随机数（状态存在 GameState.rng 里）
+    record.ts    对局记录 GameRecord：生成、校验、重放
   ai/          AI 控制器（GDD §13）：难度 easy/normal/hard，性格 稳健/激进/守财；predict.ts 为移动预测
-  sim/         无头驱动 headless.ts、批量模拟库 simulate.ts、命令行 run.ts、参数扫描 sweep.ts
+  sim/         无头驱动 headless.ts、批量模拟库 simulate.ts、命令行 run.ts、参数扫描 sweep.ts、对局记录复盘 replay.ts
   scenes/      Phaser 场景：Boot（载图集/生成占位）→ Setup → Game → Result
   ui/          画面组件：BoardView、PlayerCards（左栏）、TopBar、SidePanel（右栏）、ChoiceModal、assets、theme、layout
-tests/         vitest：移动/岔路/灵台/地形、租金、突破、灵脉、破产、胜负、确定性回放
+tests/         vitest：移动/岔路/灵台/地形、租金、突破、灵脉、破产、胜负、确定性回放、对局记录
 scripts/       screenshots.cjs（Playwright 冒烟测试 + 截图）
 ```
 
@@ -102,6 +111,6 @@ UI 侧（`GameScene`）就是另一个 Controller：`preRoll` / `action` 选择�
 ## 未完成 / 占位
 
 - **交易**：按钮与 T 键是占位（禁用）；坊市只能买符。
-- 设置界面、音频、存档 / 读档 UI 未做（状态可序列化，可用种子 + 回答历史重放）。
+- 音频未做；存档只有一个自动存档位（「继续上局」），没有多存档位。
 - 标题界面并入设置界面。
 - 更多规则层面的简化见 `NOTES.md`。

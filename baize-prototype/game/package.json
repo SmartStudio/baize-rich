@@ -10,6 +10,7 @@
     "test": "vitest run",
     "sim": "tsx src/sim/run.ts",
     "sweep": "tsx src/sim/sweep.ts",
+    "replay": "tsx src/sim/replay.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "shots": "node scripts/screenshots.cjs"
   },

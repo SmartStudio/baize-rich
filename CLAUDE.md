@@ -26,7 +26,8 @@ npm test                            # vitest run（tests/**/*.test.ts，node 环
 npx vitest run tests/movement.test.ts -t "altar"   # 跑单个文件 / 按名字过滤
 npm run typecheck                   # tsc --noEmit
 npm run build                       # 类型检查 + vite 构建 → dist/
-npm run sim -- --games 500 --seed 1 # AI 无头自对弈平衡统计；可加 --difficulty easy|normal|hard、--verbose、--json
+npm run sim -- --games 500 --seed 1 # AI 无头自对弈平衡统计；可加 --difficulty easy|normal|hard、--verbose
+npm run replay -- record.json        # 复现下载的对局记录（GameRecord）并打印胜者与各席位结果；--log 打印战报、--json
 npm run sweep -- --param rules.furnacePills --values 2,3,4   # 参数扫描，多种子对比 §16 指标
 npm run shots                       # 需先 build；用 Playwright 打开 dist、截图到 screenshots/ 并检查控制台报错
 BAIZE_NO_ATLAS=1 npm run build      # 强制使用占位图构建
@@ -42,7 +43,7 @@ BAIZE_NO_ATLAS=1 npm run build      # 强制使用占位图构建
 - `PendingChoice` 是按 `kind` 区分的联合类型，`ChoiceValueMap`（`core/choices.ts`）规定每种 kind 的 `option.value` 类型。新增一种决策要同时加 kind 和类型映射。
 - 只有一个选项时 `ask` 会自动跳过，除非传入 `forceAsk`。
 - 回答永远是字符串 id，所以 **(setup, 回答历史) 可以完整复现一局**：`Game.replay(setup, game.history)`。所有随机都必须走 `core/rng.ts`，它的状态存放在 `GameState.rng` 中。不要用 `Math.random()`，否则重放会失效（有确定性测试覆盖）。
-- `GameState` 是纯 JSON。generator 的执行位置不可序列化，存档要靠重放。
+- `GameState` 是纯 JSON。generator 的执行位置不可序列化，存档要靠重放：`core/record.ts` 的 `GameRecord`（setup + 席位控制方 + history + 数据版本）。`GameScene` 每次回答后写入 `localStorage` 自动存档，设置界面的「继续上局」重放它；对局中按 S 或在结算界面下载记录。
 - 修为达到胜利线时，引擎抛出内部的 `GameOverSignal`，立即结束整个流程。
 - 每次状态变化都会 `emit` 一个结构化 `GameEvent`（`core/events.ts`，带中文 `text`）。用 `{ snapshots: true }` 构造时，每个事件附带一份状态快照：UI 逐个播放动画，并按快照刷新面板。模拟时关闭快照以保证速度。
 
