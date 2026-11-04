@@ -30,14 +30,15 @@ export class SetupScene extends Phaser.Scene {
       human: i === 0, hero, difficulty: 'normal', personality: PERSONAS[i % 3],
     }));
     txt(this, 640, 70, '白泽秘境大富翁', { size: 40, bold: true, color: HEX.gold, origin: [0.5, 0.5] });
-    txt(this, 640, 116, '凡人散修踏入白泽秘境 · 率先修至 10 点修为渡劫飞升', { size: 15, origin: [0.5, 0.5], color: HEX.dim });
+    const { winCultivation, rounds } = defaultData.config;
+    txt(this, 640, 116, `凡人散修踏入白泽秘境 · 率先修至 ${winCultivation} 点修为即刻飞升；否则第 ${rounds} 轮结束时修为最高者胜（同分比总资产）`, { size: 15, origin: [0.5, 0.5], color: HEX.dim });
     this.seats.forEach((_, i) => this.buildRow(i));
     const seedText = txt(this, 640, 600, '', { size: 13, color: HEX.dim, origin: [0.5, 0.5] });
     const refreshSeed = () => seedText.setText(`随机种子 ${this.seed}（点击更换）`);
     refreshSeed();
     seedText.setInteractive({ useHandCursor: true }).on('pointerdown', () => { this.seed = randomSeed(); refreshSeed(); });
     new Button(this, 540, 625, { w: 200, h: 56, label: '开始游戏', size: 22, fill: 0x8a5a1e }).onClick(() => this.start());
-    txt(this, 640, 700, '快捷键：空格 掷骰/确认 · B 升级 · C 出符 · T 交易 · Enter 结束回合 · Esc 取消 · F 2 倍速', { size: 12, color: HEX.dim, origin: [0.5, 0.5] });
+    txt(this, 640, 700, '快捷键：空格 掷骰/确认 · B 升级 · C 出符 · Enter 结束回合 · Esc 取消 · F 切换倍速', { size: 12, color: HEX.dim, origin: [0.5, 0.5] });
     this.input.keyboard?.on('keydown-SPACE', () => this.start());
     this.input.keyboard?.on('keydown-ENTER', () => this.start());
   }
