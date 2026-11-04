@@ -8,7 +8,7 @@ import { defaultData } from '../core/data';
 import { Game } from '../core/engine';
 import type { GameEvent } from '../core/events';
 import { countOwned, cultivation, nominalRent, realmName, totalAssets } from '../core/rules';
-import type { GameState, NodeId } from '../core/types';
+import type { GameState, NodeId, RoadId } from '../core/types';
 import { BoardView } from '../ui/BoardView';
 import { ChoiceModal, type ModalOption, type ModalSpec } from '../ui/ChoiceModal';
 import { BOARD } from '../ui/layout';
@@ -267,9 +267,14 @@ export class GameScene extends Phaser.Scene {
     const g = this.engine;
     this.nodeOptions.clear();
     for (const o of c.options) if (o.node && !this.nodeOptions.has(o.node)) this.nodeOptions.set(o.node, o.id);
+    if (c.kind === 'exitRoad' || c.kind === 'altarPass') {
+      for (const o of c.options) if (o.id !== 'stop') this.nodeOptions.set(g.board.gateOf(o.id as RoadId), o.id);
+    }
     this.boardView.setClickable([...this.nodeOptions.keys()]);
     const p = g.state.players[c.player];
     let desc = c.desc ?? '';
+    if (this.nodeOptions.size > 9) desc += '\n也可直接点击棋盘上高亮的格子';
+    if (c.kind === 'heavenPick') this.cards.render({ ...this.shownState, current: c.player }, c.player);
     let preview: ModalSpec['preview'];
     if (c.kind === 'rentReact') desc += `（可用避劫符 ${p.hand.filter((x) => x === 'evade').length} 张）`;
     if (c.kind === 'guardReact') desc += `（可用金光符 ${p.hand.filter((x) => x === 'goldlight').length} 张）`;
@@ -287,7 +292,7 @@ export class GameScene extends Phaser.Scene {
       preview = { tile: `tile_land_${region}`, obj: `decor_${region}` };
     }
     const multiHuman = this.ais.filter((a) => a === null).length > 1;
-    const title = multiHuman ? `${p.name} · ${c.title}` : c.title;
+    const title = multiHuman || c.kind === 'heavenPick' ? `${p.name} · ${c.title}` : c.title;
     const cards = c.kind === 'divinePick' || c.kind === 'heavenPick';
     const options: ModalOption[] = c.options.map((o) => ({
       id: o.id, label: o.label, hint: o.hint,
@@ -299,6 +304,7 @@ export class GameScene extends Phaser.Scene {
       layout: cards ? 'cards' : 'list',
       cardFrame: c.kind === 'heavenPick' ? 'card_heaven' : 'card_divine',
       cardLabel: c.kind === 'heavenPick' ? '天赐' : '神通',
+      numbered: c.kind !== 'rollValue',
     });
     this.boardView.setClickable([]);
     this.nodeOptions.clear();
