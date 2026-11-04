@@ -12,7 +12,8 @@ npm run dev          # 开发服务器 (http://localhost:5173)
 npm run build        # tsc 类型检查 + vite 生产构建 → dist/
 npm run preview      # 预览生产构建
 npm test             # vitest 单元测试
-npm run sim -- --games 500 --seed 1            # AI 自对弈统计（可加 --difficulty easy|normal|hard，--verbose 打印第 1 局战报）
+npm run sim -- --games 500 --seed 1            # AI 自对弈统计（可加 --difficulty easy|normal|hard，--verbose 打印第 1 局战报，--json 输出 JSON 报告）
+npm run sweep -- --param winCultivation --values 8,9,10   # 参数扫描：对 config.json 的任意数值路径，按多个种子各跑一批（可加 --seeds 1,2,3,4 --games 500 --json）
 npm run shots        # 需先 build：用 Playwright 打开构建产物、截图到 screenshots/ 并检查控制台错误
 ```
 
@@ -45,10 +46,9 @@ src/
     engine.ts    Game 类：回合流程、移动、结算、符箓、英雄、天魔、白泽、任务、胜负
     choices.ts   决策接口：PendingChoice / Controller 类型
     events.ts    结构化事件（战报）
-    constants.ts 只写在 GDD 文字里、JSON 中没有的数值（集中存放，便于以后迁入 JSON）
     rng.ts       种子随机数（状态存在 GameState.rng 里）
   ai/          AI 控制器（GDD §13）：难度 easy/normal/hard，性格 稳健/激进/守财；predict.ts 为移动预测
-  sim/         无头驱动 headless.ts + 批量模拟 run.ts
+  sim/         无头驱动 headless.ts、批量模拟库 simulate.ts、命令行 run.ts、参数扫描 sweep.ts
   scenes/      Phaser 场景：Boot（载图集/生成占位）→ Setup → Game → Result
   ui/          画面组件：BoardView、PlayerCards（左栏）、TopBar、SidePanel（右栏）、ChoiceModal、assets、theme、layout
 tests/         vitest：移动/岔路/灵台/地形、租金、突破、灵脉、破产、胜负、确定性回放

@@ -1,6 +1,6 @@
 # 白泽秘境大富翁 · 游戏设计文档（GDD）v0.3
 
-> 本文档是原型开发的唯一规则来源。原型实现中的细节取舍见 `game/NOTES.md`；只写在本文中的数值已集中在 `game/src/core/constants.ts`，后续可迁入 `config.json`。
+> 本文档是原型开发的唯一规则来源。原型实现中的细节取舍见 `game/NOTES.md`；只写在本文中的数值已集中在 `data/config.json` 的 `rules` 块。
 >数值均为初稿，以 `data/*.json` 为准；文档与 JSON 冲突时以 JSON 为准，并请同步修正文档。
 
 ---

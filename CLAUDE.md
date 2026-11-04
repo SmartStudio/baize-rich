@@ -13,7 +13,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **约定**
 - GDD 与 JSON 冲突时以 JSON 为准，并同步修正文档。`game/` 只读取 `docs/`、`data/`，不在实现原型时修改它们。规则解读、简化以及发现的文档/数据矛盾记录到 `game/NOTES.md`，方便策划逐条确认。
-- 只写在 GDD 正文里、JSON 中没有字段的数值，集中放在 `game/src/core/constants.ts`（`RULES`），不要散落在引擎各处。
+- 只写在 GDD 正文里、JSON 中没有字段的数值，集中放在 `data/config.json` 的 `rules` 块（类型 `RulesConfig`），引擎里通过 `cfg.rules.x` 读取，不要散落成字面量。
 - 题材只用「凡人修仙」类通用元素，不使用任何具体小说的人名、地名、宗门名。
 - 代码里的面向玩家文本、战报和文档都用中文。
 
@@ -26,12 +26,13 @@ npm test                            # vitest run（tests/**/*.test.ts，node 环
 npx vitest run tests/movement.test.ts -t "altar"   # 跑单个文件 / 按名字过滤
 npm run typecheck                   # tsc --noEmit
 npm run build                       # 类型检查 + vite 构建 → dist/
-npm run sim -- --games 500 --seed 1 # AI 无头自对弈平衡统计；可加 --difficulty easy|normal|hard、--verbose
+npm run sim -- --games 500 --seed 1 # AI 无头自对弈平衡统计；可加 --difficulty easy|normal|hard、--verbose、--json
+npm run sweep -- --param rules.furnacePills --values 2,3,4   # 参数扫描，多种子对比 §16 指标
 npm run shots                       # 需先 build；用 Playwright 打开 dist、截图到 screenshots/ 并检查控制台报错
 BAIZE_NO_ATLAS=1 npm run build      # 强制使用占位图构建
 ```
 
-`npm run shots` 使用全局预装的 `playwright`（不是项目依赖）。改了平衡相关的规则后，用 `npm run sim` 和 GDD §16 的目标对比（英雄胜率 22–28%、12–15 轮等），把结果更新到 NOTES.md。
+`npm run shots` 使用全局预装的 `playwright`（不是项目依赖）。改了平衡相关的规则后，用 `npm run sim` / `npm run sweep` 和 GDD §16 的目标对比（英雄胜率 22–28%、12–15 轮等），把结果更新到 NOTES.md。
 
 ## 架构
 
