@@ -6,7 +6,7 @@
   },
   {
     "id": "magic", "name": "法修", "role": "干扰", "color": "white",
-    "passive": { "id": "spiritbreath", "name": "灵息", "desc": "经过灵泉或丹炉时额外 +1 灵丹" },
+    "passive": { "id": "spiritbreath", "name": "灵息", "desc": "经过灵泉时额外 +1 灵丹" },
     "ult": { "id": "fivethunder", "name": "五雷正法", "desc": "指定他人一块洞府降 1 级，或对天魔造成 3 伤害" }
   },
   {

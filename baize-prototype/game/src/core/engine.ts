@@ -734,7 +734,7 @@ export class Game {
     const n = this.board.node(to);
     if (!slide) this.emit('step', '', { player: seat, node: to, from });
     if (n.type === 'start' && remaining > 0) this.gainStones(seat, this.cfg.salaryPass, '经过宗门山门');
-    if (p.hero === 'magic' && (n.type === 'spring' || n.type === 'furnace')) {
+    if (p.hero === 'magic' && n.type === 'spring') {
       p.pills += this.cfg.rules.magicPassivePills;
       this.emit('pills', `${this.pn(seat)} 灵息：经过${n.name} +${this.cfg.rules.magicPassivePills} 灵丹`, { player: seat, amount: this.cfg.rules.magicPassivePills });
     }
