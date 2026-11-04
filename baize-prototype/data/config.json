@@ -1,0 +1,90 @@
+{
+  "version": "0.3",
+  "rounds": 15,
+  "winCultivation": 10,
+  "startStones": 1500,
+  "startPills": 2,
+  "startHand": 2,
+  "handLimit": 5,
+  "salaryPass": 200,
+  "salaryLand": 400,
+  "cliffFee": 100,
+  "cliffMaxTurns": 3,
+  "maxDoubles": 2,
+  "marketCardPrice": 100,
+  "marketMaxBuy": 2,
+  "altarToll": 1,
+  "breakthroughThresholds": [
+    2,
+    4,
+    6,
+    8
+  ],
+  "breakthroughCost": [
+    1,
+    2,
+    3,
+    4
+  ],
+  "breakthroughDraw": 3,
+  "breakthroughDrawLowest": 4,
+  "maxDivine": 4,
+  "shrineDiscount": 1,
+  "demonCostPenalty": 1,
+  "rentRate": 0.1,
+  "levelRentMult": [
+    1,
+    3,
+    6,
+    10,
+    15
+  ],
+  "levelUpgradeCostP": [
+    0,
+    0.5,
+    0.5,
+    1.0,
+    1.0
+  ],
+  "lv4PillCost": 2,
+  "cultivationOnBuild": {
+    "3": 1,
+    "4": 1
+  },
+  "veinLordMinLands": 3,
+  "veinLordCultivation": 2,
+  "monopolyRentMult": 2,
+  "endgameRounds": [
+    13,
+    14,
+    15
+  ],
+  "endgameRentMult": 1.5,
+  "bankrupt": {
+    "resetStones": 300,
+    "cultivationLoss": 2
+  },
+  "eruptionRounds": [
+    4,
+    8,
+    12
+  ],
+  "demon": {
+    "spawnRounds": [
+      5,
+      10
+    ],
+    "hp": 6,
+    "stayRounds": 4,
+    "movePerRound": 2
+  },
+  "baizeManifestRound": 8,
+  "manifestRentMult": 0.5,
+  "ult": {
+    "pillCost": 3,
+    "maxUses": 2
+  },
+  "badLuckStreak": 3,
+  "maxActiveTasks": 2,
+  "pillValueInStones": 50
+}
