@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PendingChoice } from '../src/core/choices';
+import { cloneData } from '../src/core/data';
 import { newGame, placeAll, script } from './helpers';
 
 describe('movement: fork, road, altar', () => {
@@ -153,5 +154,20 @@ describe('terrain', () => {
     p.pos = 'R24';
     g.runFlow(g.debugMove(0, 1), script({ buy: 'no' }));
     expect(p.pos).toBe('R25');
+  });
+});
+
+describe('rules config', () => {
+  it('a cloneData() copy with a tweaked rules value changes the 丹炉 payout', () => {
+    const data = cloneData();
+    data.config.rules.furnacePills = 5;
+    for (const [g, gain] of [[newGame(1), 2], [newGame(1, data), 5]] as const) {
+      const p = g.state.players[0];
+      p.pos = 'R5';
+      const pills0 = p.pills;
+      g.runFlow(g.debugMove(0, 1), script({}));
+      expect(p.pos).toBe('R6');
+      expect(p.pills).toBe(pills0 + gain);
+    }
   });
 });

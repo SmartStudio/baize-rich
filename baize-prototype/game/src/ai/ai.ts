@@ -3,7 +3,6 @@
 // Personalities 稳健 / 激进 / 守财 shift thresholds and preferences.
 import { ALTAR, REGION_IDS } from '../core/board';
 import type { ActionAct, Controller, PendingChoice, PendingChoiceOf, PreRollAct, Target } from '../core/choices';
-import { RULES } from '../core/constants';
 import type { Game } from '../core/engine';
 import { Rng } from '../core/rng';
 import {
@@ -308,7 +307,7 @@ export class AIController implements Controller {
     }
     const ult = has((v) => v.t === 'ult');
     if (ult && spare >= this.data.config.ult.pillCost) {
-      if (p.hero === 'body' && this.expectedRentLoss() * RULES.immovableTurns > 300) return ult.id;
+      if (p.hero === 'body' && this.expectedRentLoss() * this.data.config.rules.immovableTurns > 300) return ult.id;
       if (p.hero === 'sword') {
         const range = Array.from({ length: 7 }, (_, i) => i - 3);
         if (this.expectedRoll(1, range) - base > 300) return ult.id;
@@ -337,21 +336,21 @@ export class AIController implements Controller {
     // 1) 五雷符: demon kill or bounty / heavy buildings
     const thunder = find((v) => v.t === 'cast' && v.card === 'thunder');
     if (thunder && attacks && spare >= 2) {
-      const tg = this.bestThunderTarget(RULES.thunderDemonDamage);
+      const tg = this.bestThunderTarget(this.data.config.rules.thunderDemonDamage);
       if (tg && tg.value * this.persona.attack >= 250) return thunder.id;
     }
     // 2) ults with value > 300
     const ult = find((v) => v.t === 'ult');
     if (ult && spare >= this.data.config.ult.pillCost) {
       if (p.hero === 'magic' && attacks) {
-        const tg = this.bestThunderTarget(RULES.magicUltDemonDamage);
+        const tg = this.bestThunderTarget(this.data.config.rules.magicUltDemonDamage);
         if (tg && tg.value * this.persona.attack > 300) return ult.id;
       }
       if (p.hero === 'alch') {
         const tg = this.bestBuyout();
         if (tg && tg.value > 300) return ult.id;
       }
-      if (p.hero === 'body' && this.expectedRentLoss() * RULES.immovableTurns > 300 && st.turn.doubles > 0) return ult.id;
+      if (p.hero === 'body' && this.expectedRentLoss() * this.data.config.rules.immovableTurns > 300 && st.turn.doubles > 0) return ult.id;
     }
     // 3) 点金符 is almost always worth a pill
     const gold = find((v) => v.t === 'cast' && v.card === 'goldtouch');
@@ -395,10 +394,10 @@ export class AIController implements Controller {
   private bestThunderTarget(demonDmg: number): { target: Target; value: number } | null {
     const st = this.st;
     let best: { target: Target; value: number } | null = null;
-    const mult = this.me.divines.includes('subdue') ? RULES.subdueDamageMult : 1;
+    const mult = this.me.divines.includes('subdue') ? this.data.config.rules.subdueDamageMult : 1;
     if (st.demon) {
       const dmg = demonDmg * mult;
-      const v = st.demon.hp <= dmg ? RULES.demonLastHitCultivation * VALUE.cult : dmg * 40;
+      const v = st.demon.hp <= dmg ? this.data.config.rules.demonLastHitCultivation * VALUE.cult : dmg * 40;
       best = { target: { t: 'demon' }, value: v };
     }
     const leader = uniqueLeader(st, this.data);
@@ -408,7 +407,7 @@ export class AIController implements Controller {
       const t = st.tiles[tg.node];
       const price = this.board.node(tg.node).price!;
       let v = (nominalRent(this.data, price, t.level) - nominalRent(this.data, price, t.level - 1)) * Math.min(4, roundsLeft) * 0.5;
-      if (leader === t.owner && leader !== this.seat) v += RULES.bountyCultivation * VALUE.cult;
+      if (leader === t.owner && leader !== this.seat) v += this.data.config.rules.bountyCultivation * VALUE.cult;
       if (!best || v > best.value) best = { target: tg, value: v };
     }
     return best;
@@ -520,7 +519,7 @@ export class AIController implements Controller {
     const real = c.options.filter((o) => o.value.t !== 'cancel');
     if (real.length === 0) return 'cancel';
     if (purpose === 'thunder' || purpose === 'fivethunder') {
-      const tg = this.bestThunderTarget(purpose === 'thunder' ? RULES.thunderDemonDamage : RULES.magicUltDemonDamage);
+      const tg = this.bestThunderTarget(purpose === 'thunder' ? this.data.config.rules.thunderDemonDamage : this.data.config.rules.magicUltDemonDamage);
       if (!tg) return 'cancel';
       return tg.target.t === 'demon' ? 'demon' : tg.target.t === 'land' ? `land:${tg.target.node}` : 'cancel';
     }

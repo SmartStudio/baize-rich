@@ -54,6 +54,75 @@ export interface ConfigData {
   badLuckStreak: number;
   maxActiveTasks: number;
   pillValueInStones: number;
+  rules: RulesConfig;
+}
+
+/** Numbers stated only in GDD text or card descriptions (config.json `rules`). */
+export interface RulesConfig {
+  /** §9.4 / §12 丹道营商：丹师购地折扣（9 折） */
+  alchBuyDiscount: number;
+  /** 折扣符：购地 / 升级折扣（7 折） */
+  discountCardMult: number;
+  /** 灵丹换地：收购价为投入总价的倍数 */
+  buyoutMult: number;
+  /** 剑气：剑修经过他人时夺取的灵石 */
+  swordQiSteal: number;
+  /** 点金符：获得灵石 */
+  goldtouchStones: number;
+  /** 神行符：本次点数 +1 至 +此值 */
+  swiftstepMax: number;
+  /** 身轻如燕：移动总点数 ±此值 */
+  swiftDivineDelta: number;
+  /** 御剑飞行：移动点数 ±此值 */
+  swordUltDelta: number;
+  /** 灵息：法修被动获得的灵丹 */
+  magicPassivePills: number;
+  /** 聚灵：每回合首次收租获得的灵丹 */
+  gatherPills: number;
+  /** 点石成金：收租倍率（+20%） */
+  midasMult: number;
+  /** 金身：每隔几回合自动抵挡 1 次 */
+  goldbodyCooldownRounds: number;
+  /** 缩地成寸：每隔几回合可用 1 次 */
+  shrinkCooldownRounds: number;
+  /** 丹心：回合开始时灵丹低于此值则 +1 */
+  pillheartBelow: number;
+  /** 不动明王：免租持续回合数（本回合与下回合） */
+  immovableTurns: number;
+  /** §9.5 天赐 白泽护道：持续轮数 */
+  wardRounds: number;
+  /** §9.5 天赐 白泽图：获得修为 */
+  chartCultivation: number;
+  /** §9.5 天赐 白泽图：抽符箓张数 */
+  chartDraw: number;
+  /** §9.5 天赐 天降祥瑞：免费升级的洞府数 */
+  auspiceLands: number;
+  /** §9.5 天赐 灵脉馈赠：获得灵石 */
+  veinStones: number;
+  /** §9.5 天赐 丹霞：获得灵丹 */
+  dawnPills: number;
+  /** §8.1 / §10 悬赏：获得修为 */
+  bountyCultivation: number;
+  /** §10 斩妖除魔：对天魔最后一击获得修为 */
+  demonLastHitCultivation: number;
+  /** 五雷符：对天魔伤害 */
+  thunderDemonDamage: number;
+  /** 法修大招：对天魔伤害 */
+  magicUltDemonDamage: number;
+  /** 镇妖：对天魔伤害倍率 */
+  subdueDamageMult: number;
+  /** §4 灵泉：获得灵丹 */
+  springPills: number;
+  /** §4 丹炉：获得灵丹 */
+  furnacePills: number;
+  /** §4 白泽祠：获得灵丹 */
+  shrinePills: number;
+  /** §11.2 灵兽引路：可选点数下限 */
+  beastRollMin: number;
+  /** §11.2 灵兽引路：可选点数上限 */
+  beastRollMax: number;
+  /** §9.4 神识：抽机缘时抽几选 1 */
+  senseDrawCount: number;
 }
 
 // ---- board.json -----------------------------------------------------------

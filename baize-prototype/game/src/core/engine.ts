@@ -18,7 +18,6 @@ import type {
   ActionAct, ChoiceKind, ChoiceOption, ChoiceSpec, ChoiceValueMap, PendingChoice, PendingChoiceOf,
   PreRollAct, Target, ThreatKind,
 } from './choices';
-import { RULES } from './constants';
 import { defaultData } from './data';
 import type { GameEvent, GameEventType } from './events';
 import { hashSeed, nextFloat } from './rng';
@@ -302,7 +301,7 @@ export class Game {
     st.turn = this.freshTurn(seat);
     this.emit('turnStart', `${this.pn(seat)} 的回合`, { player: seat });
 
-    if (p.divines.includes('pillheart') && p.pills < RULES.pillheartBelow) {
+    if (p.divines.includes('pillheart') && p.pills < this.cfg.rules.pillheartBelow) {
       p.pills += 1;
       this.emit('pills', `${this.pn(seat)} 丹心生效，+1 灵丹`, { player: seat, amount: 1 });
     }
@@ -340,7 +339,7 @@ export class Game {
           if (p.chooseRoll) {
             p.chooseRoll = false;
             const opts: ChoiceOption<number>[] = [];
-            for (let v = RULES.beastRollMin; v <= RULES.beastRollMax; v++) opts.push({ id: `v${v}`, label: `${v} 点`, value: v });
+            for (let v = this.cfg.rules.beastRollMin; v <= this.cfg.rules.beastRollMax; v++) opts.push({ id: `v${v}`, label: `${v} 点`, value: v });
             const v = yield* this.ask({ player: seat, kind: 'rollValue', title: '灵兽引路', desc: '选择本次移动点数', options: opts, forceAsk: true });
             this.emit('roll', `${this.pn(seat)} 灵兽引路，选择 ${v} 点`, { player: seat, amount: v });
             yield* this.doMove(seat, v);
@@ -556,7 +555,7 @@ export class Game {
     const node = yield* this.ask({
       player: seat, kind: 'node', title: '缩地成寸', desc: '移动到当前灵域任意外环格并结算', options: opts, ctx: { purpose: 'shrink' },
     });
-    p.shrinkReadyRound = this.state.round + RULES.shrinkCooldownRounds;
+    p.shrinkReadyRound = this.state.round + this.cfg.rules.shrinkCooldownRounds;
     this.teleport(seat, node, '缩地成寸');
     yield* this.settle(seat, node);
   }
@@ -591,9 +590,9 @@ export class Game {
     const p = this.state.players[seat];
     const t = this.state.turn;
     const sets: number[][] = [];
-    if (t.swiftstep) sets.push(Array.from({ length: RULES.swiftstepMax }, (_, i) => i + 1));
-    if (p.divines.includes('swift')) sets.push([-RULES.swiftDivineDelta, 0, RULES.swiftDivineDelta]);
-    if (t.swordUlt) sets.push(Array.from({ length: RULES.swordUltDelta * 2 + 1 }, (_, i) => i - RULES.swordUltDelta));
+    if (t.swiftstep) sets.push(Array.from({ length: this.cfg.rules.swiftstepMax }, (_, i) => i + 1));
+    if (p.divines.includes('swift')) sets.push([-this.cfg.rules.swiftDivineDelta, 0, this.cfg.rules.swiftDivineDelta]);
+    if (t.swordUlt) sets.push(Array.from({ length: this.cfg.rules.swordUltDelta * 2 + 1 }, (_, i) => i - this.cfg.rules.swordUltDelta));
     let totals = new Set<number>([base]);
     for (const s of sets) {
       const next = new Set<number>();
@@ -733,13 +732,13 @@ export class Game {
     if (!slide) this.emit('step', '', { player: seat, node: to, from });
     if (n.type === 'start' && remaining > 0) this.gainStones(seat, this.cfg.salaryPass, '经过宗门山门');
     if (p.hero === 'magic' && (n.type === 'spring' || n.type === 'furnace')) {
-      p.pills += RULES.magicPassivePills;
-      this.emit('pills', `${this.pn(seat)} 灵息：经过${n.name} +${RULES.magicPassivePills} 灵丹`, { player: seat, amount: RULES.magicPassivePills });
+      p.pills += this.cfg.rules.magicPassivePills;
+      this.emit('pills', `${this.pn(seat)} 灵息：经过${n.name} +${this.cfg.rules.magicPassivePills} 灵丹`, { player: seat, amount: this.cfg.rules.magicPassivePills });
     }
     if (p.hero === 'sword' && remaining > 0 && !slide) {
       for (const o of this.state.players) {
         if (o.seat === seat || o.pos !== to || o.stones <= 0) continue;
-        const amt = Math.min(RULES.swordQiSteal, o.stones);
+        const amt = Math.min(this.cfg.rules.swordQiSteal, o.stones);
         o.stones -= amt;
         p.stones += amt;
         this.emit('stones', `${this.pn(seat)} 剑气掠过 ${this.pn(o.seat)}，夺取 ${amt} 灵石`, { player: seat, amount: amt });
@@ -813,7 +812,7 @@ export class Game {
         yield* this.drawFortune(seat, depth);
         break;
       case 'spring': {
-        this.gainPills(seat, RULES.springPills, '灵泉');
+        this.gainPills(seat, this.cfg.rules.springPills, '灵泉');
         if (p.bound) { p.bound = false; this.emit('status', `灵泉洗去${NEGATIVE_STATUS_LABEL.bound}`, { player: seat }); }
         else if (p.tremorRound === this.state.round) { p.tremorRound = 0; this.emit('status', `灵泉洗去${NEGATIVE_STATUS_LABEL.tremor}`, { player: seat }); }
         break;
@@ -822,7 +821,7 @@ export class Game {
         yield* this.market(seat);
         break;
       case 'furnace':
-        this.gainPills(seat, RULES.furnacePills, '丹炉');
+        this.gainPills(seat, this.cfg.rules.furnacePills, '丹炉');
         break;
       case 'cliff':
         if (!ctx.stay && !p.jailed) this.sendToCliff(seat);
@@ -831,7 +830,7 @@ export class Game {
         yield* this.arrayTeleport(seat, depth);
         break;
       case 'shrine':
-        this.gainPills(seat, RULES.shrinePills, '白泽祠');
+        this.gainPills(seat, this.cfg.rules.shrinePills, '白泽祠');
         if (!p.seal) { p.seal = true; this.emit('status', `${this.pn(seat)} 获得祠印（下次突破 −${this.cfg.shrineDiscount}）`, { player: seat }); }
         break;
       case 'altar':
@@ -905,7 +904,7 @@ export class Game {
     this.emit('rent', `${this.pn(seat)} 向 ${this.pn(ownerSeat)} 支付租金 ${paid}${rb.mults.length > 1 ? `（${rb.mults.slice(1).map((m) => m.label).join('、')}）` : ''}`, { player: seat, node, amount: paid });
     if (paid > 0 && owner.divines.includes('gather') && owner.gatherRound !== st.round) {
       owner.gatherRound = st.round;
-      this.gainPills(ownerSeat, RULES.gatherPills, '聚灵');
+      this.gainPills(ownerSeat, this.cfg.rules.gatherPills, '聚灵');
     }
   }
 
@@ -1080,7 +1079,7 @@ export class Game {
 
   private *drawFortune(seat: number, depth: number): Flow {
     const p = this.state.players[seat];
-    const count = p.divines.includes('sense') ? RULES.senseDrawCount : 1;
+    const count = p.divines.includes('sense') ? this.cfg.rules.senseDrawCount : 1;
     const cards: string[] = [];
     for (let k = 0; k < count; k++) {
       const id = this.drawEventCard(seat, k === 0 && p.badStreak >= this.cfg.badLuckStreak);
@@ -1346,7 +1345,7 @@ export class Game {
         const tg = yield* this.askTarget(seat, s.name, s.desc, this.thunderTargets(seat), 'thunder');
         if (tg.t === 'cancel') return;
         this.payCard(seat, card);
-        if (tg.t === 'demon') this.damageDemon(seat, RULES.thunderDemonDamage);
+        if (tg.t === 'demon') this.damageDemon(seat, this.cfg.rules.thunderDemonDamage);
         else if (tg.t === 'land') yield* this.attackLand(seat, tg.node, 'thunder');
         return;
       }
@@ -1373,7 +1372,7 @@ export class Game {
       }
       case 'goldtouch':
         this.payCard(seat, card);
-        this.gainStones(seat, RULES.goldtouchStones, '点金符');
+        this.gainStones(seat, this.cfg.rules.goldtouchStones, '点金符');
         return;
       case 'discount':
         this.payCard(seat, card);
@@ -1411,7 +1410,7 @@ export class Game {
     const st = this.state;
     const owner = st.tiles[node].owner!;
     if (goldbodyReady(st, owner)) {
-      st.players[owner].goldbodyReadyRound = st.round + RULES.goldbodyCooldownRounds;
+      st.players[owner].goldbodyReadyRound = st.round + this.cfg.rules.goldbodyCooldownRounds;
       this.emit('block', `${this.pn(owner)} 金身自动护体，抵挡雷法`, { player: owner });
       return;
     }
@@ -1420,7 +1419,7 @@ export class Game {
     this.downgrade(node, `遭 ${this.pn(attacker)} 雷击`);
     if (leader === owner && owner !== attacker) {
       this.emit('info', `${this.pn(attacker)} 击中修为第一者的洞府，获得悬赏`, { player: attacker });
-      this.addCult(attacker, RULES.bountyCultivation, '悬赏');
+      this.addCult(attacker, this.cfg.rules.bountyCultivation, '悬赏');
     }
   }
 
@@ -1429,14 +1428,14 @@ export class Game {
     const d = st.demon;
     if (!d) return;
     const p = st.players[seat];
-    const dmg = base * (p.divines.includes('subdue') ? RULES.subdueDamageMult : 1);
+    const dmg = base * (p.divines.includes('subdue') ? this.cfg.rules.subdueDamageMult : 1);
     d.hp -= dmg;
     p.stats.demonDamage += dmg;
     this.emit('demonHit', `${this.pn(seat)} 对天魔造成 ${dmg} 点伤害（剩余 ${Math.max(0, d.hp)}）`, { player: seat, amount: dmg, node: d.node });
     if (d.hp <= 0) {
       st.demon = null;
       this.emit('demonGone', `${this.pn(seat)} 斩杀天魔！`, { player: seat, node: d.node });
-      this.addCult(seat, RULES.demonLastHitCultivation, '斩妖除魔');
+      this.addCult(seat, this.cfg.rules.demonLastHitCultivation, '斩妖除魔');
     }
   }
 
@@ -1452,7 +1451,7 @@ export class Game {
     switch (p.hero) {
       case 'body':
         payUlt();
-        p.rentImmuneUntilTurn = p.turnsTaken + RULES.immovableTurns - 1;
+        p.rentImmuneUntilTurn = p.turnsTaken + this.cfg.rules.immovableTurns - 1;
         return;
       case 'sword':
         payUlt();
@@ -1462,7 +1461,7 @@ export class Game {
         const tg = yield* this.askTarget(seat, hero.ult.name, hero.ult.desc, this.thunderTargets(seat), 'fivethunder');
         if (tg.t === 'cancel') return;
         payUlt();
-        if (tg.t === 'demon') this.damageDemon(seat, RULES.magicUltDemonDamage);
+        if (tg.t === 'demon') this.damageDemon(seat, this.cfg.rules.magicUltDemonDamage);
         else if (tg.t === 'land') yield* this.attackLand(seat, tg.node, 'fivethunder');
         return;
       }
@@ -1500,7 +1499,7 @@ export class Game {
     if (owner.divines.includes('subdue')) { this.emit('block', `${this.pn(t.owner)} 镇妖：天魔不敢作乱`, { player: t.owner }); return; }
     if (isWardActive(st, t.owner)) { this.emit('block', `${this.pn(t.owner)} 受白泽护道庇佑`, { player: t.owner }); return; }
     if (goldbodyReady(st, t.owner)) {
-      owner.goldbodyReadyRound = st.round + RULES.goldbodyCooldownRounds;
+      owner.goldbodyReadyRound = st.round + this.cfg.rules.goldbodyCooldownRounds;
       this.emit('block', `${this.pn(t.owner)} 金身护住洞府`, { player: t.owner });
       return;
     }
@@ -1520,7 +1519,7 @@ export class Game {
     this.emit('eruption', `地火喷发！波及【${this.nodeName(node)}】`, { node, player: owner });
     if (isWardActive(st, owner)) { this.emit('block', `${this.pn(owner)} 受白泽护道庇佑`, { player: owner }); return; }
     if (goldbodyReady(st, owner)) {
-      st.players[owner].goldbodyReadyRound = st.round + RULES.goldbodyCooldownRounds;
+      st.players[owner].goldbodyReadyRound = st.round + this.cfg.rules.goldbodyCooldownRounds;
       this.emit('block', `${this.pn(owner)} 金身抵挡地火`, { player: owner });
       return;
     }
@@ -1561,21 +1560,21 @@ export class Game {
     switch (id) {
       case 'chart':
         this.drawSpell(seat);
-        this.addCult(seat, RULES.chartCultivation, '白泽图');
+        this.addCult(seat, this.cfg.rules.chartCultivation, '白泽图');
         return;
       case 'ward':
-        p.wardUntilRound = st.round + RULES.wardRounds - 1;
+        p.wardUntilRound = st.round + this.cfg.rules.wardRounds - 1;
         this.emit('status', `${this.pn(seat)} 获白泽护道（至第 ${p.wardUntilRound} 轮）`, { player: seat });
         return;
       case 'vein':
-        this.gainStones(seat, RULES.veinStones, '灵脉馈赠');
+        this.gainStones(seat, this.cfg.rules.veinStones, '灵脉馈赠');
         return;
       case 'dawn':
-        this.gainPills(seat, RULES.dawnPills, '丹霞');
+        this.gainPills(seat, this.cfg.rules.dawnPills, '丹霞');
         return;
       case 'auspice': {
         const done: NodeId[] = [];
-        for (let k = 0; k < RULES.auspiceLands; k++) {
+        for (let k = 0; k < this.cfg.rules.auspiceLands; k++) {
           const cands = this.board.lands.filter((n) => {
             const t = st.tiles[n];
             return t.owner === seat && t.level < 4 && !done.includes(n) && (t.level + 1 < 4 || p.pills >= this.cfg.lv4PillCost);

@@ -1,7 +1,9 @@
 import type { PendingChoice } from '../src/core/choices';
 import { Game } from '../src/core/engine';
+import type { GameData } from '../src/core/types';
+import { defaultData } from '../src/core/data';
 
-export function newGame(seed = 1): Game {
+export function newGame(seed = 1, data: GameData = defaultData): Game {
   return new Game({
     seed,
     players: [
@@ -10,7 +12,7 @@ export function newGame(seed = 1): Game {
       { name: 'C', hero: 'sword' },
       { name: 'D', hero: 'alch' },
     ],
-  });
+  }, data);
 }
 
 /** Scripted answerer: map choice kind -> option id (or function). Unlisted kinds take the default/first option. */

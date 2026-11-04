@@ -1,6 +1,5 @@
 // Pure rule calculations (no mutation, no randomness). Shared by the engine,
 // the AI and the UI (e.g. to preview rent / costs).
-import { RULES } from './constants';
 import type { Board } from './board';
 import { REGION_IDS } from './board';
 import type { GameData, GameState, NodeId, PlayerState, RegionId } from './types';
@@ -33,7 +32,7 @@ export function upgradeCostRaw(data: GameData, price: number, newLevel: number):
 export function upgradeCost(
   data: GameData, price: number, newLevel: number, discount: boolean,
 ): { stones: number; pills: number } {
-  const mult = discount ? RULES.discountCardMult : 1;
+  const mult = discount ? data.config.rules.discountCardMult : 1;
   return {
     stones: Math.floor(upgradeCostRaw(data, price, newLevel) * mult),
     pills: newLevel === 4 ? data.config.lv4PillCost : 0,
@@ -42,9 +41,8 @@ export function upgradeCost(
 
 export function buyPrice(data: GameData, p: PlayerState, price: number, discount: boolean): number {
   let m = 1;
-  if (p.hero === 'alch') m *= RULES.alchBuyDiscount;
-  if (discount) m *= RULES.discountCardMult;
-  void data;
+  if (p.hero === 'alch') m *= data.config.rules.alchBuyDiscount;
+  if (discount) m *= data.config.rules.discountCardMult;
   return Math.floor(price * m);
 }
 
@@ -56,7 +54,7 @@ export function investedValue(data: GameData, price: number, level: number): num
 }
 
 export function buyoutPrice(data: GameData, price: number, level: number): number {
-  return Math.floor(investedValue(data, price, level) * RULES.buyoutMult);
+  return Math.floor(investedValue(data, price, level) * data.config.rules.buyoutMult);
 }
 
 export function ownsAllOfRegion(state: GameState, board: Board, region: RegionId, seat: number): boolean {
@@ -100,7 +98,7 @@ export function rentFor(state: GameState, board: Board, data: GameData, node: No
   if (isManifestRound(state, data)) mults.push({ label: '灵雨', mult: cfg.manifestRentMult });
   if (owner.treasure.some((x) => x.region === n.region && x.round === state.round)) mults.push({ label: '聚宝符', mult: 2 });
   if (owner.tremorRound === state.round) mults.push({ label: '地脉异动', mult: 0.5 });
-  if (owner.divines.includes('midas')) mults.push({ label: '点石成金', mult: RULES.midasMult });
+  if (owner.divines.includes('midas')) mults.push({ label: '点石成金', mult: data.config.rules.midasMult });
   const amount = Math.floor(mults.reduce((a, m) => a * m.mult, base));
   return { amount, base, mults };
 }
