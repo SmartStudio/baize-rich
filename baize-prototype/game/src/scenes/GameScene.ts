@@ -75,7 +75,7 @@ export class GameScene extends Phaser.Scene {
     this.side = new SidePanel(this, this.engine);
     this.modal = new ChoiceModal(this);
     this.toastText = txt(this, BOARD.x + 288, BOARD.y + 590, '', { size: 13, color: HEX.gold, origin: [0.5, 0.5] }).setDepth(9000);
-    txt(this, BOARD.x + 288, 700, '空格 掷骰/确认 · B 升级 · C 出符 · Enter 结束回合 · Esc 取消 · F 2 倍速', { size: 11, color: HEX.dim, origin: [0.5, 0.5] });
+    txt(this, BOARD.x + 288, 700, '空格 掷骰/确认 · B 升级 · C 出符 · Enter 结束回合 · Esc 取消 · F 切换倍速', { size: 11, color: HEX.dim, origin: [0.5, 0.5] });
 
     this.side.btnRoll.onClick(() => this.mainAnswer('roll'));
     this.side.btnEnd.onClick(() => this.mainAnswer('end'));
@@ -327,7 +327,8 @@ export class GameScene extends Phaser.Scene {
   private onKey(ev: KeyboardEvent): void {
     const k = ev.key;
     if (k === 'f' || k === 'F') {
-      this.speed = this.speed === 1 ? 2 : 1;
+      const speeds = [1, 2, 4, 8];
+      this.speed = speeds[(speeds.indexOf(this.speed) + 1) % speeds.length];
       this.top.render(this.shownState, this.speed);
       this.toast(`速度 ${this.speed}×`);
       return;
@@ -337,7 +338,6 @@ export class GameScene extends Phaser.Scene {
       if (this.modal.handleKey(key)) ev.preventDefault();
       return;
     }
-    if (k === 't' || k === 'T') { this.toast('交易功能暂未开放'); return; }
     if (!this.mainChoice) return;
     if (k === ' ') { ev.preventDefault(); this.mainAnswer('roll'); }
     else if (k === 'Enter') this.mainAnswer('end');
