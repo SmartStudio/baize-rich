@@ -35,8 +35,11 @@ export const PLAYER_HEX = ['#F2B93B', '#E6E4F0', '#D9434B', '#3A6FD8'];
  */
 export const FONT = '"Fusion Pixel 12px", "Ark Pixel 12px", "Noto Sans SC", "Noto Sans CJK SC", sans-serif';
 
-/** Text is rendered at this resolution so it stays legible when Scale.FIT enlarges the canvas. */
-export const TEXT_RESOLUTION = 2;
+/**
+ * Text texture resolution. Keep it at 1: the framebuffer is always 1280×720 (Scale.FIT only stretches it with CSS),
+ * so a 2× texture gets downsampled and drops 1-px strokes, e.g. "+225" renders as "−225".
+ */
+export const TEXT_RESOLUTION = 1;
 
 export interface TextOpts {
   size?: number;
@@ -57,22 +60,52 @@ export function txt(scene: Phaser.Scene, x: number, y: number, s: string, o: Tex
     fontStyle: o.bold ? 'bold' : 'normal',
     align: o.align ?? 'left',
     resolution: TEXT_RESOLUTION,
-    wordWrap: o.wrap ? { width: o.wrap, useAdvancedWrap: true } : undefined,
+    wordWrap: o.wrap ? { width: o.wrap, callback: (str: string, obj: Phaser.GameObjects.Text) => wrapCJK(str, obj, o.wrap!) } : undefined,
     stroke: o.stroke,
     strokeThickness: o.stroke ? 3 : 0,
     lineSpacing: o.lineSpacing ?? 2,
   });
   if (o.origin) t.setOrigin(o.origin[0], o.origin[1]);
-  // pixelArt:true makes every texture NEAREST; text rendered at 2× looks better LINEAR-filtered.
+  // pixelArt:true makes every texture NEAREST; text placed on half pixels (centred origins) looks better LINEAR-filtered.
   t.texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
   return t;
 }
 
-/** Small ribbon-style header tab centred on (cx, y). Returns its label for updates. */
-export function tab(scene: Phaser.Scene, cx: number, y: number, label: string, fill: number): Phaser.GameObjects.Text {
-  scene.add.rectangle(cx, y, 150, 20, fill).setStrokeStyle(2, COLORS.outline).setOrigin(0.5, 0.5);
+/** Chinese punctuation that must not start a line. */
+const NO_LINE_START = /^[，。、：；！？）」』】》,.:;!?)]/;
+
+/**
+ * Phaser's built-in wraps only break at spaces, so Chinese text breaks at the few spaces around numbers
+ * and leaves ragged short lines. Break between any two characters instead, keeping runs of
+ * Latin letters / digits / signs (e.g. "+225", "P2") whole.
+ */
+function wrapCJK(text: string, t: Phaser.GameObjects.Text, width: number): string[] {
+  const out: string[] = [];
+  for (const para of text.split('\n')) {
+    let line = '';
+    for (const tok of para.match(/[A-Za-z0-9+\-−.%×/]+|./gu) ?? []) {
+      if (line.trim() && !NO_LINE_START.test(tok) && t.context.measureText(line + tok).width > width) {
+        out.push(line.trimEnd());
+        line = tok.trimStart();
+      } else {
+        line += tok;
+      }
+    }
+    out.push(line);
+  }
+  return out;
+}
+
+export interface Tab {
+  ribbon: Phaser.GameObjects.Rectangle;
+  label: Phaser.GameObjects.Text;
+}
+
+/** Small ribbon-style header tab centred on (cx, y). Returns its ribbon and label for updates. */
+export function tab(scene: Phaser.Scene, cx: number, y: number, label: string, fill: number): Tab {
+  const ribbon = scene.add.rectangle(cx, y, 150, 20, fill).setStrokeStyle(2, COLORS.outline).setOrigin(0.5, 0.5);
   scene.add.rectangle(cx, y - 7, 146, 2, COLORS.gold).setOrigin(0.5, 0.5);
-  return txt(scene, cx, y + 1, label, { size: 12, bold: true, origin: [0.5, 0.5], color: HEX.parchment });
+  return { ribbon, label: txt(scene, cx, y + 1, label, { size: 12, bold: true, origin: [0.5, 0.5], color: HEX.parchment }) };
 }
 
 /** Simple bordered panel rectangle. */
