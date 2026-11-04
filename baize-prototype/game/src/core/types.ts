@@ -17,6 +17,8 @@ export interface ConfigData {
   rounds: number;
   winCultivation: number;
   startStones: number;
+  /** 按座位追加的开局灵石，抵消先手抢地优势（索引 = 座位号）。 */
+  seatBonusStones: number[];
   startPills: number;
   startHand: number;
   handLimit: number;

@@ -205,7 +205,7 @@ export class Game {
       endReason: null,
       players: this.setup.players.map((sp, i) => ({
         seat: i, name: sp.name, hero: sp.hero, pos: this.board.startId, roadDir: 'in',
-        stones: cfg.startStones, pills: cfg.startPills, cultBase: 0, peakCult: 0, btEarned: 0, btUsed: 0,
+        stones: cfg.startStones + cfg.seatBonusStones[i], pills: cfg.startPills, cultBase: 0, peakCult: 0, btEarned: 0, btUsed: 0,
         hand: [], divines: [], tasks: [], seal: false, jailed: false, jailTurns: 0, bound: false,
         wardUntilRound: 0, tremorRound: 0, treasure: [], rentImmuneUntilTurn: -1, turnsTaken: 0, ultUses: 0,
         goldbodyReadyRound: 0, shrinkReadyRound: 0, gatherRound: 0, mazeAvailable: false, chooseRoll: false,
@@ -250,6 +250,9 @@ export class Game {
     try {
       for (const p of this.state.players) for (let k = 0; k < this.cfg.startHand; k++) this.drawSpell(p.seat, true);
       this.emit('gameStart', '白泽秘境开启，众散修踏入秘境。');
+      const bonus = this.state.players.filter((p) => this.cfg.seatBonusStones[p.seat] > 0)
+        .map((p) => `${this.pn(p.seat)} +${this.cfg.seatBonusStones[p.seat]}`);
+      if (bonus.length) this.emit('info', `后手补偿灵石：${bonus.join('，')}`);
       for (let r = 1; r <= this.cfg.rounds; r++) {
         this.state.round = r;
         yield* this.roundStart();
@@ -1417,7 +1420,7 @@ export class Game {
     if (yield* this.guard(owner, kind, attacker, node)) return;
     const leader = uniqueLeader(st, this.data);
     this.downgrade(node, `遭 ${this.pn(attacker)} 雷击`);
-    if (leader === owner && owner !== attacker) {
+    if (kind === 'thunder' && leader === owner && owner !== attacker) {
       this.emit('info', `${this.pn(attacker)} 击中修为第一者的洞府，获得悬赏`, { player: attacker });
       this.addCult(attacker, this.cfg.rules.bountyCultivation, '悬赏');
     }

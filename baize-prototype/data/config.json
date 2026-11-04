@@ -3,6 +3,7 @@
   "rounds": 15,
   "winCultivation": 10,
   "startStones": 1500,
+  "seatBonusStones": [0, 75, 150, 225],
   "startPills": 2,
   "startHand": 2,
   "handLimit": 5,
