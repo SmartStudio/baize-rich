@@ -4,6 +4,7 @@ import type { GameState } from '../core/types';
 import { addImg } from './assets';
 import { TOP } from './layout';
 import { COLORS, HEX, panel, txt } from './theme';
+import { Tooltip } from './Tooltip';
 
 /** Top bar (y 8–60): title, round, Baize countdown, demon status, speed. */
 export class TopBar {
@@ -20,8 +21,21 @@ export class TopBar {
     panel(scene, 16, y, 312, h, COLORS.panel, COLORS.gold);
     addImg(scene, 30, y + 18, 'ic_baize').setOrigin(0, 0);
     txt(scene, 54, y + h / 2, '白泽秘境大富翁', { size: 22, color: HEX.gold, bold: true, origin: [0, 0.5] });
-    panel(scene, 440, y, 230, h, COLORS.panel, COLORS.gold);
-    this.round = txt(scene, 555, y + h / 2, '', { size: 20, bold: true, origin: [0.5, 0.5] });
+    const cfg = game.data.config;
+    panel(scene, 340, y, 330, h, COLORS.panel, COLORS.gold);
+    this.round = txt(scene, 505, y + 16, '', { size: 18, bold: true, origin: [0.5, 0.5] });
+    txt(scene, 505, y + 38, `修为先到 ${cfg.winCultivation} 即胜 · 否则第 ${cfg.rounds} 轮后修为最高者胜`, {
+      size: 11, color: HEX.gold, origin: [0.5, 0.5],
+    });
+    new Tooltip(scene).attach(340, y, 330, h, () => ({
+      title: '胜负',
+      body: [
+        `修为先达到 ${cfg.winCultivation} 的玩家立即获胜（渡劫飞升）。`,
+        `无人达到时，第 ${cfg.rounds} 轮结束后修为最高者获胜；平局比总资产（灵石 + 洞府造价 + 灵丹 × ${cfg.pillValueInStones}）。`,
+        `不会淘汰：付不起时破产重整，灵田归还，领 ${cfg.bankrupt.resetStones} 灵石，修为 −${cfg.bankrupt.cultivationLoss}。`,
+        '一轮 = 每位玩家各行动一个回合。',
+      ].join('\n'),
+    }));
     panel(scene, 684, y, 196, h, COLORS.panel, COLORS.gold);
     addImg(scene, 696, y + 18, 'ic_baize').setOrigin(0, 0);
     this.baize = txt(scene, 720, y + 9, '', { size: 12 });
@@ -37,7 +51,7 @@ export class TopBar {
   render(state: GameState, speed: number): void {
     const cfg = this.game.data.config;
     const r = Math.max(1, state.round);
-    this.round.setText(`第 ${r} / ${cfg.rounds} 回合`);
+    this.round.setText(`第 ${r} / ${cfg.rounds} 轮${r === cfg.rounds ? ' · 最终轮' : ''}`);
     if (state.demon) {
       this.demon.setText(`天魔 生命 ${state.demon.hp}/${state.demon.maxHp}`).setColor(HEX.bad);
       this.demon2.setText(`${this.game.nodeName(state.demon.node)} · 剩 ${state.demon.leaveRound - r} 轮`);
