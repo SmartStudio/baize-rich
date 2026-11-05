@@ -9,7 +9,16 @@ export type NodeId = string; // e.g. 'W0'..'W18' (one district), 'ALTAR'
 export type HeroId = 'body' | 'magic' | 'sword' | 'alch';
 export type TileType =
   | 'start' | 'land' | 'gate' | 'trial' | 'spring' | 'market'
-  | 'furnace' | 'cliff' | 'array' | 'shrine' | 'altar';
+  | 'furnace' | 'cliff' | 'array' | 'shrine' | 'altar'
+  | 'shop' | 'minigame' | 'hospital';
+/** 小游戏格的玩法：炼丹房 / 灵骰台。 */
+export type MiniGameId = 'alchemy' | 'dice';
+/** 小游戏结果档位（灵骰台只用 fail / perfect）。 */
+export type MiniGameTier = 'fail' | 'ok' | 'perfect';
+/** 功能建筑：药园 / 集市 / 挪移阵。 */
+export type SpecialKind = 'garden' | 'bazaar' | 'portal';
+/** 附身灵体：福缘灵狐（吉）/ 心魔（凶）。 */
+export type SpiritKind = 'fox' | 'heart';
 
 // ---- config.json ----------------------------------------------------------
 export interface ConfigData {
@@ -153,6 +162,46 @@ export interface RulesConfig {
   swapRange: number;
   /** §12 剑遁：只能瞬移到相距不超过此格数（沿路网任意方向）的他人 */
   swordDashRange: number;
+  /** §18.1 整街：一人拥有一条街的全部灵田时，该街租金倍率 */
+  streetRentMult: number;
+  /** §18.2 福缘灵狐：附身者收租倍率 */
+  foxRentMult: number;
+  /** §18.2 福缘灵狐：附身者购地价格倍率（8 折） */
+  foxLandDiscount: number;
+  /** §18.2 心魔：附身者付租倍率 */
+  heartRentMult: number;
+  /** §18.2 心魔：附身者每个自己的回合开始失去的灵丹 */
+  heartPills: number;
+  /** §18.2 附身持续：附身者自己的回合数 */
+  spiritTurns: number;
+  /** §18.2 每轮结束时灵体游走 1 至此值步 */
+  spiritMoveMax: number;
+  /** §18.4 药园：每轮开始拥有者获得的灵丹 */
+  gardenPills: number;
+  /** §18.4 集市：他人停留时付的过路费（代替租金） */
+  bazaarFee: number;
+  /** §18.4 挪移阵：传送一次花费的灵丹（0 = 免费） */
+  portalPills: number;
+  /** §18.4 修为 for the first 功能建筑 a player builds on a given land (counts as one 筑府 milestone). */
+  specialCultivation: number;
+  /** §18.5 小游戏奖励的灵丹（按玩法、档位） */
+  miniGameRewards: Record<MiniGameId, Record<MiniGameTier, number>>;
+  /** §18.5 灵骰台可押的灵石档位 */
+  diceStakes: number[];
+  /** §18.5 灵骰台猜中时押注返还的倍数（2 = 翻倍） */
+  diceWinMult: number;
+  /** §18.5 灵骰台：两骰之和不小于此值为「大」 */
+  diceBigMin: number;
+  /** §18.5 灵骰台：两骰之和不大于此值为「小」（中间的点数庄家通吃） */
+  diceSmallMax: number;
+  /** §18.3 御骰符：可选点数下限 */
+  diceCardMin: number;
+  /** §18.3 御骰符：可选点数上限 */
+  diceCardMax: number;
+  /** §18.3 路障符：可放在前方 1 至此值格 */
+  barrierRange: number;
+  /** §18.3 医馆：被爆炎阵炸伤后休养（跳过）的回合数 */
+  hospitalTurns: number;
 }
 
 // ---- board.json -----------------------------------------------------------
@@ -174,6 +223,8 @@ export interface BoardNodeData {
   rect?: [number, number, number, number];
   /** 前进方向的后继格，多于一个即为岔路；next[0] 是主线（默认选项） */
   next: NodeId[];
+  /** 小游戏格（type = minigame）的玩法 */
+  game?: MiniGameId;
 }
 export interface RegionData { name: string; element: string; rule: string; ruleName: string; color: string }
 export interface BoardData {
@@ -184,6 +235,12 @@ export interface BoardData {
   streets?: Record<string, { name: string; region: RegionId }>;
   nodes: BoardNodeData[];
   tileTypes: Record<TileType, { name: string; desc: string }>;
+  /** 小游戏玩法的名字与说明 */
+  games?: Record<MiniGameId, { name: string; desc: string }>;
+  /** 功能建筑的名字与说明 */
+  specials?: Record<SpecialKind, { name: string; desc: string }>;
+  /** 灵体出生 / 重生的候选格（缺省 = 本图没有灵体） */
+  spiritSpawns?: NodeId[];
   buildings: { level: number; name: string }[];
 }
 
@@ -210,6 +267,10 @@ export interface SpellData {
   cost: number;
   timing: SpellTiming;
   desc: string;
+  /** 百宝阁售价（灵石）；有售价的牌才在百宝阁出售 */
+  price?: number;
+  /** 道具：只在百宝阁出售，不进符箓牌堆 */
+  shopOnly?: boolean;
 }
 export interface SpellsData {
   copiesEach: number;
@@ -291,6 +352,18 @@ export interface PlayerStats {
   trapTriggers: number;
   /** 主动技能使用次数 */
   skillUses: number;
+  /** 被灵体附身的次数（含心魔转移得来） */
+  possessions: number;
+  /** 把心魔传给他人的次数 */
+  heartPasses: number;
+  /** 在百宝阁买下的道具 / 符箓数 */
+  shopBuys: number;
+  /** 改建的功能建筑数 */
+  specialsBuilt: number;
+  /** 玩过的小游戏次数 */
+  miniGames: number;
+  /** 凑齐整条街的次数 */
+  streets: number;
 }
 
 export interface PlayerState {
@@ -340,6 +413,8 @@ export interface PlayerState {
   duelShieldRound: number;
   /** 迷魂丹：下一次掷骰移动步数减半（向下取整，至少 1）。 */
   dazed: boolean;
+  /** §18.3 医馆：>0 时跳过自己的回合并 −1。 */
+  hospitalTurns: number;
   /** "<node>:<level>" — first-time Lv3/Lv4 cultivation already granted. */
   milestones: string[];
   stats: PlayerStats;
@@ -350,6 +425,17 @@ export interface TileState {
   level: number;
   /** 禁制（属于地主）。易主或破产时清除。 */
   trap: boolean;
+  /** 功能建筑（只在 Lv0 自有灵田上改建，之后不能升级）。破产时清除，易主时保留。 */
+  special?: SpecialKind;
+}
+
+/** §18.2 游荡时 node 有值、holder 为 null；附身时反过来。 */
+export interface SpiritState {
+  kind: SpiritKind;
+  node: NodeId | null;
+  holder: number | null;
+  /** 附身剩余：附身者每个自己的回合开始 −1，回合结束时 ≤0 即离体。 */
+  turnsLeft: number;
 }
 
 export interface DemonState {
@@ -377,6 +463,8 @@ export interface TurnState {
   duelDone: boolean;
   /** 本次移动途中超过的玩家座位。 */
   passed: number[];
+  /** 御骰符：本回合下一次移动改为自选点数。 */
+  diceCard: boolean;
 }
 
 export interface GameState {
@@ -405,6 +493,12 @@ export interface GameState {
   bountySeat: number | null;
   /** 体修镇山的山岳路障：拦下下一个经过它的他人；主人下回合开始时消失。 */
   roadblock: { node: NodeId; seat: number } | null;
+  /** §18.2 附身灵体：[0] 福缘灵狐，[1] 心魔。 */
+  spirits: SpiritState[];
+  /** §18.3 路障符的路障：拦下下一个经过的他人，用后消失；每人同时 1 处。 */
+  barriers: { node: NodeId; seat: number }[];
+  /** §18.3 爆炎阵（对他人隐藏）：下一个停上去的他人去医馆。 */
+  blasts: { node: NodeId; seat: number }[];
   turn: TurnState;
 }
 

@@ -1,5 +1,5 @@
 // Lightweight movement predictor for AI look-ahead. Mirrors engine.walk() rules
-// (forks, altar stop/toll, mire, 镇山 roadblock, slide, start salary) without mutating
+// (forks, altar stop/toll, mire, 镇山 roadblock, 路障符 barriers, slide, start salary) without mutating
 // state or asking anybody; fork / altar decisions come from a policy callback.
 import { ALTAR, type Board } from '../core/board';
 import type { GameState, NodeId } from '../core/types';
@@ -48,6 +48,7 @@ export function predictWalk(
     node = next;
     path.push(next);
     if (rb && rb.node === next && rb.seat !== seat) { blocked = true; break; }
+    if (state.barriers.some((x) => x.node === next && x.seat !== seat)) { blocked = true; break; }
     const n = board.node(next);
     if (n.type === 'start' && remaining > 0) passStart++;
     if (n.type === 'land' && n.region === 'earth' && !mireUsed) {

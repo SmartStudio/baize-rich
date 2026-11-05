@@ -1,5 +1,5 @@
 {
-  "version": "0.6",
+  "version": "0.7",
   "rounds": 12,
   "winCultivation": 8,
   "startStones": 1500,
@@ -133,6 +133,29 @@
     "skillCooldownTurns": 2,
     "roadblockRange": 6,
     "swapRange": 8,
-    "swordDashRange": 8
+    "swordDashRange": 8,
+    "streetRentMult": 2,
+    "foxRentMult": 1.5,
+    "foxLandDiscount": 0.8,
+    "heartRentMult": 1.5,
+    "heartPills": 1,
+    "spiritTurns": 4,
+    "spiritMoveMax": 3,
+    "gardenPills": 1,
+    "bazaarFee": 100,
+    "portalPills": 0,
+    "specialCultivation": 1,
+    "miniGameRewards": {
+      "alchemy": { "fail": 0, "ok": 1, "perfect": 3 },
+      "dice": { "fail": 0, "ok": 0, "perfect": 1 }
+    },
+    "diceStakes": [0, 100, 200],
+    "diceWinMult": 2,
+    "diceBigMin": 8,
+    "diceSmallMax": 6,
+    "diceCardMin": 2,
+    "diceCardMax": 12,
+    "barrierRange": 6,
+    "hospitalTurns": 1
   }
 }

@@ -12,7 +12,7 @@ import { runHeadless } from './headless';
 export const LEADER_CHECK_ROUND = 10;
 
 /** Events that mean the active player touched another player this turn. */
-const INTERACTION_EVENTS: GameEventType[] = ['rent', 'duel', 'trap', 'roadblockHit', 'skill'];
+const INTERACTION_EVENTS: GameEventType[] = ['rent', 'duel', 'trap', 'roadblockHit', 'skill', 'barrierHit', 'blast'];
 
 export interface SimOptions {
   games: number;
@@ -46,6 +46,16 @@ export interface InteractionStats {
   trapsSet: number;
   trapTriggers: number;
   roadblockHits: number;
+  /** §18 per game: spirit possessions (transfers included), 心魔 handed over, 百宝阁 buys, 功能建筑 built, mini-games played, streets completed. */
+  possessions: number;
+  heartPasses: number;
+  shopBuys: number;
+  specialsBuilt: number;
+  miniGames: number;
+  streets: number;
+  /** §18 per game: 路障 stops and 爆炎阵 blasts. */
+  barrierHits: number;
+  blasts: number;
   /** Skill uses per game by the seat playing each hero. */
   skillUsesByHero: Record<HeroId, number>;
   /** Fractions of completed turns. */
@@ -53,7 +63,7 @@ export interface InteractionStats {
   duelTurnRate: number;
   /** A 符箓 or 大招 was used during the turn (any player). */
   castTurnRate: number;
-  /** Rent, duel, 禁制 trigger, 山岳 stop or an active skill happened during the turn. */
+  /** Rent, duel, 禁制 trigger, 山岳 / 路障 stop, 爆炎阵, 心魔 handed over or an active skill happened during the turn. */
   interactionTurnRate: number;
 }
 
@@ -89,7 +99,10 @@ export function simulate({ games, seed, difficulty, onGameEnd }: SimOptions, dat
   let playerCount = 0;
   let reachedR10 = 0;
   let leaderWon = 0;
-  const ix = { duels: 0, bountyClaims: 0, trapsSet: 0, trapTriggers: 0, roadblockHits: 0 };
+  const ix = {
+    duels: 0, bountyClaims: 0, trapsSet: 0, trapTriggers: 0, roadblockHits: 0, barrierHits: 0, blasts: 0,
+    possessions: 0, heartPasses: 0, shopBuys: 0, specialsBuilt: 0, miniGames: 0, streets: 0,
+  };
   const skillUses: Record<string, number> = {};
   const turnHits = { rent: 0, duel: 0, cast: 0, any: 0 };
 
@@ -99,7 +112,7 @@ export function simulate({ games, seed, difficulty, onGameEnd }: SimOptions, dat
     const heroes = rng.shuffle([...HERO_IDS]);
     const setup = { seed: gs, players: heroes.map((h, i) => ({ name: `P${i + 1}·${heroName[h]}`, hero: h })) };
     const seats = heroes.map(() => ({ difficulty, personality: randomPersonality(rng) }));
-    let turn: { seat: number; idle: boolean; seen: Set<GameEventType> } | null = null;
+    let turn: { seat: number; idle: boolean; seen: Set<GameEventType>; handover: boolean } | null = null;
     let r10Leader: number | null = null;
     const { game } = runHeadless(setup, seats, data, {
       onChoice: (c) => {
@@ -110,7 +123,9 @@ export function simulate({ games, seed, difficulty, onGameEnd }: SimOptions, dat
         else if (e.type === 'trapSet') ix.trapsSet++;
         else if (e.type === 'trap') ix.trapTriggers++;
         else if (e.type === 'roadblockHit') ix.roadblockHits++;
-        if (e.type === 'turnStart') turn = { seat: e.player!, idle: true, seen: new Set() };
+        else if (e.type === 'barrierHit') ix.barrierHits++;
+        else if (e.type === 'blast') ix.blasts++;
+        if (e.type === 'turnStart') turn = { seat: e.player!, idle: true, seen: new Set(), handover: false };
         else if (e.type === 'turnEnd' && turn) {
           totals.turns++;
           if (turn.idle) totals.idleTurns++;
@@ -118,9 +133,12 @@ export function simulate({ games, seed, difficulty, onGameEnd }: SimOptions, dat
           if (seen.has('rent')) turnHits.rent++;
           if (seen.has('duel')) turnHits.duel++;
           if (seen.has('cast') || seen.has('ult')) turnHits.cast++;
-          if (INTERACTION_EVENTS.some((t) => seen.has(t))) turnHits.any++;
+          if (turn.handover || INTERACTION_EVENTS.some((t) => seen.has(t))) turnHits.any++;
           turn = null;
-        } else if (turn) turn.seen.add(e.type);
+        } else if (turn) {
+          turn.seen.add(e.type);
+          if (e.type === 'spirit' && e.spirit?.action === 'transfer') turn.handover = true;
+        }
         if (e.type === 'roundEnd' && e.round === LEADER_CHECK_ROUND) r10Leader = game.ranking()[0];
       },
     });
@@ -142,6 +160,12 @@ export function simulate({ games, seed, difficulty, onGameEnd }: SimOptions, dat
       totals.bankruptcies += p.stats.bankruptcies;
       totals.tasksDone += p.stats.tasksDone;
       ix.bountyClaims += p.stats.bountyClaims;
+      ix.possessions += p.stats.possessions;
+      ix.heartPasses += p.stats.heartPasses;
+      ix.shopBuys += p.stats.shopBuys;
+      ix.specialsBuilt += p.stats.specialsBuilt;
+      ix.miniGames += p.stats.miniGames;
+      ix.streets += p.stats.streets;
       skillUses[p.hero] = (skillUses[p.hero] ?? 0) + p.stats.skillUses;
       playerCount++;
     }
@@ -166,6 +190,14 @@ export function simulate({ games, seed, difficulty, onGameEnd }: SimOptions, dat
       trapsSet: ix.trapsSet / games,
       trapTriggers: ix.trapTriggers / games,
       roadblockHits: ix.roadblockHits / games,
+      barrierHits: ix.barrierHits / games,
+      blasts: ix.blasts / games,
+      possessions: ix.possessions / games,
+      heartPasses: ix.heartPasses / games,
+      shopBuys: ix.shopBuys / games,
+      specialsBuilt: ix.specialsBuilt / games,
+      miniGames: ix.miniGames / games,
+      streets: ix.streets / games,
       skillUsesByHero: Object.fromEntries(HERO_IDS.map((h) => [h, (skillUses[h] ?? 0) / (plays[h] ?? 1)])) as Record<HeroId, number>,
       rentTurnRate: turnHits.rent / Math.max(1, totals.turns),
       duelTurnRate: turnHits.duel / Math.max(1, totals.turns),
