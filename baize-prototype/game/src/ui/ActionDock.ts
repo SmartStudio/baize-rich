@@ -4,7 +4,7 @@
 import Phaser from 'phaser';
 import type { Game } from '../core/engine';
 import type { GameState } from '../core/types';
-import { addImg, setFrame } from './assets';
+import { addImg, hasFrame, setFrame } from './assets';
 import { DOCK, H, RIGHT, type Rect } from './layout';
 import { COLORS, FLOAT_ALPHA, FS, HEX, PLAYER_COLORS, PLAYER_HEX, txt } from './theme';
 import type { Tooltip, TipContent } from './Tooltip';
@@ -132,7 +132,7 @@ export class ActionDock {
       const can = this.castable.has(card);
       const rect: Rect = { x: bx, y: top, w: cw, h: ch };
       const c = s.add.container(bx, top);
-      const img = addImg(s, 0, 0, `card_${spell.cat}`).setOrigin(0, 0).setScale(CARD_SCALE);
+      const img = addImg(s, 0, 0, hasFrame(s, `card_${spell.id}`) ? `card_${spell.id}` : `card_${spell.cat}`).setOrigin(0, 0).setScale(CARD_SCALE);
       const name = txt(s, cw / 2, ch * 0.68, spell.name, { size: FS.xs, color: HEX.ink, origin: [0.5, 0.5], bold: true });
       const cost = s.add.circle(cw - 5, 5, 6, 0xe0663a).setStrokeStyle(1, COLORS.outline);
       const costT = txt(s, cw - 5, 5, `${spell.cost}`, { size: FS.xs, origin: [0.5, 0.5], bold: true });

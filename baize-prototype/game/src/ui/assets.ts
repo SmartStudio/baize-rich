@@ -257,6 +257,12 @@ export function frameRef(scene: Phaser.Scene, name: string): [string, string | u
   return [name, undefined];
 }
 
+/** Whether a contract frame exists, in the atlas or as a placeholder. */
+export function hasFrame(scene: Phaser.Scene, name: string): boolean {
+  const [key, frame] = frameRef(scene, name);
+  return frame !== undefined || scene.textures.exists(key);
+}
+
 export function addImg(scene: Phaser.Scene, x: number, y: number, name: string): Phaser.GameObjects.Image {
   const [key, frame] = frameRef(scene, name);
   return scene.add.image(x, y, key, frame);

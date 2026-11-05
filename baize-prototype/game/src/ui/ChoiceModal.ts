@@ -100,7 +100,9 @@ export class ChoiceModal {
     const footH = side ? 0 : 18;
     const maxPh = side ? H - 2 * EDGE - 40 : H - 40;
     const fitBh = Math.floor((maxPh - 60 - footH - descH) / rows) - gap;
-    const bh = Math.max(hasHints ? 40 : 20, Math.min(hasHints ? 46 : side && n > 12 ? 26 : 32, fitBh));
+    const bw = (pw - 28 - previewW - (cols - 1) * gap) / cols;
+    const hintH = Math.max(0, ...spec.options.map((o) => (o.hint ? measure(s, o.hint, bw - 12) : 0)));
+    const bh = Math.max(hasHints ? 40 : 20, Math.min(hasHints ? Math.max(46, 30 + hintH) : side && n > 12 ? 26 : 32, fitBh));
     const compact = bh < 30;
     const bodyH = Math.max(descH + rows * (bh + gap), spec.preview ? 136 : 0);
     const ph = Math.min(maxPh, 44 + bodyH + 16 + footH);
@@ -118,7 +120,6 @@ export class ChoiceModal {
       }
     }
     if (descText) layer.add(descText.setPosition(cx, py + 30));
-    const bw = (pw - 28 - previewW - (cols - 1) * gap) / cols;
     const all: ModalOption[] = [...spec.options];
     if (spec.closable) all.push({ id: '__close', label: '返回' });
     all.forEach((o, i) => {
@@ -213,4 +214,12 @@ export class ChoiceModal {
     }
     return false;
   }
+}
+
+/** Rendered height of a button hint (size 11) wrapped at `wrap`. */
+function measure(s: Phaser.Scene, text: string, wrap: number): number {
+  const t = txt(s, 0, 0, text, { size: 11, wrap });
+  const h = t.height;
+  t.destroy();
+  return h;
 }

@@ -28,7 +28,7 @@ URL 参数：
 | `?speed=1` | 动画倍速（auto 模式默认 2，其余默认 1） |
 | `?preview=minigame` | 开发用预览：试玩炼丹房 / 灵骰台浮层（亲手与观战），并列出 v0.6 新增的占位美术 |
 
-开局流程：标题（开场文案，任意键跳过）→ 选修士（点一位作为「你」，坐 1 号位，其余三位由 AI 扮演，统一选一个难度）→ 对阵过场 → 对局。选人界面的「高级设置」进入逐席位设置（多人同屏、AI 性格、种子）。「玩法说明」是 5 页图文浮层，标题界面随时可开；第一次点「开始游戏」会自动弹出一次（`localStorage` 键 `baize.tutorialSeen`，读不到就当没看过）。
+开局流程：标题（开场文案，任意键跳过）→ 选修士（点一位作为「你」，坐 1 号位，其余三位由 AI 扮演，统一选一个难度）→ 对阵过场 → 对局。选人界面的「高级设置」进入逐席位设置（多人同屏、AI 性格、种子）。「玩法说明」是 7 页图文浮层，标题界面随时可开；第一次点「开始游戏」会自动弹出一次（`localStorage` 键 `baize.tutorialSeen`，读不到就当没看过）。
 
 快捷键（GDD §14）：空格 掷骰 / 确认，B 升级，C 出符（含大招、技能、布禁制），K 发动技能，Enter 结束回合，Esc 取消，F 切换倍速（0.5/1/2/4），L 展开 / 收起战报，S 下载对局记录，H（或 Home）回到棋子；弹窗内数字键 1–9 直接选择。
 
@@ -65,7 +65,7 @@ src/
   ai/          AI 控制器（GDD §13）：难度 easy/normal/hard，性格 稳健/激进/守财；predict.ts 为移动预测
   sim/         无头驱动 headless.ts、批量模拟库 simulate.ts、命令行 run.ts、参数扫描 sweep.ts、对局记录复盘 replay.ts、地图检查 boardcheck.ts / board.ts（`npm run board`）
   scenes/      Phaser 场景：Boot（载图集/生成占位）→ Title → HeroSelect →（Setup 高级设置）→ Versus → Game → Result；Hud 是叠在 Game 上的屏幕层，放全部面板
-  ui/          画面组件：world（棋盘世界坐标与镜头数学，不依赖 Phaser，有单测）、Ground（按 board.json 生成的地面、道路与方向箭头、装饰）、BoardView（格子、棋子、建筑与白泽现世光效）、BoardCamera（跟随 / 框选 / 拖动缩放）、Minimap（小地图）、TopBar（左上轮次）、PlayerCards（左侧玩家小卡）、LogPanel（战报）、ActionDock（右下行动坞与手牌）、Tooltip（共用提示框）、TileInfo（地块提示）、Cutscene（过场横幅）、ChoiceModal、HowToPlay（玩法说明浮层）、session（开局配置）、saves（自动存档 / 教程标记）、assets、theme、layout
+  ui/          画面组件：world（棋盘世界坐标与镜头数学，不依赖 Phaser，有单测）、Ground（按 board.json 生成的地面、道路与方向箭头、装饰）、BoardView（格子、棋子、建筑与功能建筑、灵体与附身光环、整街描边、路障 / 爆炎阵标记、白泽现世光效）、Spirits（灵狐 / 心魔造型与附身光环）、MiniGame（炼丹房 / 灵骰台浮层）、BoardCamera（跟随 / 框选 / 拖动缩放）、Minimap（小地图）、TopBar（左上轮次）、PlayerCards（左侧玩家小卡）、LogPanel（战报）、ActionDock（右下行动坞与手牌）、Tooltip（共用提示框）、TileInfo（地块提示）、Cutscene（过场横幅）、ChoiceModal、HowToPlay（玩法说明浮层）、session（开局配置）、saves（自动存档 / 教程标记）、assets、theme、layout
 tests/         vitest：移动/岔路/灵台/地形、租金、突破、灵脉、破产、胜负、确定性回放、对局记录、选人开局、棋盘世界坐标与镜头夹取
 scripts/       screenshots.cjs（Playwright 冒烟测试 + 截图）
 ```
@@ -92,7 +92,7 @@ while (!game.over) {
 - 任何人修为 ≥ 10 时引擎抛出内部 `GameOverSignal` 立刻结束流程。
 - 事件：每次状态变化都 `emit` 一个 `GameEvent`（`type`、中文 `text`、`player`/`node`/`from`/`dice`/`amount`）。UI 用 `{ snapshots: true }` 让每个事件附带状态快照，逐个播放动画并按快照刷新面板；模拟时关闭快照以求速度（500 局约 2 秒）。
 
-UI 侧（`GameScene`）就是另一个 Controller：`preRoll` / `action` 选择映射到右栏按钮、手牌点击与快捷键；其余所有选择都弹出通用 `ChoiceModal`（选项带 `node` 时弹窗靠右并让棋盘格子可点击；神通 / 天赐用卡牌样式）。AI 座位在短暂延时后由 `AIController.decide()` 自动回答。
+UI 侧（`GameScene`）就是另一个 Controller：`preRoll` / `action` 选择映射到右栏按钮、手牌点击与快捷键；真人的 `miniGame` 打开小游戏浮层（灵骰台的点数来自引擎，浮层只负责开盅），AI 的小游戏以观战方式回放；其余所有选择都弹出通用 `ChoiceModal`（选项带 `node` 时弹窗靠右并让棋盘格子可点击，一格对应多个选项时（如升级和三种改建）点它会把弹窗收窄到这一格；神通 / 天赐用卡牌样式）。AI 座位在短暂延时后由 `AIController.decide()` 自动回答。
 
 ## 如何扩展
 

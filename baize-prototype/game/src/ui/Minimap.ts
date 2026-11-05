@@ -1,8 +1,8 @@
 // HUD minimap under the utility pills: every node as a dot in its region colour (or its owner's
-// colour), the demon, each seat's token and the camera's viewport. Clicking or dragging on it pans the
+// colour), the demon, the wandering spirits, each seat's token and the camera's viewport. Clicking or dragging on it pans the
 // camera; the button under it recentres on the current token. Hidden while the whole world is on screen.
 import Phaser from 'phaser';
-import type { BoardData, GameState } from '../core/types';
+import type { BoardData, GameState, SpiritKind } from '../core/types';
 import { CELL, MINI, RIGHT, type Rect } from './layout';
 import { COLORS, FLOAT_ALPHA, FS, PLAYER_COLORS } from './theme';
 import { Button } from './widgets';
@@ -10,6 +10,7 @@ import type { Point, WorldMap } from './world';
 
 const PAD = 6;
 const NEUTRAL = 0x8a84a8;
+const SPIRIT_DOT: Record<SpiritKind, number> = { fox: 0xffe7a0, heart: 0xb03a6e };
 
 const inset = (r: Rect, d: number): Rect => ({ x: r.x + d, y: r.y + d, w: r.w - 2 * d, h: r.h - 2 * d });
 
@@ -59,7 +60,7 @@ export class Minimap {
   }
 
   /** Per frame: viewport rect, live token positions, the demon; hidden while `fits`. */
-  update(view: Rect, tokens: Point[], current: number, demon: Point | null, fits: boolean): void {
+  update(view: Rect, tokens: Point[], current: number, demon: Point | null, fits: boolean, spirits: { kind: SpiritKind; p: Point }[] = []): void {
     if (this.shown === fits) {
       this.shown = !fits;
       this.layer.setVisible(this.shown);
@@ -67,6 +68,7 @@ export class Minimap {
     if (!this.shown) return;
     const g = this.live.clear();
     if (demon) g.fillStyle(0x1a0f1e, 1).fillCircle(...this.pt(demon), 3.5).lineStyle(1, 0xd9434b, 1).strokeCircle(...this.pt(demon), 3.5);
+    for (const sp of spirits) g.fillStyle(SPIRIT_DOT[sp.kind], 1).fillCircle(...this.pt(sp.p), 2.5);
     tokens.forEach((t, i) => {
       if (i === current) return;
       g.fillStyle(PLAYER_COLORS[i], 1).fillCircle(...this.pt(t), 3).lineStyle(1, COLORS.outline, 1).strokeCircle(...this.pt(t), 3);

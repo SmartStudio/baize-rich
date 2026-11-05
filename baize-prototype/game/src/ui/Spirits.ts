@@ -17,7 +17,7 @@ interface SpiritLook {
 
 const LOOK: Record<SpiritKind, SpiritLook> = {
   fox: { frame: 'spirit_fox', glow: 0xffe7a0, ring: 0xf2b93b, mote: 0xfff4c0, moteSpeedY: -26 },
-  heart: { frame: 'spirit_heart', glow: 0x8e2b8e, ring: 0xb03a6e, mote: 0x9a4ac8, moteSpeedY: -10 },
+  heart: { frame: 'spirit_heart', glow: 0xc04ad0, ring: 0xd0458a, mote: 0x9a4ac8, moteSpeedY: -10 },
 };
 
 const GLOW_KEY = 'fx_spirit_glow';
@@ -74,8 +74,8 @@ export function addSpirit(scene: Phaser.Scene, x: number, y: number, kind: Spiri
 export function possessionAura(scene: Phaser.Scene, token: Phaser.GameObjects.Container, kind: SpiritKind): Phaser.GameObjects.Container {
   ensureTextures(scene);
   const look = LOOK[kind];
-  const ring = scene.add.ellipse(0, -2, 30, 10).setStrokeStyle(2, look.ring).setFillStyle(look.ring, 0.18);
-  const glow = scene.add.image(0, -22, GLOW_KEY).setTint(look.glow).setScale(0.9, 1.2).setBlendMode(Phaser.BlendModes.ADD);
+  const ring = scene.add.ellipse(0, -2, 40, 13).setStrokeStyle(3, look.ring).setFillStyle(look.ring, 0.25);
+  const glow = scene.add.image(0, -22, GLOW_KEY).setTint(look.glow).setScale(1.3, 1.6).setBlendMode(Phaser.BlendModes.ADD);
   const motes = scene.add.particles(0, -6, MOTE_KEY, {
     speedY: { min: look.moteSpeedY * 1.4, max: look.moteSpeedY }, speedX: { min: -8, max: 8 }, lifespan: 1100,
     scale: { start: 1, end: 0.3 }, alpha: { start: 0.9, end: 0 }, frequency: 160, tint: look.mote,

@@ -18,6 +18,9 @@ interface Page {
 const cfg = defaultData.config;
 const realmAt = (n: number) => defaultData.blessings.realms.filter((r) => r.min <= n).pop()!.name;
 const building = (lv: number) => defaultData.board.buildings[lv].name;
+const R = cfg.rules;
+const special = (k: 'garden' | 'bazaar' | 'portal') => defaultData.board.specials?.[k]?.name ?? k;
+const specials = (['garden', 'bazaar', 'portal'] as const).map(special).join('、');
 
 function chip(scene: Phaser.Scene, cx: number, y: number, label: string, w = 220): Obj[] {
   return [
@@ -119,6 +122,39 @@ const PAGES: Page[] = [
       `步数没走完时，也可以付 ${cfg.altarToll} 灵丹借道穿过灵台，但借道不能突破。`,
     ],
     art: (s, cx, cy) => [addImg(s, cx, cy - 20, 'altar').setScale(1.25)],
+  },
+  {
+    title: '整街、附身灵体与功能建筑',
+    lines: [
+      `整街：一条街的灵田全归你，街上租金 ×${R.streetRentMult}，棋盘上会描出你的颜色。一域独占时改按独占计，不叠加。`,
+      `福缘灵狐：走过或停在它的格子就被附身 ${R.spiritTurns} 回合，收租 ×${R.foxRentMult}、购地 ${R.foxLandDiscount * 10} 折。`,
+      `心魔：同样附身，付租 ×${R.heartRentMult}、每回合 −${R.heartPills} 灵丹；走进别人所在的格子会转给对方。`,
+      `灵体每轮结束游荡 1–${R.spiritMoveMax} 步，附身者棋子周围有光环。`,
+      `改建：站在自己的空地上，「升级」菜单里可改建为${specials}，花费同升到 Lv1，首次改建 +${R.specialCultivation} 修为。`,
+    ],
+    art: (s, cx, cy) => [
+      ...captioned(s, cx - 80, cy - 90, 'spirit_fox', 2, '福缘灵狐'),
+      ...captioned(s, cx + 80, cy - 90, 'spirit_heart', 2, '心魔'),
+      ...captioned(s, cx - 100, cy + 70, 'bld_garden', 1.6, special('garden')),
+      ...captioned(s, cx, cy + 70, 'bld_bazaar', 1.6, special('bazaar')),
+      ...captioned(s, cx + 100, cy + 70, 'bld_portal', 1.6, special('portal')),
+    ],
+  },
+  {
+    title: '百宝阁、小游戏与医馆',
+    lines: [
+      '百宝阁：停下可买 1 件道具，道具和符箓共用手牌位。',
+      '御骰符、倒行符在掷骰前用；路障符、爆炎阵在行动阶段用。',
+      `路障：放在前方 1–${R.barrierRange} 格，下一个走到的他人在此停下。爆炎阵：暗埋，只有自己看得到，踩中的人进医馆休养 ${R.hospitalTurns} 回合。`,
+      `炼丹房：看准火候按空格收火，极品 +${R.miniGameRewards.alchemy.perfect} 灵丹，成丹 +${R.miniGameRewards.alchemy.ok}。`,
+      `灵骰台：押大（${R.diceBigMin} 点以上）或押小（${R.diceSmallMax} 点以下），猜中拿回押注 ×${R.diceWinMult} 并 +${R.miniGameRewards.dice.perfect} 灵丹。`,
+    ],
+    art: (s, cx, cy) => [
+      ...captioned(s, cx - 80, cy - 90, 'obj_shop', 1.6, '百宝阁'),
+      ...captioned(s, cx + 80, cy - 90, 'obj_hospital', 1.6, '医馆'),
+      ...captioned(s, cx - 80, cy + 70, 'obj_minigame_alchemy', 1.6, '炼丹房'),
+      ...captioned(s, cx + 80, cy + 70, 'obj_minigame_dice', 1.6, '灵骰台'),
+    ],
   },
   {
     title: '修士、大招与操作',

@@ -128,6 +128,15 @@ export class PlayerCards {
       tags.push({ label: '悬赏令', desc: `修为独占鳌头：谁在斗法中击败你，谁就修为 +${cfg.rules.bountyDuelCultivation}，悬赏令随之揭下。` });
     }
     if (p.dazed) tags.push({ label: '迷魂', desc: '中了迷魂丹：下一次掷骰移动的步数减半（向下取整，至少 1）。' });
+    const sp = state.spirits.find((x) => x.holder === i);
+    const r = cfg.rules;
+    if (sp?.kind === 'fox') {
+      tags.push({ label: `灵狐附身 ${sp.turnsLeft}`, desc: `福缘灵狐附身，还剩 ${sp.turnsLeft} 个自己的回合：收的租金 ×${r.foxRentMult}，购地 ${r.foxLandDiscount * 10} 折。` });
+    }
+    if (sp?.kind === 'heart') {
+      tags.push({ label: `心魔附身 ${sp.turnsLeft}`, desc: `心魔附身，还剩 ${sp.turnsLeft} 个自己的回合：付的租金 ×${r.heartRentMult}，每回合开始 −${r.heartPills} 灵丹。走进别人所在的格子会把心魔转给对方。` });
+    }
+    if (p.hospitalTurns > 0) tags.push({ label: `医馆 ${p.hospitalTurns}`, desc: `中了爆炎阵，在医馆休养：还要停 ${p.hospitalTurns} 回合，期间不能行动。` });
     const traps = g.board.lands.filter((id) => state.tiles[id].owner === i && state.tiles[id].trap).length;
     if (traps) tags.push({ label: `禁制 ${traps}/${cfg.rules.trapMaxPerPlayer}`, desc: `在自己的洞府上布下的禁制：他人停留时交 ${cfg.rules.trapStones} 灵石并被定身 1 回合，触发后消耗。` });
     for (const [r, seat] of Object.entries(state.veinLords) as [keyof typeof state.veinLords, number | null][]) {

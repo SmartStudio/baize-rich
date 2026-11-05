@@ -40,8 +40,12 @@ export class Button extends Phaser.GameObjects.Container {
     });
     this.add([this.bg, this.label]);
     if (hasHint) {
-      this.hintText = txt(scene, o.w / 2, o.h / 2 + Math.max(9, size * 0.6), o.hint!, { size: 11, color: o.hintColor ?? HEX.dim, origin: [0.5, 0.5], wrap: o.w - 12, align: 'center' });
+      this.hintText = txt(scene, o.w / 2, 0, o.hint!, { size: 11, color: o.hintColor ?? HEX.dim, origin: [0.5, 0], wrap: o.w - 12, align: 'center' });
       this.add(this.hintText);
+      // Stack label over hint and centre the pair, so a hint that wraps to two lines never covers the label.
+      const top = (o.h - this.label.height - this.hintText.height) / 2;
+      this.label.setY(top + this.label.height / 2);
+      this.hintText.setY(top + this.label.height);
     }
     this.setSize(o.w, o.h);
     this.bg.setInteractive({ useHandCursor: true });
