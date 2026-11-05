@@ -6,7 +6,7 @@ import { AIController, DIFFICULTY_LABEL, PERSONALITY_LABEL } from '../ai/ai';
 import type { PendingChoice } from '../core/choices';
 import { defaultData } from '../core/data';
 import { Game } from '../core/engine';
-import type { GameEvent, GameEventType } from '../core/events';
+import type { GameEvent, GameEventType, MiniGameResult } from '../core/events';
 import { toRecord, type GameRecord } from '../core/record';
 import { countOwned, cultivation, nominalRent, realmName, totalAssets } from '../core/rules';
 import { ALTAR } from '../core/board';
@@ -17,6 +17,7 @@ import { ChoiceModal, type ModalOption, type ModalSpec } from '../ui/ChoiceModal
 import { Cutscene, type BannerSpec } from '../ui/Cutscene';
 import { STAGE, type Rect } from '../ui/layout';
 import { LogPanel } from '../ui/LogPanel';
+import { playMiniGame, type MiniGameSpec } from '../ui/MiniGame';
 import { Minimap } from '../ui/Minimap';
 import { PlayerCards } from '../ui/PlayerCards';
 import { downloadRecord, saveAutosave } from '../ui/saves';
@@ -34,6 +35,8 @@ const SLOW_EVENTS = new Set<GameEvent['type']>([
   'eruption', 'demonHit', 'demonGone', 'taskDone', 'event', 'cast', 'block', 'jail', 'veinLord',
   'bounty', 'trapSet', 'trap', 'skill', 'roadblock', 'roadblockHit', 'roadblockGone',
 ]);
+
+const SPIRIT_COLOR = { fox: 0xf2b93b, heart: 0xb03a6e } as const;
 
 /** preRoll / action option ids reached through the 出符 menu (C) rather than their own button. */
 const isCastId = (id: string): boolean =>
@@ -66,8 +69,16 @@ const CUTSCENE_MS = 1500;
 const WIN_MS = 2000;
 const SPEEDS = [0.5, 1, 2, 4];
 
-/** Big events get a full-width cutscene banner. */
-const CUTSCENES: Partial<Record<GameEventType, (g: Game, e: GameEvent) => BannerSpec>> = {
+/** Big events get a full-width cutscene banner; a null spec means this instance is not big. */
+const CUTSCENES: Partial<Record<GameEventType, (g: Game, e: GameEvent) => BannerSpec | null>> = {
+  street: (g, e) => ({ title: '整街！', sub: e.text, icon: portrait(g, e), color: PLAYER_COLORS[e.player!] }),
+  blast: (_g, e) => ({ title: '爆炎阵！', sub: e.text, icon: 'card_blast', color: COLORS.bad }),
+  spirit: (g, e) => {
+    const sp = e.spirit!;
+    if (sp.action !== 'possess' && sp.action !== 'transfer') return null;
+    const title = sp.action === 'transfer' ? '心魔转附' : `${g.spiritName(sp.kind)}附身`;
+    return { title, sub: e.text, icon: `spirit_${sp.kind}`, color: SPIRIT_COLOR[sp.kind] };
+  },
   breakthrough: (g, e) => ({ title: '破境！', sub: e.text, icon: portrait(g, e), color: COLORS.gold }),
   demonSpawn: (_g, e) => ({ title: '天魔降世', sub: e.text, icon: 'demon', color: 0xc04ad0 }),
   manifest: (_g, e) => ({ title: '白泽现世', sub: e.text, icon: 'baize', color: 0xe6e4f0 }),
@@ -80,6 +91,27 @@ const CUTSCENES: Partial<Record<GameEventType, (g: Game, e: GameEvent) => Banner
   bankrupt: (g, e) => ({ title: '破产重整', sub: e.text, icon: portrait(g, e), color: COLORS.bad }),
   win: (g, e) => ({ title: g.state.endReason === 'cultivation' ? '渡劫飞升' : '夺得魁首', sub: e.text, icon: portrait(g, e), color: COLORS.gold }),
 };
+
+/** Smaller beats get a non-blocking ribbon under the top bar. */
+const RIBBONS: Partial<Record<GameEventType, (g: Game, e: GameEvent) => { title: string; color: number } | null>> = {
+  special: (g, e) => ({ title: e.card ? '集市强卖' : `改建·${g.data.board.specials?.[e.special!]?.name ?? e.special}`, color: COLORS.gold }),
+  shop: () => ({ title: '百宝阁', color: COLORS.gold }),
+  barrier: (_g, e) => ({ title: '路障', color: PLAYER_COLORS[e.player!] }),
+  barrierHit: () => ({ title: '撞上路障', color: COLORS.bad }),
+  blastSet: (_g, e) => ({ title: '暗埋爆炎阵', color: PLAYER_COLORS[e.player!] }),
+  hospital: () => ({ title: '医馆休养', color: 0x6fb7d8 }),
+  spirit: (g, e) => (e.spirit!.action === 'expire' ? { title: `${g.spiritName(e.spirit!.kind)}离去`, color: SPIRIT_COLOR[e.spirit!.kind] } : null),
+};
+
+/** Sub-menu answer meaning "re-open narrowed to this tile". */
+const NARROW = '@node:';
+
+/** Rebuild a mini-game overlay spec from its result event, for watching someone else play. */
+function miniSpec(mg: MiniGameResult): MiniGameSpec {
+  return mg.game === 'dice'
+    ? { game: 'dice', stake: mg.stake ?? 0, side: mg.side ?? 'big', roll: mg.roll ?? [1, 1], win: mg.tier === 'perfect' }
+    : { game: 'alchemy' };
+}
 
 function portrait(g: Game, e: GameEvent): string {
   return `por_${g.state.players[e.player ?? 0].hero}`;
@@ -114,8 +146,11 @@ export class GameScene extends Phaser.Scene {
   /** Waiting for a human preRoll / action decision via the main buttons. */
   private mainChoice: PendingChoice | null = null;
   private mainResolve: ((id: string) => void) | null = null;
-  /** Options of the open modal that map to board nodes (click-to-choose). */
-  private nodeOptions = new Map<NodeId, string>();
+  /** Options of the open modal that map to board nodes (click-to-choose); a node may carry several. */
+  private nodeOptions = new Map<NodeId, string[]>();
+  private hud!: Phaser.Scene;
+  /** A human just played this mini-game for real, so its result event needs no watch replay. */
+  private playedMini = false;
   private toastText!: Phaser.GameObjects.Text;
   private cam!: BoardCamera;
   private minimap!: Minimap;
@@ -150,6 +185,8 @@ export class GameScene extends Phaser.Scene {
     // never scrolls or zooms, so the HUD stays put whatever this camera does.
     this.game.scene.start('Hud');
     const hud = this.scene.get('Hud');
+    this.hud = hud;
+    this.playedMini = false;
     this.boardView = new BoardView(this, this.engine.board, session.setup.players.map((p) => p.hero));
     this.cam = new BoardCamera(this, this.boardView.world, (seat) => this.boardView.tokenFocus(seat), () => this.speed);
     this.tip = new Tooltip(hud);
@@ -207,6 +244,7 @@ export class GameScene extends Phaser.Scene {
       st.current,
       st.demon ? world.centre(st.demon.node) : null,
       this.cam.fits(),
+      this.boardView.spiritPoints(),
     );
   }
 
@@ -315,9 +353,25 @@ export class GameScene extends Phaser.Scene {
         this.cam.recentre(seat);
         if (e.snap) await this.turnIntro(e.snap, seat);
         break;
+      case 'spirit':
+        await this.boardView.animateSpirit(e.spirit!, this.ms(e.spirit!.action === 'move' ? pace.slide : pace.teleport));
+        await this.present(e, pace);
+        break;
+      case 'street':
+        this.boardView.flashStreet(e.node!, seat, this.ms(CUTSCENE_MS));
+        await this.present(e, pace);
+        break;
+      case 'miniGame':
+        if (this.playedMini) {
+          this.playedMini = false;
+          await this.wait(this.ms(pace.slow));
+        } else {
+          const p = (e.snap ?? this.engine.state).players[seat];
+          await playMiniGame(this.hud, miniSpec(e.miniGame!), { auto: e.miniGame!.tier, speed: this.speed, who: p.name });
+        }
+        break;
       default:
-        if (CUTSCENES[e.type]) await this.cutscene(e);
-        else if (SLOW_EVENTS.has(e.type)) await this.wait(this.ms(pace.slow));
+        await this.present(e, pace);
     }
     if (e.snap) {
       this.popDeltas(e.snap);
@@ -326,7 +380,34 @@ export class GameScene extends Phaser.Scene {
   }
 
   private cutscene(e: GameEvent): Promise<void> {
-    return this.fx.banner(CUTSCENES[e.type]!(this.engine, e), this.ms(e.type === 'win' ? WIN_MS : CUTSCENE_MS));
+    return this.fx.banner(CUTSCENES[e.type]!(this.engine, e)!, this.ms(e.type === 'win' ? WIN_MS : CUTSCENE_MS));
+  }
+
+  /** The generic beat for an event: its cutscene banner, else its ribbon, else a pause if it is a slow one. */
+  private async present(e: GameEvent, pace: Pace): Promise<void> {
+    const banner = CUTSCENES[e.type]?.(this.engine, e);
+    if (banner) {
+      await this.fx.banner(banner, this.ms(e.type === 'win' ? WIN_MS : CUTSCENE_MS));
+      return;
+    }
+    const rib = RIBBONS[e.type]?.(this.engine, e);
+    if (rib) {
+      this.fx.ribbon(rib.title, e.text, rib.color, STAGE.turnRibbonY, this.ms(pace.slow * 2 + 400));
+      await this.wait(this.ms(pace.slow));
+    } else if (SLOW_EVENTS.has(e.type)) {
+      await this.wait(this.ms(pace.slow));
+    }
+  }
+
+  /**
+   * §18.3 爆炎阵 are hidden from opponents. Its owner sees them when that seat is the only human, or is
+   * the human whose hand is on screen. An AI-only game shows them faintly so a spectator can follow.
+   */
+  private blastAlpha(seat: number): number {
+    const humans = this.ais.filter((a) => a === null).length;
+    if (humans === 0) return 0.35;
+    if (!this.isHuman(seat)) return 0;
+    return humans === 1 || this.handViewer(this.shownState) === seat ? 1 : 0;
   }
 
   private roundRibbon(st: GameState): void {
@@ -371,7 +452,7 @@ export class GameScene extends Phaser.Scene {
 
   private renderAll(state: GameState, syncTokens = true): void {
     this.shownState = state;
-    this.boardView.render(state);
+    this.boardView.render(state, (seat) => this.blastAlpha(seat));
     if (syncTokens) this.boardView.syncTokens(state);
     this.cards.render(state, this.handViewer(state));
     this.top.render(state);
@@ -416,7 +497,21 @@ export class GameScene extends Phaser.Scene {
       this.setMainButtons(c);
       return new Promise((res) => { this.mainResolve = res; });
     }
+    if (c.kind === 'miniGame') return this.playHumanMini(c);
     return this.modalChoice(c);
+  }
+
+  /** §18.5 The human plays the overlay; alchemy's tier is the answer, dice only reveals the engine's roll. */
+  private async playHumanMini(c: Extract<PendingChoice, { kind: 'miniGame' }>): Promise<string> {
+    const { game, diceBet, dice } = c.ctx;
+    const win = c.options[0].id === 'perfect';
+    const spec: MiniGameSpec = game === 'dice' && diceBet && dice
+      ? { game: 'dice', stake: diceBet.stake, side: diceBet.side, roll: dice, win }
+      : { game: 'alchemy' };
+    const multiHuman = this.ais.filter((a) => a === null).length > 1;
+    const tier = await playMiniGame(this.hud, spec, { who: multiHuman ? this.engine.state.players[c.player].name : undefined });
+    this.playedMini = true;
+    return c.options.some((o) => o.id === tier) ? tier : c.options[0].id;
   }
 
   private setMainButtons(c: PendingChoice | null): void {
@@ -445,25 +540,34 @@ export class GameScene extends Phaser.Scene {
     res(id);
   }
 
-  /** 升级 / 出符 sub-menus built from the current preRoll / action options. */
-  private async openSubMenu(which: 'upgrade' | 'cast'): Promise<void> {
+  /**
+   * 升级 / 出符 sub-menus built from the current preRoll / action options. Clicking a tile that carries
+   * several options (升级 or 改建 the same land) narrows the menu to that tile instead of picking one.
+   */
+  private async openSubMenu(which: 'upgrade' | 'cast', only?: NodeId): Promise<void> {
     const c = this.mainChoice;
     if (!c) return;
-    const opts = c.options.filter((o) => which === 'upgrade' ? o.id.startsWith('upgrade:') : isCastId(o.id));
+    const opts = c.options.filter((o) => (which === 'upgrade' ? o.id.startsWith('upgrade:') : isCastId(o.id)) && (!only || o.node === only));
     if (opts.length === 0) return;
-    this.nodeOptions.clear();
-    for (const o of opts) if (o.node) this.nodeOptions.set(o.node, o.id);
+    this.setNodeOptions(opts);
     this.boardView.setClickable([...this.nodeOptions.keys()]);
     this.frameTargets(c.player);
+    const where = only ? `【${this.engine.board.node(only).name}】` : '';
     const id = await this.modal.open({
-      title: which === 'upgrade' ? '升级洞府（每回合 1 次）' : '符箓 / 大招 / 神通 / 技能 / 禁制',
+      title: which === 'upgrade' ? (where ? `升级 / 改建${where}` : '升级 / 改建洞府（每回合 1 次）') : '符箓 / 大招 / 神通 / 技能 / 禁制',
       options: opts.map((o) => ({ id: o.id, label: o.label, hint: o.hint })),
       closable: true, cancelId: null, placement: which === 'upgrade' ? 'side' : 'center', avoid: this.tokenScreenRect(c.player),
     });
     this.boardView.setClickable([]);
     this.nodeOptions.clear();
     this.cam.release();
-    if (id) this.mainAnswer(id);
+    if (id?.startsWith(NARROW)) void this.openSubMenu(which, id.slice(NARROW.length) as NodeId);
+    else if (id) this.mainAnswer(id);
+  }
+
+  private setNodeOptions(opts: readonly { id: string; node?: NodeId }[]): void {
+    this.nodeOptions.clear();
+    for (const o of opts) if (o.node) this.nodeOptions.set(o.node, [...(this.nodeOptions.get(o.node) ?? []), o.id]);
   }
 
   /** Bring the highlighted choice targets and the deciding seat's token into view together. */
@@ -480,10 +584,11 @@ export class GameScene extends Phaser.Scene {
 
   private async modalChoice(c: PendingChoice): Promise<string> {
     const g = this.engine;
-    this.nodeOptions.clear();
-    for (const o of c.options) if (o.node && !this.nodeOptions.has(o.node)) this.nodeOptions.set(o.node, o.id);
+    // Generic asks keep the first option per tile: a click there must answer, there is no narrower menu.
+    this.setNodeOptions(c.options);
+    for (const [n, ids] of this.nodeOptions) this.nodeOptions.set(n, ids.slice(0, 1));
     if (c.kind === 'exitRoad' || c.kind === 'altarPass') {
-      for (const o of c.options) if (o.id !== 'stop') this.nodeOptions.set(g.board.corridorEnd(ALTAR, o.id), o.id);
+      for (const o of c.options) if (o.id !== 'stop') this.nodeOptions.set(g.board.corridorEnd(ALTAR, o.id), [o.id]);
     }
     this.boardView.setClickable([...this.nodeOptions.keys()]);
     this.frameTargets(c.player);
@@ -507,6 +612,8 @@ export class GameScene extends Phaser.Scene {
       desc = lines.join('\n');
       preview = { tile: `tile_land_${region}`, obj: `decor_${region}` };
     }
+    if (c.kind === 'shop') preview = { tile: 'tile_shop', obj: 'obj_shop' };
+    if (c.kind === 'diceBet') preview = { tile: 'tile_minigame', obj: 'obj_minigame_dice' };
     const multiHuman = this.ais.filter((a) => a === null).length > 1;
     const title = multiHuman || c.kind === 'heavenPick' ? `${p.name} · ${c.title}` : c.title;
     const cards = c.kind === 'divinePick' || c.kind === 'heavenPick';
@@ -530,13 +637,14 @@ export class GameScene extends Phaser.Scene {
   }
 
   private nodeClicked(n: NodeId): void {
-    const id = this.nodeOptions.get(n);
-    if (!id) {
+    const ids = this.nodeOptions.get(n);
+    if (!ids) {
       this.tip.toggle(`tile:${n}`, this.toScreen(this.boardView.nodeRect(n)), tileTip(this.engine, this.shownState, n));
       return;
     }
-    if (this.mainChoice) this.mainAnswer(id);
-    else if (this.modal.isOpen) this.modal.close(id);
+    if (ids.length > 1 && this.modal.isOpen) this.modal.close(`${NARROW}${n}`);
+    else if (this.modal.isOpen) this.modal.close(ids[0]);
+    else if (this.mainChoice) this.mainAnswer(ids[0]);
   }
 
   /** Hovered tile's popover; a pinned tile popover follows the latest state. */
