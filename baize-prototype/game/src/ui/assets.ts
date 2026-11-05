@@ -6,6 +6,7 @@
 // always call `addImg(scene, x, y, 'tile_gate')` without caring which exists.
 import Phaser from 'phaser';
 import { defaultData } from '../core/data';
+import { ITEM_PICTURES, paintPixels, PIXEL_FRAMES, pixelSize } from './sprites';
 import { FONT } from './theme';
 
 export const ATLAS_KEY = 'atlas';
@@ -90,6 +91,47 @@ function pips(n: number): Draw {
   });
 }
 
+/** Ground tile in the atlas style: sand border, a patterned rug, a dark band along the bottom edge. */
+function rug(border: string, fill: string, mark: string, band: string, pattern: (x: number, y: number) => boolean): Draw {
+  return (ctx, w, h) => {
+    ctx.fillStyle = '#DCC9A0';
+    ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = border;
+    ctx.fillRect(8, 6, w - 16, h - 18);
+    ctx.fillStyle = fill;
+    ctx.fillRect(10, 8, w - 20, h - 22);
+    ctx.fillStyle = mark;
+    for (let y = 8; y < h - 14; y++) for (let x = 10; x < w - 10; x++) if (pattern(x, y)) ctx.fillRect(x, y, 1, 1);
+    ctx.fillStyle = '#B8A27A';
+    ctx.fillRect(0, h - 12, w, 2);
+    ctx.fillStyle = band;
+    ctx.fillRect(0, h - 10, w, 10);
+  };
+}
+
+/** v0.6 card face for an item: coloured border, 道具 label, its picture in the box, a seal at the foot. */
+function itemCard(id: string): Draw {
+  const it = ITEM_PICTURES[id];
+  return (ctx, w, h) => {
+    ctx.fillStyle = '#0F0E1A';
+    ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = it.border;
+    ctx.fillRect(2, 2, w - 4, h - 4);
+    ctx.fillStyle = '#EAD7A0';
+    ctx.fillRect(5, 5, w - 10, h - 10);
+    ctx.fillStyle = '#0F0E1A';
+    ctx.fillRect(6, 19, w - 12, 56);
+    ctx.fillStyle = it.sky;
+    ctx.fillRect(7, 20, w - 14, 54);
+    paintPixels(ctx, w - 14, 50, { rows: it.rows, scale: 4 }, 7, 22);
+    glyph(it.label, '#2A2238', 11, 0)(ctx, w, 24);
+    ctx.fillStyle = '#9A2A2A';
+    ctx.fillRect(w / 2 - 7, h - 22, 14, 12);
+    ctx.fillStyle = '#F4E9D0';
+    ctx.fillRect(w / 2 - 3, h - 19, 6, 6);
+  };
+}
+
 /** Every frame name in the art contract, with its size and a placeholder painter. */
 export function frameSpecs(): FrameSpec[] {
   const out: FrameSpec[] = [];
@@ -108,6 +150,15 @@ export function frameSpecs(): FrameSpec[] {
     add(`tile_${t}`, 64, 64, box(fill));
     add(`obj_${t}`, 40, 40, object(t === 'start' ? '#B8902E' : '#4A4466', ch));
   }
+  add('tile_shop', 64, 64, rug('#F2B93B', '#2F6B5A', '#4FA38A', '#1F4A3E', (x, y) => (x + y) % 6 === 0));
+  add('tile_minigame', 64, 64, rug('#8E5BC2', '#4A2A6E', '#F2B93B', '#2A1A3E', (x, y) => (x >> 2) % 2 === (y >> 2) % 2 && (x + y) % 2 === 0));
+  add('tile_hospital', 64, 64, rug('#4FA35A', '#E8F0E0', '#BFD8B0', '#2F6B3A', (x, y) => (x % 10 === 4 && y % 10 < 7) || (y % 10 === 3 && x % 10 < 9)));
+  add('obj_minigame', 40, 40, object('#4A4466', '戏'));
+  for (const [name, sp] of Object.entries(PIXEL_FRAMES)) {
+    const { w, h } = pixelSize(sp);
+    add(name, w, h, (ctx, cw, ch) => paintPixels(ctx, cw, ch, sp));
+  }
+  for (const id of Object.keys(ITEM_PICTURES)) add(`card_${id}`, 88, 120, itemCard(id));
   for (let i = 1; i <= 4; i++) {
     add(`owner_p${i}`, 64, 10, box(PLAYER_FILL[i - 1]));
     add(`flag_p${i}`, 12, 18, (ctx) => {
