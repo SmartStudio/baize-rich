@@ -1,9 +1,9 @@
 {
-  "version": "0.3",
-  "rounds": 15,
-  "winCultivation": 10,
+  "version": "0.4",
+  "rounds": 12,
+  "winCultivation": 8,
   "startStones": 1500,
-  "seatBonusStones": [0, 75, 150, 225],
+  "seatBonusStones": [0, 200, 400, 600],
   "startPills": 2,
   "startHand": 2,
   "handLimit": 5,
@@ -18,18 +18,16 @@
   "breakthroughThresholds": [
     2,
     4,
-    6,
-    8
+    6
   ],
   "breakthroughCost": [
     1,
     2,
-    3,
-    4
+    3
   ],
   "breakthroughDraw": 3,
   "breakthroughDrawLowest": 4,
-  "maxDivine": 4,
+  "maxDivine": 3,
   "shrineDiscount": 1,
   "demonCostPenalty": 1,
   "rentRate": 0.1,
@@ -49,6 +47,7 @@
   ],
   "lv4PillCost": 2,
   "cultivationOnBuild": {
+    "2": 1,
     "3": 1,
     "4": 1
   },
@@ -56,9 +55,9 @@
   "veinLordCultivation": 2,
   "monopolyRentMult": 2,
   "endgameRounds": [
-    13,
-    14,
-    15
+    10,
+    11,
+    12
   ],
   "endgameRentMult": 1.5,
   "bankrupt": {
@@ -66,20 +65,20 @@
     "cultivationLoss": 2
   },
   "eruptionRounds": [
-    4,
-    8,
-    12
+    3,
+    6,
+    9
   ],
   "demon": {
     "spawnRounds": [
-      5,
-      10
+      4,
+      8
     ],
     "hp": 6,
-    "stayRounds": 4,
+    "stayRounds": 3,
     "movePerRound": 2
   },
-  "baizeManifestRound": 8,
+  "baizeManifestRound": 6,
   "manifestRentMult": 0.5,
   "ult": {
     "pillCost": 3,
@@ -89,7 +88,7 @@
   "maxActiveTasks": 2,
   "pillValueInStones": 50,
   "rules": {
-    "alchBuyDiscount": 0.9,
+    "alchBuyDiscount": 0.8,
     "discountCardMult": 0.7,
     "buyoutMult": 1.5,
     "swordQiSteal": 20,
@@ -120,6 +119,19 @@
     "shrinePills": 1,
     "beastRollMin": 1,
     "beastRollMax": 6,
-    "senseDrawCount": 2
+    "senseDrawCount": 2,
+    "duelMaxPills": 2,
+    "swordDuelAttack": 1,
+    "bodyDuelDefense": 1,
+    "duelStealPct": 0.2,
+    "duelStealMax": 300,
+    "bountyMinCult": 2,
+    "bountyDuelCultivation": 1,
+    "trapPillCost": 1,
+    "trapMaxPerPlayer": 2,
+    "trapStones": 100,
+    "skillCooldownTurns": 3,
+    "roadblockRange": 6,
+    "swapRange": 8
   }
 }

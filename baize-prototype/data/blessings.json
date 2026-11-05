@@ -4,8 +4,7 @@
     { "min": 2,  "name": "筑基" },
     { "min": 4,  "name": "结丹" },
     { "min": 6,  "name": "元婴" },
-    { "min": 8,  "name": "化神" },
-    { "min": 10, "name": "飞升" }
+    { "min": 8,  "name": "化神" }
   ],
   "divine": [
     { "id": "swift",     "name": "身轻如燕", "desc": "每次移动总点数可 +1 或 −1", "aiWeight": 5 },

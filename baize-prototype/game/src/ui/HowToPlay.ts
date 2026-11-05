@@ -64,7 +64,7 @@ const PAGES: Page[] = [
       '① 掷骰前：可以先施放身法符、财运符。',
       `② 掷骰：两颗骰子的点数之和就是步数。掷出双数再掷一次，连续第 ${cfg.maxDoubles + 1} 次双数会被送往思过崖。`,
       `③ 移动：经过宗门山门 +${cfg.salaryPass} 灵石。走到山门时可以拐进神道，直通中央的白泽灵台。`,
-      '④ 落点结算：无主灵田可以买下；停在别人的灵田要交租。',
+      '④ 斗法与结算：可向途中遇到的一名修士斗法；无主灵田可以买下，别人的灵田要交租。',
       '⑤ 行动：升级一块自己的洞府（每回合 1 次）、施放符箓或大招，然后结束回合。',
     ],
     art: (s, cx, cy) => [
@@ -80,11 +80,11 @@ const PAGES: Page[] = [
   {
     title: '修为从哪里来',
     lines: [
-      `筑府：洞府首次升到${building(3)}、${building(4)}，各 +1。`,
+      `筑府：洞府首次升到${Object.keys(cfg.cultivationOnBuild).map((lv) => building(Number(lv))).join('、')}，各 +1。`,
       `灵脉之主：某灵域里你的灵田最多且至少 ${cfg.veinLordMinLands} 块，+${cfg.veinLordCultivation}；被反超就失去。`,
       '机缘：历练碑、静心抽到宗门任务，完成后 +1。',
       `斩妖除魔：对天魔造成最后一击 +${cfg.rules.demonLastHitCultivation}。`,
-      `悬赏：用五雷符让修为第一名的洞府降级 +${cfg.rules.bountyCultivation}。`,
+      `悬赏：五雷符让修为第一名的洞府降级 +${cfg.rules.bountyCultivation}；斗法击败持悬赏令者 +${cfg.rules.bountyDuelCultivation}。`,
       `白泽现世（第 ${cfg.baizeManifestRound} 轮）：挑中天赐「白泽图」+${cfg.rules.chartCultivation}。`,
     ],
     art: (s, cx, cy) => [
@@ -92,6 +92,21 @@ const PAGES: Page[] = [
       ...captioned(s, cx + 80, cy - 80, 'tile_land_fire', 1.1, '灵脉之主'),
       ...captioned(s, cx - 80, cy + 70, 'obj_trial', 1.6, '宗门任务'),
       ...captioned(s, cx + 80, cy + 70, 'demon', 1.1, '斩妖除魔'),
+    ],
+  },
+  {
+    title: '斗法、悬赏令与禁制',
+    lines: [
+      `移动后，可向落点或途中经过的一名修士发起斗法（每回合 1 次，面壁者和本轮已被挑战者除外）。`,
+      `双方各掷 1 颗骰，可各押至多 ${cfg.rules.duelMaxPills} 灵丹、每颗 +1 点；平局守方胜。败者交出 ${Math.round(cfg.rules.duelStealPct * 100)}% 灵石（至多 ${cfg.rules.duelStealMax}）。`,
+      `悬赏令：每轮开始时，修为唯一最高且至少 ${cfg.rules.bountyMinCult} 的人持令；斗法击败他修为 +${cfg.rules.bountyDuelCultivation}。`,
+      `禁制：行动阶段花 ${cfg.rules.trapPillCost} 灵丹布在自己的洞府上（同时至多 ${cfg.rules.trapMaxPerPlayer} 处）。他人停下时交 ${cfg.rules.trapStones} 灵石并定身 1 回合。`,
+    ],
+    art: (s, cx, cy) => [
+      addImg(s, cx - 60, cy - 60, 'por_sword').setScale(1.6),
+      addImg(s, cx + 60, cy - 60, 'por_body').setScale(1.6),
+      txt(s, cx, cy - 60, 'VS', { size: 22, bold: true, color: HEX.gold, origin: [0.5, 0.5] }),
+      ...chip(s, cx, cy + 50, '1d6 + 灵丹 + 英雄加成'),
     ],
   },
   {
@@ -110,13 +125,14 @@ const PAGES: Page[] = [
     lines: [
       '每位修士有一个被动和一个大招，开局在选人页挑选。',
       `大招花 ${cfg.ult.pillCost} 灵丹，每局最多 ${cfg.ult.maxUses} 次，在「出符」菜单里发动。`,
+      `每人还有一个免费技能，用后冷却 ${cfg.rules.skillCooldownTurns} 个自己的回合，按 K 发动。`,
       `符箓施放要花灵丹，手牌上限 ${cfg.handLimit} 张；坊市可以买符。`,
       '鼠标悬停棋盘上的格子，可以查看它的详情。',
     ],
     art: (s, cx, cy) => {
       const out: Obj[] = HERO_IDS.map((h, i) => addImg(s, cx - 120 + i * 80, cy - 110, `por_${h}`).setScale(1.1));
       const keys: [string, string][] = [
-        ['空格', '掷骰 / 确认'], ['B', '升级洞府'], ['C', '出符 / 大招'], ['Enter', '结束回合'],
+        ['空格', '掷骰 / 确认'], ['B', '升级洞府'], ['C', '出符 / 大招'], ['K', '发动技能'], ['Enter', '结束回合'],
         ['Esc', '取消'], ['F', '切换倍速'], ['S', '下载对局记录'],
       ];
       keys.forEach(([k, what], i) => {

@@ -19,7 +19,7 @@ import type {
   PreRollAct, Target, ThreatKind,
 } from './choices';
 import { defaultData } from './data';
-import type { GameEvent, GameEventType } from './events';
+import type { DuelResult, GameEvent, GameEventType } from './events';
 import { hashSeed, nextFloat } from './rng';
 import {
   breakthroughCost, breakthroughsAvailable, buyoutPrice, buyPrice, canBreakthrough, computeVeinLords,
@@ -27,7 +27,7 @@ import {
   upgradeCost,
 } from './rules';
 import type {
-  ActiveTask, EventCardData, GameData, GameSetup, GameState, NodeId, PlayerState, RegionId, RoadId,
+  ActiveTask, EventCardData, GameData, GameSetup, GameState, HeroData, NodeId, PlayerState, RegionId, RoadId,
   SpellData, TaskData, TurnState,
 } from './types';
 
@@ -193,7 +193,7 @@ export class Game {
     for (const c of this.data.spells.cards) for (let k = 0; k < this.data.spells.copiesEach; k++) spellDeck.push(c.id);
     const eventDeck = [...this.data.events.tasks.map((t) => t.id), ...this.data.events.events.map((e) => e.id)];
     const tiles: GameState['tiles'] = {};
-    for (const id of this.board.lands) tiles[id] = { owner: null, level: 0 };
+    for (const id of this.board.lands) tiles[id] = { owner: null, level: 0, trap: false };
     const n = this.setup.players.length;
     const st: GameState = {
       seed: this.setup.seed,
@@ -209,10 +209,10 @@ export class Game {
         hand: [], divines: [], tasks: [], seal: false, jailed: false, jailTurns: 0, bound: false,
         wardUntilRound: 0, tremorRound: 0, treasure: [], rentImmuneUntilTurn: -1, turnsTaken: 0, ultUses: 0,
         goldbodyReadyRound: 0, shrinkReadyRound: 0, gatherRound: 0, mazeAvailable: false, chooseRoll: false,
-        badStreak: 0, milestones: [],
+        badStreak: 0, milestones: [], skillReadyTurn: 0, duelShieldRound: 0, dazed: false,
         stats: {
           rentCollected: 0, rentPaid: 0, breakthroughs: 0, demonDamage: 0, twoGateMoves: 0, roadEntries: 0,
-          altarVisits: 0, bankruptcies: 0, tasksDone: 0,
+          altarVisits: 0, bankruptcies: 0, tasksDone: 0, duels: 0, duelWins: 0, bountyClaims: 0, trapTriggers: 0, skillUses: 0,
         },
       })),
       tiles,
@@ -228,6 +228,8 @@ export class Game {
         wood: new Array(n).fill(0), fire: new Array(n).fill(0), water: new Array(n).fill(0), earth: new Array(n).fill(0),
       },
       seq: 0,
+      bountySeat: null,
+      roadblock: null,
       turn: this.freshTurn(0),
     };
     this.state = st;
@@ -240,7 +242,7 @@ export class Game {
   private freshTurn(seat: number): TurnState {
     return {
       seat, doubles: 0, mireUsed: false, upgraded: false, discount: false,
-      swiftstep: false, reverse: false, swordUlt: false, lastPath: [], lastDir: 1,
+      swiftstep: false, reverse: false, swordUlt: false, lastPath: [], lastDir: 1, duelDone: false, passed: [],
     };
   }
 
@@ -290,6 +292,23 @@ export class Game {
     }
     // 3) Baize manifests
     if (manifestNow) yield* this.manifest();
+    // 4) §17 悬赏令
+    this.updateBounty();
+  }
+
+  /** §17 悬赏令：修为唯一最高且不低于 bountyMinCult 者持令。 */
+  private updateBounty(): void {
+    const st = this.state;
+    const leader = uniqueLeader(st, this.data);
+    const next = leader !== null && this.cult(leader) >= this.cfg.rules.bountyMinCult ? leader : null;
+    if (next === st.bountySeat) return;
+    const before = st.bountySeat;
+    st.bountySeat = next;
+    if (next !== null) {
+      this.emit('bounty', `悬赏令高悬：${this.pn(next)} 修为独占鳌头（${this.cult(next)}），斗法击败其者修为 +${this.cfg.rules.bountyDuelCultivation}`, { player: next });
+    } else if (before !== null) {
+      this.emit('bounty', `${this.pn(before)} 不再独占鳌头，悬赏令撤下`, { player: before });
+    }
   }
 
   private *roundEnd(): Flow {
@@ -303,6 +322,11 @@ export class Game {
     p.turnsTaken++;
     st.turn = this.freshTurn(seat);
     this.emit('turnStart', `${this.pn(seat)} 的回合`, { player: seat });
+    if (st.roadblock && st.roadblock.seat === seat) {
+      const node = st.roadblock.node;
+      st.roadblock = null;
+      this.emit('roadblockGone', `${this.pn(seat)} 的山岳消散`, { player: seat, node });
+    }
 
     if (p.divines.includes('pillheart') && p.pills < this.cfg.rules.pillheartBelow) {
       p.pills += 1;
@@ -497,6 +521,7 @@ export class Game {
       if (p.divines.includes('shrink') && this.state.round >= p.shrinkReadyRound && onRing) {
         opts.push({ id: 'shrink', label: '神通【缩地成寸】', value: { t: 'shrink' } });
       }
+      if (this.skillAvailable(seat, 'preroll')) opts.push(this.skillOption(seat));
       const act = yield* this.ask({
         player: seat, kind: 'preRoll', title: '掷骰前', desc: '可施放身法符、财运符，或直接掷骰。',
         options: opts, defaultId: 'roll', forceAsk: true,
@@ -504,6 +529,10 @@ export class Game {
       if (act.t === 'roll') return 'roll';
       if (act.t === 'ult') { yield* this.useUlt(seat); continue; }
       if (act.t === 'shrink') { yield* this.useShrink(seat); return 'moved'; }
+      if (act.t === 'skill') {
+        if ((yield* this.useSkill(seat)) === 'moved') return 'moved';
+        continue;
+      }
       const r = yield* this.castPreroll(seat, act.card);
       if (r === 'moved') return 'moved';
     }
@@ -568,7 +597,13 @@ export class Game {
   private *doMove(seat: number, base: number, dice?: [number, number]): Flow {
     const p = this.state.players[seat];
     const t = this.state.turn;
-    const total = yield* this.adjustRoll(seat, base, dice);
+    let total = yield* this.adjustRoll(seat, base, dice);
+    if (p.dazed) {
+      p.dazed = false;
+      const halved = Math.max(1, Math.floor(total / 2));
+      this.emit('status', `${this.pn(seat)} 受迷魂丹所困，步数 ${total} → ${halved}`, { player: seat, amount: halved });
+      total = halved;
+    }
     let dir: 1 | -1 = 1;
     if (t.reverse) dir = -1;
     else if (p.mazeAvailable && this.board.isRing(p.pos)) {
@@ -586,6 +621,7 @@ export class Game {
     t.swiftstep = false;
     t.reverse = false;
     t.swordUlt = false;
+    yield* this.offerDuel(seat);
     yield* this.settle(seat, p.pos);
   }
 
@@ -629,6 +665,7 @@ export class Game {
     let mode: 'ring' | 'in' | 'out';
     let road: RoadId | null = null;
     let noForkAt: NodeId | null = null;
+    let blocked = false;
 
     if (node === ALTAR) {
       road = yield* this.ask({
@@ -675,6 +712,15 @@ export class Game {
       path.push(next);
       const nn = b.node(next);
       if (nn.type === 'gate') gates++;
+      // 镇山: the mountain stops the next other player who enters its tile.
+      const rb = this.state.roadblock;
+      if (rb && rb.node === next && rb.seat !== seat) {
+        this.state.roadblock = null;
+        blocked = true;
+        remaining = 0;
+        this.emit('roadblockHit', `${this.pn(seat)} 被 ${this.pn(rb.seat)} 的山岳拦下，停在【${this.nodeName(next)}】`, { player: seat, node: next });
+        break;
+      }
       // 瘴泽泥沼: first entry onto an earth land this turn costs one remaining step.
       if (nn.type === 'land' && nn.region === 'earth' && !t.mireUsed) {
         t.mireUsed = true;
@@ -709,7 +755,7 @@ export class Game {
     }
     // 寒冰滑行: ending a ring move on water slides one more cell in the same direction.
     const fin = b.node(node);
-    if (mode === 'ring' && fin.type === 'land' && fin.region === 'water') {
+    if (mode === 'ring' && !blocked && fin.type === 'land' && fin.region === 'water') {
       const next = b.ringStep(node, dir);
       this.emit('slide', `${this.pn(seat)} 踏上寒冰，滑行 1 格`, { player: seat, node: next, from: node });
       this.enterNode(seat, node, next, 0, true);
@@ -734,6 +780,10 @@ export class Game {
     const n = this.board.node(to);
     if (!slide) this.emit('step', '', { player: seat, node: to, from });
     if (n.type === 'start' && remaining > 0) this.gainStones(seat, this.cfg.salaryPass, '经过宗门山门');
+    const t = this.state.turn;
+    if (remaining > 0 && !slide && t.seat === seat) {
+      for (const o of this.state.players) if (o.seat !== seat && o.pos === to && !t.passed.includes(o.seat)) t.passed.push(o.seat);
+    }
     if (p.hero === 'magic' && n.type === 'spring') {
       p.pills += this.cfg.rules.magicPassivePills;
       this.emit('pills', `${this.pn(seat)} 灵息：经过${n.name} +${this.cfg.rules.magicPassivePills} 灵丹`, { player: seat, amount: this.cfg.rules.magicPassivePills });
@@ -811,7 +861,7 @@ export class Game {
         this.gainStones(seat, this.cfg.salaryLand, '停留宗门山门');
         break;
       case 'land':
-        yield* this.settleLand(seat, node);
+        yield* this.settleLand(seat, node, ctx);
         break;
       case 'gate':
         break;
@@ -847,7 +897,7 @@ export class Game {
     }
   }
 
-  private *settleLand(seat: number, node: NodeId): Flow {
+  private *settleLand(seat: number, node: NodeId, ctx: SettleCtx = {}): Flow {
     const p = this.state.players[seat];
     const t = this.state.tiles[node];
     const n = this.board.node(node);
@@ -872,7 +922,21 @@ export class Game {
       this.updateVeinLords();
     } else if (t.owner !== seat) {
       yield* this.payRent(seat, node);
+      if (t.trap && t.owner !== null && t.owner !== seat && !ctx.stay) this.triggerTrap(seat, node);
     }
+  }
+
+  /** §17 禁制：停在他人布了禁制的洞府上 → 交罚金并被定身，禁制消耗。 */
+  private triggerTrap(seat: number, node: NodeId): void {
+    const t = this.state.tiles[node];
+    const owner = t.owner!;
+    t.trap = false;
+    this.state.players[owner].stats.trapTriggers++;
+    this.emit('trap', `${this.pn(seat)} 触发 ${this.pn(owner)} 在【${this.nodeName(node)}】布下的禁制！`, { player: seat, node });
+    const paid = this.pay(seat, owner, this.cfg.rules.trapStones, '禁制罚金');
+    this.emit('stones', `${this.pn(seat)} 交给 ${this.pn(owner)} 禁制罚金 ${paid} 灵石`, { player: seat, amount: paid });
+    this.state.players[seat].bound = true;
+    this.emit('bind', `${this.pn(seat)} 被禁制定身，下回合无法移动`, { player: seat });
   }
 
   private *payRent(seat: number, node: NodeId): Flow {
@@ -941,7 +1005,7 @@ export class Game {
     const cfg = this.cfg.bankrupt;
     for (const id of this.board.lands) {
       const t = this.state.tiles[id];
-      if (t.owner === seat) { t.owner = null; t.level = 0; }
+      if (t.owner === seat) { t.owner = null; t.level = 0; t.trap = false; }
     }
     for (const r of REGION_IDS) this.state.regionReach[r][seat] = ++this.state.seq;
     p.stones = cfg.resetStones;
@@ -965,6 +1029,7 @@ export class Game {
     const t = this.state.tiles[node];
     const region = this.board.node(node).region!;
     if (t.owner !== null) this.state.regionReach[region][t.owner] = ++this.state.seq;
+    if (t.owner !== seat) t.trap = false;
     t.owner = seat;
     if (seat !== null) this.state.regionReach[region][seat] = ++this.state.seq;
   }
@@ -1263,6 +1328,13 @@ export class Game {
         opts.push({ id: `cast:${card}`, label: `${s.name}（${s.cost} 灵丹）`, value: { t: 'cast', card }, hint: s.desc });
       }
       if (this.ultAvailable(seat, 'action')) opts.push(this.ultOption(seat));
+      if (this.skillAvailable(seat, 'action')) opts.push(this.skillOption(seat));
+      for (const id of this.trapSpots(seat)) {
+        opts.push({
+          id: `trap:${id}`, label: `布置禁制 · ${this.nodeName(id)}（${this.cfg.rules.trapPillCost} 灵丹）`, value: { t: 'trap', node: id }, node: id,
+          hint: `他人停留时交 ${this.cfg.rules.trapStones} 灵石并被定身 1 回合`,
+        });
+      }
       opts.push({ id: 'end', label: '结束回合', value: { t: 'end' } });
       const act = yield* this.ask({
         player: seat, kind: 'action', title: '行动阶段', desc: '升级 1 次、施放符箓、发动大招', options: opts, defaultId: 'end', forceAsk: true,
@@ -1272,6 +1344,8 @@ export class Game {
         case 'upgrade': this.upgrade(seat, act.node, false); st.turn.upgraded = true; break;
         case 'ult': yield* this.useUlt(seat); break;
         case 'cast': yield* this.castAction(seat, act.card); break;
+        case 'skill': yield* this.useSkill(seat); break;
+        case 'trap': this.placeTrap(seat, act.node); break;
       }
     }
   }
@@ -1340,6 +1414,7 @@ export class Game {
     if (tg.t === 'land') return { id: `land:${tg.node}`, label: this.nodeLabel(tg.node), value: tg, node: tg.node };
     if (tg.t === 'demon') return { id: 'demon', label: `天魔（HP ${this.state.demon!.hp}）`, value: tg, node: this.state.demon!.node };
     if (tg.t === 'player') return { id: `p${tg.seat}`, label: `${this.pn(tg.seat)}（灵丹 ${this.state.players[tg.seat].pills}）`, value: tg };
+    if (tg.t === 'node') return { id: `node:${tg.node}`, label: this.nodeLabel(tg.node), value: tg, node: tg.node };
     return { id: 'cancel', label: '取消', value: tg };
   }
 
@@ -1493,6 +1568,214 @@ export class Game {
         return;
       }
     }
+  }
+
+  // ------------------------------------------------- §17 斗法 / 禁制 / 技能 --
+
+  heroOf(seat: number): HeroData {
+    return this.data.heroes.find((h) => h.id === this.state.players[seat].hero)!;
+  }
+
+  /** May `seat` be challenged right now (not 面壁, not already challenged this round)? */
+  duelEligible(seat: number): boolean {
+    const o = this.state.players[seat];
+    return !o.jailed && o.duelShieldRound !== this.state.round;
+  }
+
+  /** Stones the loser of a duel hands over. */
+  duelStake(loser: number): number {
+    const r = this.cfg.rules;
+    return Math.min(r.duelStealMax, Math.floor(this.state.players[loser].stones * r.duelStealPct));
+  }
+
+  /** After a walk: challenge someone on the landing tile or passed on the way (once per turn). */
+  private *offerDuel(seat: number): Flow {
+    const st = this.state;
+    const t = st.turn;
+    const p = st.players[seat];
+    const met = [...st.players.filter((o) => o.seat !== seat && o.pos === p.pos).map((o) => o.seat), ...t.passed];
+    t.passed = [];
+    if (t.duelDone || t.seat !== seat) return;
+    const cands = [...new Set(met)].filter((s) => this.duelEligible(s)).sort((a, b) => a - b);
+    if (cands.length === 0) return;
+    const opts: ChoiceOption<number | null>[] = cands.map((s) => ({
+      id: `p${s}`,
+      label: `挑战 ${this.pn(s)}${st.bountySeat === s ? '（悬赏令）' : ''}`,
+      value: s,
+      node: st.players[s].pos,
+      hint: `胜：夺 ${this.duelStake(s)} 灵石${st.bountySeat === s ? `，修为 +${this.cfg.rules.bountyDuelCultivation}` : ''}；败：失 ${this.duelStake(seat)} 灵石`,
+    }));
+    opts.push({ id: 'none', label: '不斗法', value: null });
+    const target = yield* this.ask({
+      player: seat, kind: 'duel', title: '斗法',
+      desc: `可向途中相遇的一名修士发起斗法：双方各掷 1 颗骰，可押灵丹加点，点高者胜（平局守方胜），败者交出 ${Math.round(this.cfg.rules.duelStealPct * 100)}% 灵石（至多 ${this.cfg.rules.duelStealMax}）。`,
+      options: opts, defaultId: 'none', cancelId: 'none', ctx: {},
+    });
+    if (target === null) return;
+    yield* this.duel(seat, target);
+  }
+
+  private *askBet(seat: number, attacker: number, defender: number, oppBet: number | undefined): Flow<number> {
+    const p = this.state.players[seat];
+    const max = Math.min(this.cfg.rules.duelMaxPills, p.pills);
+    const opts: ChoiceOption<number>[] = [];
+    for (let k = 0; k <= max; k++) opts.push({ id: `b${k}`, label: k === 0 ? '不押灵丹' : `押 ${k} 灵丹（+${k} 点）`, value: k });
+    const other = seat === attacker ? defender : attacker;
+    return yield* this.ask({
+      player: seat, kind: 'duelBet', title: seat === attacker ? `斗法 · 向 ${this.pn(defender)} 出手` : `斗法 · ${this.pn(attacker)} 向你出手`,
+      desc: `每颗灵丹 +1 点，胜负都会消耗。胜得 ${this.duelStake(other)} 灵石，败失 ${this.duelStake(seat)} 灵石。${oppBet !== undefined ? `对方押了 ${oppBet} 颗。` : ''}`,
+      options: opts, defaultId: 'b0', cancelId: 'b0',
+      ctx: { attacker, defender, stake: this.duelStake(other), bet: oppBet },
+    });
+  }
+
+  /** §17 斗法. Resolves fully, including the 悬赏令 payout. */
+  private *duel(attacker: number, defender: number): Flow {
+    const st = this.state;
+    const r = this.cfg.rules;
+    const pa = st.players[attacker];
+    const pd = st.players[defender];
+    st.turn.duelDone = true;
+    pd.duelShieldRound = st.round;
+    pa.stats.duels++;
+    this.emit('info', `${this.pn(attacker)} 向 ${this.pn(defender)} 发起斗法！`, { player: attacker, node: pd.pos });
+    const betA = yield* this.askBet(attacker, attacker, defender, undefined);
+    const betD = yield* this.askBet(defender, attacker, defender, betA);
+    pa.pills -= betA;
+    pd.pills -= betD;
+    const rolls: [number, number] = [this.d6(), this.d6()];
+    const bonus: [number, number] = [pa.hero === 'sword' ? r.swordDuelAttack : 0, pd.hero === 'body' ? r.bodyDuelDefense : 0];
+    const totals: [number, number] = [rolls[0] + betA + bonus[0], rolls[1] + betD + bonus[1]];
+    const winner = totals[0] > totals[1] ? attacker : defender;
+    const loser = winner === attacker ? defender : attacker;
+    const amount = this.duelStake(loser);
+    st.players[loser].stones -= amount;
+    st.players[winner].stones += amount;
+    st.players[winner].stats.duelWins++;
+    const bounty = st.bountySeat === loser;
+    const duel: DuelResult = { attacker, defender, bets: [betA, betD], rolls, bonus, totals, winner, loser, amount, bounty };
+    const part = (i: 0 | 1) => `${rolls[i]}${[betA, betD][i] ? ` + 丹 ${[betA, betD][i]}` : ''}${bonus[i] ? ` + ${bonus[i]}` : ''} = ${totals[i]}`;
+    this.emit('duel', `斗法：${this.pn(attacker)} ${part(0)} 对 ${this.pn(defender)} ${part(1)}，${this.pn(winner)} 胜${totals[0] === totals[1] ? '（平局守方胜）' : ''}，夺得 ${amount} 灵石`, {
+      player: winner, node: pd.pos, amount, duel,
+    });
+    if (bounty) {
+      st.bountySeat = null;
+      st.players[winner].stats.bountyClaims++;
+      this.emit('bounty', `${this.pn(winner)} 击败持令者 ${this.pn(loser)}，揭下悬赏令`, { player: winner });
+      this.addCult(winner, r.bountyDuelCultivation, '悬赏令');
+    }
+  }
+
+  /** Own lands where a 禁制 may be placed right now. */
+  trapSpots(seat: number): NodeId[] {
+    const st = this.state;
+    const r = this.cfg.rules;
+    if (st.players[seat].pills < r.trapPillCost) return [];
+    const mine = this.board.lands.filter((id) => st.tiles[id].owner === seat);
+    if (mine.filter((id) => st.tiles[id].trap).length >= r.trapMaxPerPlayer) return [];
+    return mine.filter((id) => !st.tiles[id].trap);
+  }
+
+  private placeTrap(seat: number, node: NodeId): void {
+    this.state.players[seat].pills -= this.cfg.rules.trapPillCost;
+    this.state.tiles[node].trap = true;
+    this.emit('trapSet', `${this.pn(seat)} 在【${this.nodeName(node)}】布下禁制`, { player: seat, node, amount: this.cfg.rules.trapPillCost });
+  }
+
+  skillReady(seat: number): boolean {
+    const p = this.state.players[seat];
+    return p.turnsTaken >= p.skillReadyTurn;
+  }
+
+  /** Targets of the hero's active skill (players for 剑遁 / 乾坤挪移 / 迷魂丹, ring nodes for 镇山). */
+  skillTargets(seat: number): number[] | NodeId[] {
+    const st = this.state;
+    const p = st.players[seat];
+    const others = st.players.filter((o) => o.seat !== seat);
+    switch (this.heroOf(seat).skill.id) {
+      case 'sworddash':
+        if (st.turn.duelDone) return [];
+        return others.filter((o) => this.duelEligible(o.seat) && o.pos !== p.pos).map((o) => o.seat);
+      case 'swap':
+        if (!this.board.isRing(p.pos)) return [];
+        return others
+          .filter((o) => !o.jailed && this.board.isRing(o.pos) && o.pos !== p.pos && this.board.ringDistance(p.pos, o.pos) <= this.cfg.rules.swapRange)
+          .map((o) => o.seat);
+      case 'daze':
+        return others.filter((o) => !o.dazed && !isWardActive(st, o.seat)).map((o) => o.seat);
+      case 'roadblock': {
+        if (!this.board.isRing(p.pos) || st.roadblock) return [];
+        const out: NodeId[] = [];
+        let n = p.pos;
+        for (let k = 0; k < this.cfg.rules.roadblockRange; k++) {
+          n = this.board.ringStep(n, 1);
+          if (!st.players.some((o) => o.pos === n)) out.push(n);
+        }
+        return out;
+      }
+    }
+  }
+
+  private skillAvailable(seat: number, phase: 'preroll' | 'action'): boolean {
+    return this.heroOf(seat).skill.timing === phase && this.skillReady(seat) && this.skillTargets(seat).length > 0;
+  }
+
+  private skillOption(seat: number): ChoiceOption<{ t: 'skill' }> {
+    const sk = this.heroOf(seat).skill;
+    return { id: 'skill', label: `技能【${sk.name}】（冷却 ${this.cfg.rules.skillCooldownTurns} 回合）`, value: { t: 'skill' }, hint: sk.desc };
+  }
+
+  private spendSkill(seat: number): void {
+    const p = this.state.players[seat];
+    p.skillReadyTurn = p.turnsTaken + this.cfg.rules.skillCooldownTurns;
+    p.stats.skillUses++;
+    this.emit('skill', `${this.pn(seat)} 施展技能【${this.heroOf(seat).skill.name}】`, { player: seat });
+  }
+
+  /** Returns 'moved' when the skill replaced this turn's roll (剑遁), 'cancel' when backed out. */
+  private *useSkill(seat: number): Flow<'moved' | 'ok' | 'cancel'> {
+    const st = this.state;
+    const p = st.players[seat];
+    const sk = this.heroOf(seat).skill;
+    if (sk.id === 'roadblock') {
+      const nodes = this.skillTargets(seat) as NodeId[];
+      const tg = yield* this.askTarget(seat, sk.name, sk.desc, nodes.map((node) => ({ t: 'node' as const, node })), 'roadblock');
+      if (tg.t !== 'node') return 'cancel';
+      this.spendSkill(seat);
+      st.roadblock = { node: tg.node, seat };
+      this.emit('roadblock', `${this.pn(seat)} 在【${this.nodeName(tg.node)}】落下山岳`, { player: seat, node: tg.node });
+      return 'ok';
+    }
+    const seats = this.skillTargets(seat) as number[];
+    const tg = yield* this.askTarget(seat, sk.name, sk.desc, seats.map((x) => ({ t: 'player' as const, seat: x })), sk.id);
+    if (tg.t !== 'player') return 'cancel';
+    const o = st.players[tg.seat];
+    this.spendSkill(seat);
+    switch (sk.id) {
+      case 'sworddash': {
+        const to = o.pos;
+        this.teleport(seat, to, `剑遁追至 ${this.pn(tg.seat)} 身前`);
+        p.roadDir = o.roadDir;
+        st.turn.lastPath = [];
+        yield* this.duel(seat, tg.seat);
+        yield* this.settle(seat, p.pos);
+        return 'moved';
+      }
+      case 'swap': {
+        const mine = p.pos;
+        const theirs = o.pos;
+        p.pos = theirs;
+        o.pos = mine;
+        this.emit('teleport', `${this.pn(seat)} 乾坤挪移，与 ${this.pn(tg.seat)} 互换位置`, { player: seat, node: theirs, from: mine });
+        this.emit('teleport', '', { player: tg.seat, node: mine, from: theirs });
+        return 'ok';
+      }
+      case 'daze':
+        o.dazed = true;
+        this.emit('status', `${this.pn(tg.seat)} 中了迷魂丹，下次移动步数减半`, { player: tg.seat });
+        return 'ok';
+    }
+    return 'ok';
   }
 
   // ------------------------------------------------------- world events ---
@@ -1701,7 +1984,7 @@ export class Game {
   }
 
   /** Drive an arbitrary engine sub-flow with scripted answers (tests). */
-  runFlow(flow: Flow, answer: (c: PendingChoice) => string): void {
+  runFlow(flow: Flow<unknown>, answer: (c: PendingChoice) => string): void {
     let r = flow.next(undefined as unknown as string);
     while (!r.done) r = flow.next(answer(r.value));
   }
@@ -1711,4 +1994,18 @@ export class Game {
   testAltar(seat: number): Flow { return this.altar(seat, 0); }
   testTasks(): void { this.checkTasks(); }
   testUpdateVeinLords(): void { this.updateVeinLords(); }
+  testUpdateBounty(): void { this.updateBounty(); }
+  testDuel(attacker: number, defender: number): Flow { return this.duel(attacker, defender); }
+  testUseSkill(seat: number): Flow<'moved' | 'ok' | 'cancel'> { return this.useSkill(seat); }
+  /** A full turn for `seat` (dice from the game rng). */
+  testPlayTurn(seat: number): Flow {
+    this.state.current = seat;
+    return this.playTurn(seat);
+  }
+  /** One move of `total` steps for `seat` as in a normal turn (迷魂丹, 斗法 offer, settle), skipping the dice. */
+  *testMove(seat: number, total: number): Flow {
+    this.state.current = seat;
+    this.state.turn = this.freshTurn(seat);
+    yield* this.doMove(seat, total);
+  }
 }

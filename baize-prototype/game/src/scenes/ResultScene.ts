@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { defaultData } from '../core/data';
 import type { GameRecord } from '../core/record';
 import type { GameState } from '../core/types';
 import { addImg } from '../ui/assets';
@@ -22,8 +23,8 @@ export class ResultScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor(COLORS.bg);
     const st = d.state;
     const w = st.players[st.winner!];
-    txt(this, 640, 70, st.endReason === 'cultivation' ? '渡劫飞升！' : '十五轮终了', { size: 40, bold: true, color: HEX.gold, origin: [0.5, 0.5] });
-    txt(this, 640, 120, `${w.name} 获胜${st.endReason === 'cultivation' ? '（修为达成）' : '（第 15 轮结束时修为最高）'} · 共 ${st.round} 轮`, { size: 18, origin: [0.5, 0.5] });
+    txt(this, 640, 70, st.endReason === 'cultivation' ? '渡劫飞升！' : `${defaultData.config.rounds} 轮终了`, { size: 40, bold: true, color: HEX.gold, origin: [0.5, 0.5] });
+    txt(this, 640, 120, `${w.name} 获胜${st.endReason === 'cultivation' ? '（修为达成）' : `（第 ${defaultData.config.rounds} 轮结束时修为最高）`} · 共 ${st.round} 轮`, { size: 18, origin: [0.5, 0.5] });
     d.ranking.forEach((seat, rank) => {
       const p = st.players[seat];
       const r = d.rows[seat];

@@ -61,7 +61,7 @@ export interface ConfigData {
 
 /** Numbers stated only in GDD text or card descriptions (config.json `rules`). */
 export interface RulesConfig {
-  /** §9.4 / §12 丹道营商：丹师购地折扣（9 折） */
+  /** §9.4 / §12 丹道营商：丹师购地折扣（8 折） */
   alchBuyDiscount: number;
   /** 折扣符：购地 / 升级折扣（7 折） */
   discountCardMult: number;
@@ -125,6 +125,32 @@ export interface RulesConfig {
   beastRollMax: number;
   /** §9.4 神识：抽机缘时抽几选 1 */
   senseDrawCount: number;
+  /** §17 斗法：每方最多押注的灵丹（每颗 +1 点） */
+  duelMaxPills: number;
+  /** §17 斗法：剑修主动挑战时 +点 */
+  swordDuelAttack: number;
+  /** §17 斗法：体修被挑战时 +点 */
+  bodyDuelDefense: number;
+  /** §17 斗法：败者交出自身灵石的比例 */
+  duelStealPct: number;
+  /** §17 斗法：单次斗法夺取灵石上限 */
+  duelStealMax: number;
+  /** §17 悬赏令：持令者至少需要的修为 */
+  bountyMinCult: number;
+  /** §17 悬赏令：斗法击败持令者获得的修为 */
+  bountyDuelCultivation: number;
+  /** §17 禁制：布置一处花费的灵丹 */
+  trapPillCost: number;
+  /** §17 禁制：每名玩家同时生效的上限 */
+  trapMaxPerPlayer: number;
+  /** §17 禁制：触发者交给地主的灵石 */
+  trapStones: number;
+  /** §12 主动技能：冷却（自己的回合数） */
+  skillCooldownTurns: number;
+  /** §12 镇山：山岳可放在前方 1 至此值格 */
+  roadblockRange: number;
+  /** §12 乾坤挪移：只能与外环上相距不超过此格数（顺逆时针取近）的他人互换 */
+  swapRange: number;
 }
 
 // ---- board.json -----------------------------------------------------------
@@ -160,7 +186,10 @@ export interface HeroData {
   color: string;
   passive: { id: string; name: string; desc: string };
   ult: { id: string; name: string; desc: string };
+  /** 主动技能：免费，冷却 rules.skillCooldownTurns 个自己的回合。 */
+  skill: { id: HeroSkillId; name: string; desc: string; timing: 'preroll' | 'action' };
 }
+export type HeroSkillId = 'sworddash' | 'swap' | 'roadblock' | 'daze';
 
 // ---- spells.json ----------------------------------------------------------
 export type SpellCat = 'attack' | 'guard' | 'move' | 'wealth';
@@ -243,6 +272,16 @@ export interface PlayerStats {
   altarVisits: number;
   bankruptcies: number;
   tasksDone: number;
+  /** 发起的斗法次数 */
+  duels: number;
+  /** 斗法胜场（攻守皆计） */
+  duelWins: number;
+  /** 击败悬赏令持有者的次数 */
+  bountyClaims: number;
+  /** 自己的禁制被触发次数 */
+  trapTriggers: number;
+  /** 主动技能使用次数 */
+  skillUses: number;
 }
 
 export interface PlayerState {
@@ -286,6 +325,12 @@ export interface PlayerState {
   /** 灵兽引路: next movement value chosen 1–6. */
   chooseRoll: boolean;
   badStreak: number;
+  /** 主动技能在 turnsTaken >= skillReadyTurn 时可用。 */
+  skillReadyTurn: number;
+  /** 本轮已被挑战过斗法（state.round 相等时不可再被挑战）。 */
+  duelShieldRound: number;
+  /** 迷魂丹：下一次掷骰移动步数减半（向下取整，至少 1）。 */
+  dazed: boolean;
   /** "<node>:<level>" — first-time Lv3/Lv4 cultivation already granted. */
   milestones: string[];
   stats: PlayerStats;
@@ -294,6 +339,8 @@ export interface PlayerState {
 export interface TileState {
   owner: number | null;
   level: number;
+  /** 禁制（属于地主）。易主或破产时清除。 */
+  trap: boolean;
 }
 
 export interface DemonState {
@@ -317,6 +364,10 @@ export interface TurnState {
   swordUlt: boolean;
   lastPath: NodeId[];
   lastDir: 1 | -1;
+  /** 本回合已发起过斗法（含双数再掷）。 */
+  duelDone: boolean;
+  /** 本次移动途中超过的玩家座位。 */
+  passed: number[];
 }
 
 export interface GameState {
@@ -341,6 +392,10 @@ export interface GameState {
   /** Region -> per-seat sequence number of when the land count last changed (tie-break "先达成者"). */
   regionReach: Record<RegionId, number[]>;
   seq: number;
+  /** §17 悬赏令持有者（每轮开始时重算；被斗法击败后清空至下一轮）。 */
+  bountySeat: number | null;
+  /** 体修镇山的山岳路障：拦下下一个经过它的他人；主人下回合开始时消失。 */
+  roadblock: { node: NodeId; seat: number } | null;
   turn: TurnState;
 }
 

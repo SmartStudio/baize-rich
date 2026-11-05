@@ -38,7 +38,17 @@ const PERSONAS: Record<Personality, Persona> = {
 };
 
 /** Rough stone-equivalents used when comparing heterogeneous gains. */
-const VALUE = { pill: 50, cult: 400, card: 80 };
+const VALUE = { pill: 50, cult: 400, card: 80, bound: 150 };
+
+/** P(attacker wins) when the attacker's total is offset by `off` over the defender's (ties go to the defender). */
+export function duelWinChance(off: number): number {
+  let n = 0;
+  for (let a = 1; a <= 6; a++) for (let d = 1; d <= 6; d++) if (a + off > d) n++;
+  return n / 36;
+}
+
+/** Minimum duel EV (stones) worth a challenge, by difficulty. */
+const DUEL_BAR: Record<Difficulty, number> = { easy: 150, normal: 30, hard: 0 };
 
 export interface AIOptions {
   difficulty?: Difficulty;
@@ -111,6 +121,7 @@ export class AIController implements Controller {
           const r = rentFor(st, b, this.data, node, this.seat).amount;
           s -= r;
           if (r >= p.stones) s -= 400;
+          if (t.trap) s -= this.data.config.rules.trapStones + VALUE.bound;
         }
         break;
       }
@@ -129,8 +140,163 @@ export class AIController implements Controller {
   }
 
   private scoreMove(steps: number, dir: 1 | -1, from?: NodeId): number {
-    const pr = predictWalk(this.board, this.st, this.seat, steps, dir, this.policy(), from);
-    return this.landingScore(pr.node, pr.passStart);
+    const n = this.me.dazed ? Math.max(1, Math.floor(steps / 2)) : steps;
+    const pr = predictWalk(this.board, this.st, this.seat, n, dir, this.policy(), from);
+    return this.landingScore(pr.node, pr.passStart) + this.meetValue(pr.path);
+  }
+
+  /** Best duel EV among players met on a predicted path (0 if none worth it or already dueled). */
+  private meetValue(path: NodeId[]): number {
+    if (this.difficulty === 'easy' || this.st.turn.duelDone) return 0;
+    let best = 0;
+    for (const o of this.st.players) {
+      if (o.seat === this.seat || !path.slice(1).includes(o.pos) || !this.game.duelEligible(o.seat)) continue;
+      best = Math.max(best, this.challengeValue(o.seat));
+    }
+    return best;
+  }
+
+  // ------------------------------------------------------------- duels ---
+
+  private duelBonus(seat: number, role: 'atk' | 'def'): number {
+    const r = this.data.config.rules;
+    const h = this.st.players[seat].hero;
+    return role === 'atk' ? (h === 'sword' ? r.swordDuelAttack : 0) : (h === 'body' ? r.bodyDuelDefense : 0);
+  }
+
+  /** What `seat` gains by beating `other` (stones + bounty). */
+  private duelPrize(other: number): number {
+    return this.game.duelStake(other) + (this.st.bountySeat === other ? this.data.config.rules.bountyDuelCultivation * VALUE.cult : 0);
+  }
+
+  /** Guess how many pills a player will bet (they bet when the stakes are worth more than the pills). */
+  private guessBet(seat: number, stakeSum: number): number {
+    const max = Math.min(this.data.config.rules.duelMaxPills, this.st.players[seat].pills);
+    return stakeSum >= 250 ? max : stakeSum >= 120 ? Math.min(1, max) : 0;
+  }
+
+  /** Expected value (stones) for this AI of a duel, given both bets. */
+  private duelEV(attacker: number, defender: number, betA: number, betD: number): number {
+    const off = this.duelBonus(attacker, 'atk') + betA - this.duelBonus(defender, 'def') - betD;
+    const pAtk = duelWinChance(off);
+    const meAtk = attacker === this.seat;
+    const opp = meAtk ? defender : attacker;
+    const pWin = meAtk ? pAtk : 1 - pAtk;
+    const myBet = meAtk ? betA : betD;
+    return pWin * this.duelPrize(opp) * this.persona.attack - (1 - pWin) * this.duelPrize(this.seat) - myBet * VALUE.pill;
+  }
+
+  private maxBet(): number {
+    return Math.max(0, Math.min(this.data.config.rules.duelMaxPills, this.sparePills()));
+  }
+
+  /** EV of challenging `target` now, with the best own bet against the guessed reply. */
+  challengeValue(target: number): number {
+    const stakeSum = this.game.duelStake(target) + this.game.duelStake(this.seat);
+    const theirs = this.guessBet(target, stakeSum);
+    let best = -Infinity;
+    for (let b = 0; b <= this.maxBet(); b++) best = Math.max(best, this.duelEV(this.seat, target, b, theirs));
+    const leader = this.leaderOpponent();
+    return best + (target === leader ? 30 : 0);
+  }
+
+  private duelChoice(c: PendingChoiceOf<'duel'>): string {
+    let bestId = 'none';
+    let bestV = DUEL_BAR[this.difficulty];
+    for (const o of c.options) {
+      if (o.value === null) continue;
+      const v = this.challengeValue(o.value);
+      if (v > bestV) { bestV = v; bestId = o.id; }
+    }
+    return bestId;
+  }
+
+  private duelBet(c: PendingChoiceOf<'duelBet'>): string | undefined {
+    if (this.difficulty === 'easy') return 'b0';
+    const atk = c.ctx.attacker!;
+    const def = c.ctx.defender!;
+    const meAtk = atk === this.seat;
+    const stakeSum = this.game.duelStake(atk) + this.game.duelStake(def);
+    const cap = this.maxBet();
+    const opts = c.options.filter((o) => o.value <= cap);
+    if (opts.length === 0) return 'b0';
+    if (meAtk) {
+      const theirs = this.guessBet(def, stakeSum);
+      return this.bestBy(opts, (o) => this.duelEV(atk, def, o.value, theirs));
+    }
+    const theirs = c.ctx.bet ?? 0;
+    return this.bestBy(opts, (o) => this.duelEV(atk, def, theirs, o.value));
+  }
+
+  // ------------------------------------------------------------ skills ---
+
+  /** Best target for the hero's active skill and its estimated gain over not using it. */
+  private bestSkill(): { id: string; value: number } | null {
+    const g = this.game;
+    const st = this.st;
+    const sk = g.heroOf(this.seat).skill;
+    const targets = g.skillTargets(this.seat);
+    let best: { id: string; value: number } | null = null;
+    const consider = (id: string, value: number) => { if (!best || value > best.value) best = { id, value }; };
+    switch (sk.id) {
+      case 'sworddash': {
+        const base = this.expectedRoll(1);
+        for (const s of targets as number[]) consider(`p${s}`, this.challengeValue(s) + this.landingScore(st.players[s].pos) - base);
+        break;
+      }
+      case 'swap': {
+        const base = this.expectedRoll(1);
+        for (const s of targets as number[]) consider(`p${s}`, this.expectedRoll(1, [0], st.players[s].pos) - base);
+        break;
+      }
+      case 'daze': {
+        const leader = this.leaderOpponent();
+        for (const s of targets as number[]) consider(`p${s}`, 40 + (s === leader ? 40 : 0) + this.cult(s) * 5);
+        break;
+      }
+      case 'roadblock':
+        for (const n of targets as NodeId[]) consider(`node:${n}`, this.roadblockValue(n));
+        break;
+    }
+    return best;
+  }
+
+  /** Expected gain of a 镇山 mountain on `node`: the next opponent to move is stopped there. */
+  private roadblockValue(node: NodeId): number {
+    const st = this.st;
+    const n = st.players.length;
+    for (let k = 1; k < n; k++) {
+      const seat = (this.seat + k) % n;
+      const o = st.players[seat];
+      if (o.jailed || o.bound) continue;
+      let pPass = 0;
+      for (const { total, p } of DICE_DIST) {
+        const pr = predictWalk(this.board, st, seat, total, 1, { fork: () => false, altar: () => 'stop', exitRoad: 'S', canPayToll: false });
+        if (pr.path.slice(1).includes(node)) pPass += p;
+      }
+      const t = st.tiles[node];
+      let v = 30;
+      if (t && t.owner === this.seat) {
+        v += rentFor(st, this.board, this.data, node, seat).amount;
+        if (t.trap) v += this.data.config.rules.trapStones + VALUE.bound;
+      } else if (t && t.owner !== null) v += rentFor(st, this.board, this.data, node, seat).amount * 0.3;
+      return pPass * v;
+    }
+    return 0;
+  }
+
+  /** Chance-weighted value of a 禁制 on `node` over the opponents' next rolls. */
+  private trapValue(node: NodeId): number {
+    const st = this.st;
+    let e = 0;
+    for (const o of st.players) {
+      if (o.seat === this.seat || o.jailed) continue;
+      for (const { total, p } of DICE_DIST) {
+        const pr = predictWalk(this.board, st, o.seat, total, 1, { fork: () => false, altar: () => 'stop', exitRoad: 'S', canPayToll: false });
+        if (pr.node === node) e += p;
+      }
+    }
+    return e * (this.data.config.rules.trapStones + VALUE.bound);
   }
 
   /** Expected landing value of a fresh 2d6 roll plus an optional bonus. */
@@ -257,6 +423,8 @@ export class AIController implements Controller {
       case 'node': return this.nodeChoice(c);
       case 'target': return this.targetChoice(c);
       case 'region': return this.bestBy(c.options.filter((o) => o.value !== 'cancel'), (o) => this.regionRent(o.value as RegionId));
+      case 'duel': return this.duelChoice(c);
+      case 'duelBet': return this.duelBet(c);
       case 'cliff': {
         if (c.options.some((o) => o.id === 'calm') && this.sparePills() >= 1) return 'calm';
         const payBar = this.data.config.cliffFee + this.persona.buyReserve + (this.personality === 'aggressive' ? 0 : 200);
@@ -299,6 +467,11 @@ export class AIController implements Controller {
     const spare = this.sparePills();
     const base = this.expectedRoll(1);
 
+    const skill = has((v) => v.t === 'skill');
+    if (skill) {
+      const sk = this.bestSkill();
+      if (sk && sk.value > (this.difficulty === 'hard' ? 40 : 80)) return skill.id;
+    }
     const shrink = has((v) => v.t === 'shrink');
     if (shrink) {
       const region = this.board.sideRegion(p.pos)!;
@@ -370,6 +543,23 @@ export class AIController implements Controller {
       if (bind && spare >= 2 && leader !== null && this.cult(leader) >= 5 && this.cult(leader) >= this.cult()) return bind.id;
       const drain = find((v) => v.t === 'cast' && v.card === 'drain');
       if (drain && spare >= 1 && leader !== null && st.players[leader].pills >= 3) return drain.id;
+    }
+    // 6) active skill (free, on cooldown)
+    const skill = find((v) => v.t === 'skill');
+    if (skill && (this.difficulty !== 'easy' || this.rng.float() < 0.5)) {
+      const sk = this.bestSkill();
+      if (sk && sk.value > 20) return skill.id;
+    }
+    // 7) 禁制 on the tile opponents are most likely to stop on
+    const traps = c.options.filter((o) => o.value.t === 'trap');
+    if (traps.length > 0 && attacks && spare >= this.data.config.rules.trapPillCost) {
+      let best = traps[0];
+      let bv = -Infinity;
+      for (const o of traps) {
+        const v = this.trapValue((o.value as { node: NodeId }).node);
+        if (v > bv) { bv = v; best = o; }
+      }
+      if (bv * this.persona.attack >= 20 || spare >= 3) return best.id;
     }
     return 'end';
   }
@@ -532,6 +722,9 @@ export class AIController implements Controller {
       const leader = this.leaderOpponent();
       const o = real.find((x) => x.value.t === 'player' && x.value.seat === leader);
       return o?.id ?? real[0].id;
+    }
+    if (purpose === 'sworddash' || purpose === 'swap' || purpose === 'daze' || purpose === 'roadblock') {
+      return this.bestSkill()?.id ?? 'cancel';
     }
     if (purpose === 'drain') {
       return this.bestBy(real, (o) => (o.value.t === 'player' ? this.st.players[o.value.seat].pills + this.cult(o.value.seat) * 0.1 : 0));

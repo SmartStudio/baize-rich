@@ -11,18 +11,22 @@ export type PreRollAct =
   | { t: 'roll' }
   | { t: 'cast'; card: string }
   | { t: 'ult' }
-  | { t: 'shrink' };
+  | { t: 'shrink' }
+  | { t: 'skill' };
 
 export type ActionAct =
   | { t: 'upgrade'; node: NodeId }
   | { t: 'cast'; card: string }
   | { t: 'ult' }
+  | { t: 'skill' }
+  | { t: 'trap'; node: NodeId }
   | { t: 'end' };
 
 export type Target =
   | { t: 'land'; node: NodeId }
   | { t: 'demon' }
   | { t: 'player'; seat: number }
+  | { t: 'node'; node: NodeId }
   | { t: 'cancel' };
 
 /** What kind of attack/threat a guard reaction (金光符) is being asked about. */
@@ -63,6 +67,10 @@ export interface ChoiceValueMap {
   target: Target;
   region: RegionId | 'cancel';
   cliff: 'pay' | 'roll' | 'calm';
+  /** §17 斗法：挑战哪位玩家（null = 不斗法）。 */
+  duel: number | null;
+  /** §17 斗法：押注几颗灵丹（每颗 +1 点，胜负都消耗）。 */
+  duelBet: number;
 }
 export type ChoiceKind = keyof ChoiceValueMap;
 
@@ -84,10 +92,17 @@ export interface ChoiceContext {
   card?: string;
   threat?: ThreatKind;
   attacker?: number;
-  purpose?: NodePurpose | 'thunder' | 'fivethunder' | 'drain' | 'bind' | 'buyout' | 'treasure';
+  purpose?: NodePurpose | 'thunder' | 'fivethunder' | 'drain' | 'bind' | 'buyout' | 'treasure'
+    | 'sworddash' | 'swap' | 'roadblock' | 'daze';
   dice?: [number, number];
   base?: number;
   cost?: number;
+  /** 斗法：守方座位 */
+  defender?: number;
+  /** 斗法：本局赌注（败者将交出的灵石，按当前双方灵石计） */
+  stake?: number;
+  /** 斗法押注阶段：对手已押的灵丹（守方决定时可见） */
+  bet?: number;
 }
 
 export interface PendingChoiceOf<K extends ChoiceKind> {

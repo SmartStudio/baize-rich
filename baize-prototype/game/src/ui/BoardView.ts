@@ -4,7 +4,7 @@ import { ALTAR, type Board } from '../core/board';
 import type { GameState, HeroId, NodeId } from '../core/types';
 import { addImg, setFrame } from './assets';
 import { ALTAR_RECT, BOARD, cellXY } from './layout';
-import { COLORS, HEX, PLAYER_COLORS, txt } from './theme';
+import { COLORS, HEX, PLAYER_COLORS, PLAYER_HEX, txt } from './theme';
 
 const S = BOARD.scale;
 const C = BOARD.cell;
@@ -16,6 +16,8 @@ interface LandView {
   bld: Phaser.GameObjects.Image;
   owner: Phaser.GameObjects.Image;
   flag: Phaser.GameObjects.Image;
+  /** §17 禁制 marker, in the owner's seat colour. */
+  trap: Phaser.GameObjects.Text;
 }
 
 export class BoardView {
@@ -30,6 +32,8 @@ export class BoardView {
   private clickFn: ((n: NodeId) => void) | null = null;
   private clickable = new Set<NodeId>();
   private currentMark: Phaser.GameObjects.Rectangle;
+  /** §12 镇山 mountain marker. */
+  private rock: Phaser.GameObjects.Text;
 
   constructor(private scene: Phaser.Scene, private board: Board, heroes: HeroId[]) {
     const s = scene;
@@ -47,7 +51,9 @@ export class BoardView {
         const bld = addImg(s, x + u(32), y + u(48), 'bld_1').setOrigin(0.5, 1).setDepth(y + u(48)).setVisible(false).setScale(S);
         const owner = addImg(s, x, y + u(54), 'owner_p1').setOrigin(0, 0).setDepth(2).setVisible(false).setScale(S);
         const flag = addImg(s, x + u(9), y + u(24), 'flag_p1').setOrigin(0.5, 1).setDepth(y + u(49)).setVisible(false).setScale(S);
-        this.lands.set(id, { decor, bld, owner, flag });
+        const trap = txt(s, x + C - u(4), y + u(4), '禁', { size: 13, bold: true, stroke: HEX.ink, origin: [1, 0] })
+          .setDepth(2500).setVisible(false);
+        this.lands.set(id, { decor, bld, owner, flag, trap });
       } else {
         addImg(s, x + u(32), y + u(48), `obj_${n.type}`).setOrigin(0.5, 1).setDepth(y + u(48)).setScale(S);
       }
@@ -57,6 +63,7 @@ export class BoardView {
     this.addZone(ALTAR, ALTAR_RECT.x, ALTAR_RECT.y, ALTAR_RECT.w, ALTAR_RECT.h);
     this.baize = addImg(s, ALTAR_RECT.x + u(96), ALTAR_RECT.y + u(40), 'baize').setOrigin(0.5, 1).setDepth(900).setVisible(false).setScale(S);
     this.demon = addImg(s, 0, 0, 'demon').setOrigin(0.5, 1).setVisible(false).setScale(S);
+    this.rock = txt(s, 0, 0, '山', { size: 22, bold: true, color: HEX.gold, stroke: HEX.ink, origin: [0.5, 0.5] }).setDepth(2600).setVisible(false);
     this.currentMark = s.add.rectangle(0, 0, C, C, COLORS.gold, 0.16).setOrigin(0, 0).setStrokeStyle(4, COLORS.gold).setDepth(3).setVisible(false);
     s.tweens.add({ targets: this.currentMark, alpha: 0.45, duration: 520, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
 
@@ -157,7 +164,13 @@ export class BoardView {
       v.decor.setVisible(t.level === 0);
       v.bld.setVisible(t.level > 0);
       if (t.level > 0) setFrame(v.bld, `bld_${t.level}`);
+      v.trap.setVisible(t.trap && owned);
+      if (t.trap && owned) v.trap.setColor(PLAYER_HEX[t.owner!]);
     }
+    if (state.roadblock) {
+      const r = this.nodeRect(state.roadblock.node);
+      this.rock.setVisible(true).setPosition(r.x + r.w / 2, r.y + u(20)).setColor(PLAYER_HEX[state.roadblock.seat]);
+    } else this.rock.setVisible(false);
     if (state.demon) {
       const r = this.nodeRect(state.demon.node);
       this.demon.setVisible(true).setPosition(r.x + u(32), r.y + u(46)).setDepth(r.y + u(46) + 50);
