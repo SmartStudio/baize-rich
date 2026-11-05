@@ -52,6 +52,11 @@ export class Tooltip {
     return this.pinnedKey;
   }
 
+  /** True while `key` is the popover an empty-space click closed this very frame. */
+  justClosed(key: string): boolean {
+    return this.closedKey === key && this.closedFrame === this.scene.game.loop.frame;
+  }
+
   /** Make `rect` (screen coords) a hover zone; `content` is evaluated on every hover so it reflects the latest state. */
   attach(x: number, y: number, w: number, h: number, content: () => TipContent | null): Phaser.GameObjects.Zone {
     const zone = this.scene.add.zone(x, y, w, h).setOrigin(0, 0).setInteractive();
@@ -79,7 +84,7 @@ export class Tooltip {
       this.unpin();
       return;
     }
-    if (this.closedKey === key && this.closedFrame === this.scene.game.loop.frame) return;
+    if (this.justClosed(key)) return;
     this.pinnedKey = key;
     this.render(anchor, c);
   }

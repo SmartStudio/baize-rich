@@ -11,11 +11,13 @@ import { toRecord, type GameRecord } from '../core/record';
 import { countOwned, cultivation, nominalRent, realmName, totalAssets } from '../core/rules';
 import { ALTAR } from '../core/board';
 import type { GameState, NodeId } from '../core/types';
+import { BoardCamera } from '../ui/BoardCamera';
 import { BoardView } from '../ui/BoardView';
 import { ChoiceModal, type ModalOption, type ModalSpec } from '../ui/ChoiceModal';
 import { Cutscene, type BannerSpec } from '../ui/Cutscene';
-import { BOARD, STAGE, type Rect } from '../ui/layout';
+import { STAGE, type Rect } from '../ui/layout';
 import { LogPanel } from '../ui/LogPanel';
+import { Minimap } from '../ui/Minimap';
 import { PlayerCards } from '../ui/PlayerCards';
 import { downloadRecord, saveAutosave } from '../ui/saves';
 import type { SessionConfig } from '../ui/session';
@@ -24,6 +26,7 @@ import { COLORS, FS, HEX, PLAYER_COLORS, txt } from '../ui/theme';
 import { tileTip } from '../ui/TileInfo';
 import { Tooltip } from '../ui/Tooltip';
 import { TopBar } from '../ui/TopBar';
+import { unionRect } from '../ui/world';
 import type { ResultData } from './ResultScene';
 
 const SLOW_EVENTS = new Set<GameEvent['type']>([
@@ -114,6 +117,12 @@ export class GameScene extends Phaser.Scene {
   /** Options of the open modal that map to board nodes (click-to-choose). */
   private nodeOptions = new Map<NodeId, string>();
   private toastText!: Phaser.GameObjects.Text;
+  private cam!: BoardCamera;
+  private minimap!: Minimap;
+  /** Tile the current press started on, unless that press only closed its own pinned popover. */
+  private pressed: NodeId | null = null;
+  /** The camera moved since tile popovers were last placed. */
+  private camMoving = false;
 
   constructor() {
     super('Game');
@@ -142,6 +151,7 @@ export class GameScene extends Phaser.Scene {
     this.game.scene.start('Hud');
     const hud = this.scene.get('Hud');
     this.boardView = new BoardView(this, this.engine.board, session.setup.players.map((p) => p.hero));
+    this.cam = new BoardCamera(this, this.boardView.world, (seat) => this.boardView.tokenFocus(seat), () => this.speed);
     this.tip = new Tooltip(hud);
     this.top = new TopBar(hud, this.engine, this.tip);
     this.cards = new PlayerCards(hud, this.engine, labels, this.tip);
@@ -150,7 +160,13 @@ export class GameScene extends Phaser.Scene {
     this.logPanel = new LogPanel(hud);
     this.fx = new Cutscene(hud);
     this.lastSnap = null;
-    this.toastText = txt(hud, STAGE.cx, BOARD.y + BOARD.size - BOARD.cell - 18, '', { size: FS.lg, bold: true, color: HEX.gold, stroke: HEX.ink, origin: [0.5, 0.5] }).setDepth(9000);
+    this.minimap = new Minimap(hud, this.boardView.world, this.engine.board.data, (p) => this.cam.panTo(p));
+    this.minimap.btnRecentre.onClick(() => this.recentre());
+    this.cam.onManual(() => {
+      if (this.tip.pinned?.startsWith('tile:')) this.tip.unpin();
+      else this.tip.hide();
+    });
+    this.toastText = txt(hud, STAGE.cx, STAGE.toastY, '', { size: FS.lg, bold: true, color: HEX.gold, stroke: HEX.ink, origin: [0.5, 0.5] }).setDepth(9000);
 
     this.side.btnSpeed.onClick(() => this.cycleSpeed());
     this.side.btnLog.onClick(() => this.logPanel.toggle());
@@ -161,7 +177,8 @@ export class GameScene extends Phaser.Scene {
     this.side.btnCast.onClick(() => void this.openSubMenu('cast'));
     this.side.onCardClick((card) => this.mainAnswer(`cast:${card}`));
     this.boardView.onHover((n) => { this.hovered = n; this.showTile(); });
-    this.boardView.onClick((n) => this.nodeClicked(n));
+    this.boardView.onPress((n) => { this.pressed = this.tip.justClosed(`tile:${n}`) ? null : n; });
+    this.boardView.onClick((n) => { if (n === this.pressed && !this.cam.dragged) this.nodeClicked(n); });
     this.input.keyboard?.on('keydown', (ev: KeyboardEvent) => this.onKey(ev));
     this.setMainButtons(null);
 
@@ -171,7 +188,26 @@ export class GameScene extends Phaser.Scene {
     else this.engine.start();
     this.autosave();
     this.engine.state.players.forEach((p, i) => this.boardView.placeToken(i, p.pos));
+    this.cam.recentre(this.engine.state.current, true);
     void this.loop();
+  }
+
+  update(_time: number, delta: number): void {
+    if (!this.alive) return;
+    // Popovers are placed in screen space: hide the hover one while the board slides, re-place both once it stops.
+    const moved = this.cam.update(delta);
+    if (moved && !this.camMoving) this.tip.hide();
+    if (!moved && this.camMoving) this.showTile();
+    this.camMoving = moved;
+    const st = this.shownState;
+    const world = this.boardView.world;
+    this.minimap.update(
+      this.cam.visibleRect(),
+      st.players.map((_, i) => this.boardView.tokenFocus(i)),
+      st.current,
+      st.demon ? world.centre(st.demon.node) : null,
+      this.cam.fits(),
+    );
   }
 
   // ------------------------------------------------------------ main loop
@@ -241,13 +277,18 @@ export class GameScene extends Phaser.Scene {
     if (e.snap && (e.type === 'step' || e.type === 'slide' || e.type === 'teleport')) this.boardView.markCurrent(e.snap);
     switch (e.type) {
       case 'step':
+        this.cam.follow(seat);
         await this.boardView.moveToken(seat, e.node!, this.ms(pace.step));
         break;
       case 'slide':
+        this.cam.follow(seat);
         await this.boardView.moveToken(seat, e.node!, this.ms(pace.slide), false);
         break;
       case 'teleport':
+        if (e.from && e.from !== e.node) this.cam.frameTeleport(unionRect([this.boardView.nodeRect(e.from), this.boardView.nodeRect(e.node!)]), seat);
+        else this.cam.follow(seat);
         await this.boardView.moveToken(seat, e.node!, this.ms(pace.teleport), false);
+        this.cam.release();
         break;
       case 'roll':
         if (e.dice) {
@@ -271,6 +312,7 @@ export class GameScene extends Phaser.Scene {
         await this.wait(this.ms(ROUND_WAIT));
         break;
       case 'turnStart':
+        this.cam.recentre(seat);
         if (e.snap) await this.turnIntro(e.snap, seat);
         break;
       default:
@@ -337,6 +379,7 @@ export class GameScene extends Phaser.Scene {
     this.side.btnSpeed.setLabel(`倍速 ×${this.speed} · F`);
     this.showTile();
     this.side.renderHand(state, this.handViewer(state));
+    this.minimap.render(state);
   }
 
   /** Hand is only visible to a human, on their own turn (or when they must react). */
@@ -397,6 +440,8 @@ export class GameScene extends Phaser.Scene {
     this.setMainButtons(null);
     this.boardView.setClickable([]);
     this.nodeOptions.clear();
+    // Rolling means "show me my move", even if the player had panned away to look around.
+    if (id === 'roll') this.cam.recentre(c.player);
     res(id);
   }
 
@@ -409,6 +454,7 @@ export class GameScene extends Phaser.Scene {
     this.nodeOptions.clear();
     for (const o of opts) if (o.node) this.nodeOptions.set(o.node, o.id);
     this.boardView.setClickable([...this.nodeOptions.keys()]);
+    this.frameTargets(c.player);
     const id = await this.modal.open({
       title: which === 'upgrade' ? '升级洞府（每回合 1 次）' : '符箓 / 大招 / 神通 / 技能 / 禁制',
       options: opts.map((o) => ({ id: o.id, label: o.label, hint: o.hint })),
@@ -416,7 +462,20 @@ export class GameScene extends Phaser.Scene {
     });
     this.boardView.setClickable([]);
     this.nodeOptions.clear();
+    this.cam.release();
     if (id) this.mainAnswer(id);
+  }
+
+  /** Bring the highlighted choice targets and the deciding seat's token into view together. */
+  private frameTargets(seat: number): void {
+    if (this.nodeOptions.size === 0) return;
+    const rects = [...this.nodeOptions.keys()].map((n) => this.boardView.nodeRect(n));
+    this.cam.frameChoice(unionRect([...rects, this.boardView.tokenRect(seat)]), seat);
+  }
+
+  /** 回到棋子: centre on whoever is deciding (or moving) and follow them again. */
+  private recentre(): void {
+    this.cam.recentre(this.engine.pending?.player ?? this.shownState.current);
   }
 
   private async modalChoice(c: PendingChoice): Promise<string> {
@@ -427,6 +486,7 @@ export class GameScene extends Phaser.Scene {
       for (const o of c.options) if (o.id !== 'stop') this.nodeOptions.set(g.board.corridorEnd(ALTAR, o.id), o.id);
     }
     this.boardView.setClickable([...this.nodeOptions.keys()]);
+    this.frameTargets(c.player);
     const p = g.state.players[c.player];
     let desc = c.desc ?? '';
     if (this.nodeOptions.size > 9) desc += '\n也可直接点击棋盘上高亮的格子';
@@ -465,6 +525,7 @@ export class GameScene extends Phaser.Scene {
     });
     this.boardView.setClickable([]);
     this.nodeOptions.clear();
+    this.cam.release();
     return id ?? c.cancelId ?? c.defaultId ?? c.options[0].id;
   }
 
@@ -487,18 +548,18 @@ export class GameScene extends Phaser.Scene {
       this.tip.toggle(pinned, this.toScreen(this.boardView.nodeRect(n)), tileTip(this.engine, this.shownState, n));
       return;
     }
-    if (this.hovered === null) this.tip.hide();
+    if (this.hovered === null || this.camMoving) this.tip.hide();
     else this.tip.show(this.toScreen(this.boardView.nodeRect(this.hovered)), tileTip(this.engine, this.shownState, this.hovered));
   }
 
-  /** Board (world) rect to HUD (screen) coordinates through this scene's camera. */
+  /** Board (world) rect to HUD (screen) coordinates through the board camera. */
   private toScreen(r: Rect): Rect {
-    const cam = this.cameras.main;
-    return { x: (r.x - cam.worldView.x) * cam.zoom, y: (r.y - cam.worldView.y) * cam.zoom, w: r.w * cam.zoom, h: r.h * cam.zoom };
+    return this.cam.toScreen(r);
   }
 
+  /** Where a token will be on screen once the camera settles, so a modal opened now does not cover it. */
   private tokenScreenRect(seat: number): Rect {
-    return this.toScreen(this.boardView.tokenRect(seat));
+    return this.cam.toScreenAtGoal(this.boardView.tokenRect(seat));
   }
 
   private toast(s: string): void {
@@ -524,6 +585,7 @@ export class GameScene extends Phaser.Scene {
     if (k === 'l' || k === 'L') { this.logPanel.toggle(); return; }
     if (k === 'Escape' && this.logPanel.isOpen) { this.logPanel.toggle(false); return; }
     if (k === 'Escape' && this.tip.pinned && !this.modal.isOpen) { this.tip.unpin(); return; }
+    if (k === 'h' || k === 'H' || k === 'Home') { this.recentre(); return; }
     if (this.modal.isOpen) {
       const key = k === ' ' ? 'SPACE' : k === 'Escape' ? 'ESC' : k === 'Enter' ? 'SPACE' : k;
       if (this.modal.handleKey(key)) ev.preventDefault();
