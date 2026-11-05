@@ -16,19 +16,19 @@
 import { ALTAR, Board, REGION_IDS } from './board';
 import type {
   ActionAct, ChoiceKind, ChoiceOption, ChoiceSpec, ChoiceValueMap, PendingChoice, PendingChoiceOf,
-  PreRollAct, Target, ThreatKind,
+  PreRollAct, Target, ThreatKind, DiceBet,
 } from './choices';
 import { defaultData } from './data';
 import type { DuelResult, GameEvent, GameEventType } from './events';
 import { hashSeed, nextFloat } from './rng';
 import {
   breakthroughCost, breakthroughsAvailable, buyoutPrice, buyPrice, canBreakthrough, computeVeinLords,
-  countOwned, cultivation, goldbodyReady, isWardActive, realmName, rentFor, totalAssets, uniqueLeader,
+  countOwned, cultivation, goldbodyReady, isWardActive, ownsStreet, realmName, rentFor, totalAssets, uniqueLeader,
   upgradeCost,
 } from './rules';
 import type {
-  ActiveTask, EventCardData, GameData, GameSetup, GameState, HeroData, NodeId, PlayerState, RegionId,
-  SpellData, TaskData, TurnState,
+  ActiveTask, EventCardData, GameData, GameSetup, GameState, HeroData, MiniGameTier, NodeId, PlayerState, RegionId,
+  SpecialKind, SpellData, SpiritState, TaskData, TurnState,
 } from './types';
 
 export type Flow<T = void> = Generator<PendingChoice, T, string>;
@@ -190,7 +190,10 @@ export class Game {
   private createInitialState(): GameState {
     const cfg = this.data.config;
     const spellDeck: string[] = [];
-    for (const c of this.data.spells.cards) for (let k = 0; k < this.data.spells.copiesEach; k++) spellDeck.push(c.id);
+    for (const c of this.data.spells.cards) {
+      if (c.shopOnly) continue; // §18.3 道具只在百宝阁出售
+      for (let k = 0; k < this.data.spells.copiesEach; k++) spellDeck.push(c.id);
+    }
     const eventDeck = [...this.data.events.tasks.map((t) => t.id), ...this.data.events.events.map((e) => e.id)];
     const tiles: GameState['tiles'] = {};
     for (const id of this.board.lands) tiles[id] = { owner: null, level: 0, trap: false };
@@ -209,10 +212,11 @@ export class Game {
         hand: [], divines: [], tasks: [], seal: false, jailed: false, jailTurns: 0, bound: false,
         wardUntilRound: 0, tremorRound: 0, treasure: [], rentImmuneUntilTurn: -1, turnsTaken: 0, ultUses: 0,
         goldbodyReadyRound: 0, shrinkReadyRound: 0, gatherRound: 0, mazeAvailable: false, chooseRoll: false,
-        badStreak: 0, milestones: [], skillReadyTurn: 0, duelShieldRound: 0, dazed: false,
+        badStreak: 0, milestones: [], skillReadyTurn: 0, duelShieldRound: 0, dazed: false, hospitalTurns: 0,
         stats: {
           rentCollected: 0, rentPaid: 0, breakthroughs: 0, demonDamage: 0, twoGateMoves: 0, roadEntries: 0,
           altarVisits: 0, bankruptcies: 0, tasksDone: 0, duels: 0, duelWins: 0, bountyClaims: 0, trapTriggers: 0, skillUses: 0,
+          possessions: 0, heartPasses: 0, shopBuys: 0, specialsBuilt: 0, miniGames: 0, streets: 0,
         },
       })),
       tiles,
@@ -230,12 +234,20 @@ export class Game {
       seq: 0,
       bountySeat: null,
       roadblock: null,
+      spirits: [],
+      barriers: [],
+      blasts: [],
       turn: this.freshTurn(0),
     };
     this.state = st;
     this.shuffle(st.spellDeck);
     this.shuffle(st.eventDeck);
     this.shuffle(st.heavenDeck);
+    // §18.2 two spirits on distinct spawn cells (none on a board without spawns).
+    const spawns = this.shuffle([...(this.data.board.spiritSpawns ?? [])]);
+    if (spawns.length >= 2) {
+      st.spirits = (['fox', 'heart'] as const).map((kind, i) => ({ kind, node: spawns[i], holder: null, turnsLeft: 0 }));
+    }
     return st;
   }
 
@@ -243,6 +255,7 @@ export class Game {
     return {
       seat, doubles: 0, mireUsed: false, upgraded: false, discount: false,
       swiftstep: false, reverse: false, swordUlt: false, lastPath: [], lastDir: 1, duelDone: false, passed: [],
+      diceCard: false,
     };
   }
 
@@ -294,6 +307,11 @@ export class Game {
     if (manifestNow) yield* this.manifest();
     // 4) §17 悬赏令
     this.updateBounty();
+    // 5) §18.4 药园
+    for (const id of this.board.lands) {
+      const t = st.tiles[id];
+      if (t.special === 'garden' && t.owner !== null) this.gainPills(t.owner, this.cfg.rules.gardenPills, `药园【${this.nodeName(id)}】`);
+    }
   }
 
   /** §17 悬赏令：修为唯一最高且不低于 bountyMinCult 者持令。 */
@@ -313,7 +331,107 @@ export class Game {
 
   private *roundEnd(): Flow {
     if (this.cfg.eruptionRounds.includes(this.state.round)) yield* this.eruption();
+    this.spiritsWander();
     this.emit('roundEnd', `第 ${this.state.round} 轮结束`);
+  }
+
+  // -------------------------------------------------------- §18.2 灵体 ----
+
+  spiritName(kind: SpiritState['kind']): string {
+    return kind === 'fox' ? '福缘灵狐' : '心魔';
+  }
+
+  /** The spirit possessing `seat`, if any. */
+  heldSpirit(seat: number): SpiritState | undefined {
+    return this.state.spirits.find((s) => s.holder === seat);
+  }
+
+  /** Each wandering spirit takes 1..spiritMoveMax steps along `next`, picking forks by rng. Moving onto a player does not possess. */
+  private spiritsWander(): void {
+    for (const sp of this.state.spirits) {
+      if (sp.node === null) continue;
+      const from = sp.node;
+      let node = from;
+      const steps = 1 + this.randInt(this.cfg.rules.spiritMoveMax);
+      for (let k = 0; k < steps; k++) {
+        const next = this.board.node(node).next;
+        node = next.length > 1 ? next[this.randInt(next.length)] : next[0];
+      }
+      sp.node = node;
+      this.emit('spirit', `${this.spiritName(sp.kind)}游荡至【${this.nodeName(node)}】`, {
+        node, from, spirit: { kind: sp.kind, action: 'move', from, to: node },
+      });
+    }
+  }
+
+  /** `seat` steps onto `node` (passing or stopping): a wandering spirit there possesses them. */
+  private meetSpirits(seat: number, node: NodeId): void {
+    for (const sp of this.state.spirits) if (sp.node === node) this.possess(seat, sp, null);
+  }
+
+  /** `sp` possesses `seat`, displacing any other spirit they hold. `giver` is set when 心魔 is passed on. */
+  private possess(seat: number, sp: SpiritState, giver: number | null): void {
+    const p = this.state.players[seat];
+    const old = this.heldSpirit(seat);
+    if (old && old !== sp) this.expireSpirit(old, `被${this.spiritName(sp.kind)}顶替`);
+    const from = sp.node ?? undefined;
+    sp.node = null;
+    sp.holder = seat;
+    sp.turnsLeft = giver === null ? this.cfg.rules.spiritTurns : Math.max(1, sp.turnsLeft);
+    p.stats.possessions++;
+    const effect = sp.kind === 'fox'
+      ? `收租 ×${this.cfg.rules.foxRentMult}、购地 ${Math.round(this.cfg.rules.foxLandDiscount * 10)} 折`
+      : `付租 ×${this.cfg.rules.heartRentMult}、每回合 −${this.cfg.rules.heartPills} 灵丹`;
+    if (giver === null) {
+      this.emit('spirit', `${this.spiritName(sp.kind)}附身 ${this.pn(seat)}（${sp.turnsLeft} 回合：${effect}）`, {
+        player: seat, node: p.pos, spirit: { kind: sp.kind, action: 'possess', seat, from },
+      });
+    } else {
+      this.state.players[giver].stats.heartPasses++;
+      this.emit('spirit', `${this.pn(giver)} 擦身而过，心魔转附 ${this.pn(seat)}（剩 ${sp.turnsLeft} 回合）`, {
+        player: seat, node: p.pos, spirit: { kind: sp.kind, action: 'transfer', seat, giver },
+      });
+    }
+  }
+
+  /** The spirit leaves its holder and reappears on a free spawn cell chosen by rng. */
+  private expireSpirit(sp: SpiritState, why: string): void {
+    const st = this.state;
+    const seat = sp.holder;
+    const spawns = this.data.board.spiritSpawns ?? [];
+    const free = spawns.filter((n) => !st.players.some((o) => o.pos === n) && !st.spirits.some((s) => s.node === n));
+    const pool = free.length ? free : spawns;
+    const to = pool[this.randInt(pool.length)];
+    sp.holder = null;
+    sp.turnsLeft = 0;
+    sp.node = to;
+    this.emit('spirit', `${this.spiritName(sp.kind)}${why}，离开 ${seat !== null ? this.pn(seat) : ''}，重现于【${this.nodeName(to)}】`, {
+      player: seat ?? undefined, node: to, spirit: { kind: sp.kind, action: 'expire', seat: seat ?? undefined, to },
+    });
+  }
+
+  // ------------------------------------------------------ §18.3 医馆 ------
+
+  /** 爆炎阵: off to the 医馆 (or bound in place on a board without one). False if 白泽护道 prevented it. */
+  private sendToHospital(seat: number): boolean {
+    const p = this.state.players[seat];
+    if (isWardActive(this.state, seat)) {
+      this.emit('block', `${this.pn(seat)} 受白泽护道庇佑，毫发无伤`, { player: seat });
+      return false;
+    }
+    const h = this.board.hospitalId;
+    if (h === null) {
+      p.bound = true;
+      this.emit('bind', `${this.pn(seat)} 被炸伤，下回合无法移动`, { player: seat });
+      return true;
+    }
+    const from = p.pos;
+    p.pos = h;
+    p.cameFrom = null;
+    p.hospitalTurns = this.cfg.rules.hospitalTurns;
+    this.emit('teleport', `${this.pn(seat)} 被抬往医馆`, { player: seat, node: h, from });
+    this.emit('hospital', `${this.pn(seat)} 在医馆休养 ${p.hospitalTurns} 回合`, { player: seat, node: h, amount: p.hospitalTurns });
+    return true;
   }
 
   private *playTurn(seat: number): Flow {
@@ -326,6 +444,25 @@ export class Game {
       const node = st.roadblock.node;
       st.roadblock = null;
       this.emit('roadblockGone', `${this.pn(seat)} 的山岳消散`, { player: seat, node });
+    }
+
+    // §18.2 a possession counts the holder's own turns; 心魔 bites every turn.
+    const sp = this.heldSpirit(seat);
+    if (sp) {
+      sp.turnsLeft--;
+      if (sp.kind === 'heart' && p.pills > 0) {
+        const n = Math.min(p.pills, this.cfg.rules.heartPills);
+        p.pills -= n;
+        this.emit('pills', `${this.pn(seat)} 心魔噬心，失去 ${n} 灵丹`, { player: seat, amount: -n });
+      }
+    }
+
+    // §18.3 医馆: a hospital turn is skipped whole.
+    if (p.hospitalTurns > 0) {
+      p.hospitalTurns--;
+      this.emit('hospital', `${this.pn(seat)} 在医馆休养，本回合无法行动${p.hospitalTurns === 0 ? '（下回合出院）' : ''}`, { player: seat, node: p.pos, amount: p.hospitalTurns });
+      this.endTurn(seat);
+      return;
     }
 
     if (p.divines.includes('pillheart') && p.pills < this.cfg.rules.pillheartBelow) {
@@ -363,7 +500,15 @@ export class Game {
       } else {
         const pre = yield* this.preRollPhase(seat);
         if (pre === 'roll') {
-          if (p.chooseRoll) {
+          if (st.turn.diceCard) {
+            // §18.3 御骰符: the player names the total; no doubles.
+            st.turn.diceCard = false;
+            const opts: ChoiceOption<number>[] = [];
+            for (let v = this.cfg.rules.diceCardMin; v <= this.cfg.rules.diceCardMax; v++) opts.push({ id: `v${v}`, label: `${v} 点`, value: v });
+            const v = yield* this.ask({ player: seat, kind: 'rollValue', title: '御骰符', desc: '选择本次移动点数', options: opts, forceAsk: true });
+            this.emit('roll', `${this.pn(seat)} 御骰定数，选择 ${v} 点`, { player: seat, amount: v });
+            yield* this.doMove(seat, v);
+          } else if (p.chooseRoll) {
             p.chooseRoll = false;
             const opts: ChoiceOption<number>[] = [];
             for (let v = this.cfg.rules.beastRollMin; v <= this.cfg.rules.beastRollMax; v++) opts.push({ id: `v${v}`, label: `${v} 点`, value: v });
@@ -403,6 +548,8 @@ export class Game {
     const p = this.state.players[seat];
     const n = this.board.node(p.pos);
     p.mazeAvailable = n.type === 'land' && n.region === 'wood';
+    const sp = this.heldSpirit(seat);
+    if (sp && sp.turnsLeft <= 0) this.expireSpirit(sp, '附身期满');
     this.emit('turnEnd', `${this.pn(seat)} 结束回合`, { player: seat });
   }
 
@@ -482,7 +629,7 @@ export class Game {
     const s = this.spellById.get(card)!;
     p.hand.splice(i, 1);
     p.pills -= s.cost;
-    this.state.spellDiscard.push(card);
+    if (!s.shopOnly) this.state.spellDiscard.push(card); // 道具用完即消失，不进牌堆
     this.emit('cast', `${this.pn(seat)} 施放【${s.name}】`, { player: seat });
   }
 
@@ -513,7 +660,8 @@ export class Game {
         if (s.timing !== 'preroll' && card !== 'discount') continue;
         if (!this.canPay(p, card)) continue;
         if (card === 'swiftstep' && t.swiftstep) continue;
-        if (card === 'reverse' && (t.reverse || !onRing)) continue;
+        if ((card === 'reverse' || card === 'turnback') && (t.reverse || !onRing)) continue;
+        if (card === 'dice' && t.diceCard) continue;
         if (card === 'burrow' && !onRing) continue;
         if (card === 'discount' && t.discount) continue;
         opts.push({ id: `cast:${card}`, label: `${s.name}（${s.cost} 灵丹）`, value: { t: 'cast', card }, hint: s.desc });
@@ -560,8 +708,9 @@ export class Game {
     this.payCard(seat, card);
     switch (card) {
       case 'swiftstep': t.swiftstep = true; return 'ok';
-      case 'reverse': t.reverse = true; return 'ok';
+      case 'reverse': case 'turnback': t.reverse = true; return 'ok';
       case 'discount': t.discount = true; return 'ok';
+      case 'dice': t.diceCard = true; return 'ok';
       case 'burrow': {
         const path = this.board.pathToGate(p.pos);
         const gate = path[path.length - 1];
@@ -570,6 +719,7 @@ export class Game {
           p.pos = n;
           this.emit('step', '', { player: seat, node: n, from });
           if (this.board.node(n).type === 'start') this.gainStones(seat, this.cfg.salaryPass, '经过宗门山门');
+          this.meetSpirits(seat, n);
           from = n;
         }
         this.emit('info', `${this.pn(seat)} 遁地至【${this.nodeName(gate)}】`, { player: seat, node: gate });
@@ -700,6 +850,15 @@ export class Game {
         this.emit('roadblockHit', `${this.pn(seat)} 被 ${this.pn(rb.seat)} 的山岳拦下，停在【${this.nodeName(next)}】`, { player: seat, node: next });
         break;
       }
+      // §18.3 路障符: same as the mountain, consumed by the first other walker.
+      const bi = this.state.barriers.findIndex((x) => x.node === next && x.seat !== seat);
+      if (bi >= 0) {
+        const bar = this.state.barriers.splice(bi, 1)[0];
+        blocked = true;
+        remaining = 0;
+        this.emit('barrierHit', `${this.pn(seat)} 撞上 ${this.pn(bar.seat)} 的路障，停在【${this.nodeName(next)}】`, { player: seat, node: next });
+        break;
+      }
       // 瘴泽泥沼: first entry onto an earth land this turn costs one remaining step.
       if (nn.type === 'land' && nn.region === 'earth' && !t.mireUsed) {
         t.mireUsed = true;
@@ -782,6 +941,13 @@ export class Game {
     if (remaining > 0 && !slide && t.seat === seat) {
       for (const o of this.state.players) if (o.seat !== seat && o.pos === to && !t.passed.includes(o.seat)) t.passed.push(o.seat);
     }
+    // §18.2 心魔 jumps to the first other player its holder meets on its own move (passing or stopping).
+    const heart = this.heldSpirit(seat);
+    if (heart?.kind === 'heart' && !slide && t.seat === seat) {
+      const o = this.state.players.find((x) => x.seat !== seat && x.pos === to);
+      if (o) this.possess(o.seat, heart, seat);
+    }
+    this.meetSpirits(seat, to);
     if (p.hero === 'magic' && n.type === 'spring') {
       p.pills += this.cfg.rules.magicPassivePills;
       this.emit('pills', `${this.pn(seat)} 灵息：经过${n.name} +${this.cfg.rules.magicPassivePills} 灵丹`, { player: seat, amount: this.cfg.rules.magicPassivePills });
@@ -819,6 +985,7 @@ export class Game {
     p.pos = node;
     p.cameFrom = null;
     this.emit('teleport', `${this.pn(seat)} ${why}，来到【${this.nodeName(node)}】`, { player: seat, node, from });
+    this.meetSpirits(seat, node);
   }
 
   /** 误入幻阵: step back along the path just walked, then back along the main line (two-way nodes head outward). */
@@ -835,6 +1002,8 @@ export class Game {
       else prev = b.mainStep(node, (b.isTwoWay(node) || t.seat !== seat ? -1 : -t.lastDir) as 1 | -1);
       this.emit('step', '', { player: seat, node: prev, from: node });
       node = prev;
+      p.pos = node;
+      this.meetSpirits(seat, node);
     }
     p.pos = node;
     p.cameFrom = null;
@@ -849,6 +1018,13 @@ export class Game {
     if (depth > 4) return;
     const p = this.state.players[seat];
     const n = this.board.node(node);
+    // §18.3 爆炎阵 goes off before the tile settles; being blown away skips the settle.
+    const bi = ctx.stay ? -1 : this.state.blasts.findIndex((x) => x.node === node && x.seat !== seat);
+    if (bi >= 0) {
+      const bl = this.state.blasts.splice(bi, 1)[0];
+      this.emit('blast', `${this.pn(seat)} 踩中 ${this.pn(bl.seat)} 暗埋的爆炎阵！`, { player: seat, node });
+      if (this.sendToHospital(seat)) return;
+    }
     switch (n.type) {
       case 'start':
         this.gainStones(seat, this.cfg.salaryLand, '停留宗门山门');
@@ -887,7 +1063,106 @@ export class Game {
       case 'altar':
         yield* this.altar(seat, depth);
         break;
+      case 'shop':
+        yield* this.shop(seat);
+        break;
+      case 'minigame':
+        yield* this.miniGame(seat, node);
+        break;
+      case 'hospital':
+        this.emit('info', `${this.pn(seat)} 到医馆探望伤者`, { player: seat, node });
+        break;
     }
+  }
+
+  // ------------------------------------------------------ §18.3 百宝阁 ----
+
+  /** Cards on sale: every card with a price. */
+  shopItems(): SpellData[] {
+    return this.data.spells.cards.filter((c) => c.price !== undefined);
+  }
+
+  private *shop(seat: number): Flow {
+    const p = this.state.players[seat];
+    if (p.hand.length >= this.cfg.handLimit) {
+      this.emit('info', `${this.pn(seat)} 手牌已满，在百宝阁看了看`, { player: seat });
+      return;
+    }
+    const items = this.shopItems().filter((c) => p.stones >= c.price!);
+    if (items.length === 0) {
+      this.emit('info', `${this.pn(seat)} 囊中羞涩，在百宝阁看了看`, { player: seat });
+      return;
+    }
+    const opts: ChoiceOption<{ card: string; price: number } | null>[] = items.map((c) => ({
+      id: c.id, label: `${c.name}（${c.price} 灵石）`, value: { card: c.id, price: c.price! }, hint: c.desc,
+    }));
+    opts.push({ id: 'leave', label: '离开', value: null });
+    const buy = yield* this.ask({
+      player: seat, kind: 'shop', title: '百宝阁', desc: `每次限购 1 件（持有 ${p.stones} 灵石，手牌 ${p.hand.length} / ${this.cfg.handLimit}）`,
+      options: opts, defaultId: 'leave', cancelId: 'leave', forceAsk: true,
+    });
+    if (!buy) return;
+    p.stones -= buy.price;
+    p.hand.push(buy.card);
+    p.stats.shopBuys++;
+    this.emit('shop', `${this.pn(seat)} 在百宝阁以 ${buy.price} 灵石买下【${this.spellName(buy.card)}】`, { player: seat, card: buy.card, amount: buy.price });
+  }
+
+  // ------------------------------------------------------ §18.5 小游戏 ----
+
+  private *miniGame(seat: number, node: NodeId): Flow {
+    const p = this.state.players[seat];
+    const r = this.cfg.rules;
+    const game = this.board.node(node).game ?? 'alchemy';
+    p.stats.miniGames++;
+    if (game === 'alchemy') {
+      const tierLabel: Record<MiniGameTier, string> = { perfect: '极品丹成', ok: '丹成', fail: '炸炉' };
+      const res = yield* this.ask({
+        player: seat, kind: 'miniGame', title: '炼丹房', desc: '看准火候收火：完美、命中或失手',
+        options: (['perfect', 'ok', 'fail'] as const).map((tier) => ({
+          id: tier, label: `${tierLabel[tier]}（+${r.miniGameRewards.alchemy[tier]} 灵丹）`, value: { game, tier },
+        })),
+        defaultId: 'ok', forceAsk: true, ctx: { game },
+      });
+      const pills = r.miniGameRewards.alchemy[res.tier];
+      p.pills += pills;
+      this.emit('miniGame', `${this.pn(seat)} 在炼丹房${tierLabel[res.tier]}${pills ? `，+${pills} 灵丹` : '，一无所获'}`, {
+        player: seat, node, amount: pills, miniGame: { game, tier: res.tier, reward: { pills, stones: 0 } },
+      });
+      return;
+    }
+    // 灵骰台: bet, then the engine rolls (rng) and the miniGame answer only confirms the verdict.
+    const opts: ChoiceOption<DiceBet>[] = [];
+    for (const side of ['big', 'small'] as const) {
+      for (const stake of r.diceStakes) {
+        if (stake > p.stones) continue;
+        opts.push({ id: `${side}${stake}`, label: `押${side === 'big' ? '大' : '小'} · ${stake ? `${stake} 灵石` : '不下注'}`, value: { stake, side } });
+      }
+    }
+    const bet = yield* this.ask({
+      player: seat, kind: 'diceBet', title: '灵骰台',
+      desc: `两颗骰子，${r.diceBigMin} 点及以上为大，${r.diceSmallMax} 点及以下为小，其余庄家通吃。猜中押注 ×${r.diceWinMult}，并 +${r.miniGameRewards.dice.perfect} 灵丹`,
+      options: opts, defaultId: 'big0', forceAsk: true, ctx: { game },
+    });
+    p.stones -= bet.stake;
+    const roll: [number, number] = [this.d6(), this.d6()];
+    const sum = roll[0] + roll[1];
+    const win = bet.side === 'big' ? sum >= r.diceBigMin : sum <= r.diceSmallMax;
+    const tier: MiniGameTier = win ? 'perfect' : 'fail';
+    yield* this.ask({
+      player: seat, kind: 'miniGame', title: '灵骰台 · 开盅', desc: `${roll[0]} + ${roll[1]} = ${sum} 点`,
+      options: [{ id: tier, label: win ? '猜中了！' : '没猜中', value: { game, tier } }],
+      forceAsk: true, ctx: { game, diceBet: bet, dice: roll },
+    });
+    const back = win ? bet.stake * r.diceWinMult : 0;
+    const pills = r.miniGameRewards.dice[tier];
+    p.stones += back;
+    p.pills += pills;
+    const net = back - bet.stake;
+    this.emit('miniGame', `${this.pn(seat)} 押${bet.side === 'big' ? '大' : '小'}${bet.stake ? ` ${bet.stake} 灵石` : ''}，开出 ${roll[0]} + ${roll[1]} = ${sum}，${win ? `猜中${net ? `，赢 ${net} 灵石` : ''}${pills ? `，+${pills} 灵丹` : ''}` : `落空${bet.stake ? `，输 ${bet.stake} 灵石` : ''}`}`, {
+      player: seat, node, amount: net, dice: roll,
+      miniGame: { game, tier, reward: { pills, stones: net }, roll, side: bet.side, stake: bet.stake },
+    });
   }
 
   private *settleLand(seat: number, node: NodeId, ctx: SettleCtx = {}): Flow {
@@ -895,7 +1170,7 @@ export class Game {
     const t = this.state.tiles[node];
     const n = this.board.node(node);
     if (t.owner === null) {
-      const price = buyPrice(this.data, p, n.price!, this.state.turn.discount && this.state.current === seat);
+      const price = buyPrice(this.state, this.data, p, n.price!, this.state.turn.discount && this.state.current === seat);
       if (p.stones < price) {
         this.emit('info', `${this.pn(seat)} 灵石不足，无法购买【${n.name}】`, { player: seat, node });
         return;
@@ -912,11 +1187,64 @@ export class Game {
       p.stones -= price;
       this.setOwner(node, seat);
       this.emit('buy', `${this.pn(seat)} 以 ${price} 灵石购得【${n.name}】`, { player: seat, node, amount: price });
+      this.checkStreet(seat, node);
       this.updateVeinLords();
     } else if (t.owner !== seat) {
+      const owner = t.owner;
       yield* this.payRent(seat, node);
+      if (t.special === 'bazaar' && t.owner === owner) this.bazaarSale(seat, owner);
       if (t.trap && t.owner !== null && t.owner !== seat && !ctx.stay) this.triggerTrap(seat, node);
+    } else if (t.special === 'portal' && !ctx.stay) {
+      yield* this.portal(seat, node);
     }
+  }
+
+  /** §18.1 Emits `street` when `seat` has just completed the street of `node`. */
+  private checkStreet(seat: number, node: NodeId): void {
+    if (!ownsStreet(this.state, this.board, node, seat)) return;
+    const street = this.board.node(node).street!;
+    this.state.players[seat].stats.streets++;
+    this.emit('street', `${this.pn(seat)} 凑齐【${this.board.streetName(street)}】整条街，街上租金 ×${this.cfg.rules.streetRentMult}`, {
+      player: seat, node, street,
+    });
+  }
+
+  /** §18.4 集市: the visitor must buy the owner's oldest card at its price (skipped if they cannot). */
+  private bazaarSale(buyer: number, owner: number): void {
+    const b = this.state.players[buyer];
+    const o = this.state.players[owner];
+    const card = o.hand[0];
+    if (card === undefined) return;
+    const price = this.spellById.get(card)!.price ?? this.cfg.marketCardPrice;
+    if (b.hand.length >= this.cfg.handLimit || b.stones < price) {
+      this.emit('info', `${this.pn(buyer)} ${b.hand.length >= this.cfg.handLimit ? '手牌已满' : '灵石不足'}，免于集市强卖`, { player: buyer });
+      return;
+    }
+    o.hand.shift();
+    b.hand.push(card);
+    b.stones -= price;
+    o.stones += price;
+    this.emit('special', `${this.pn(buyer)} 在 ${this.pn(owner)} 的集市被迫以 ${price} 灵石买下【${this.spellName(card)}】`, {
+      player: buyer, special: 'bazaar', card, amount: price,
+    });
+  }
+
+  /** §18.4 挪移阵: from one own portal to another, without settling there. */
+  private *portal(seat: number, node: NodeId): Flow {
+    const p = this.state.players[seat];
+    const cost = this.cfg.rules.portalPills;
+    const others = this.board.lands.filter((id) => id !== node && this.state.tiles[id].owner === seat && this.state.tiles[id].special === 'portal');
+    if (others.length === 0 || p.pills < cost) return;
+    const opts: ChoiceOption<NodeId | null>[] = others.map((id) => ({ id, label: `挪移至${this.nodeLabel(id)}`, value: id, node: id }));
+    opts.push({ id: 'stay', label: '留在此处', value: null });
+    const to = yield* this.ask({
+      player: seat, kind: 'portal', title: '挪移阵', desc: `传送到你的另一座挪移阵${cost ? `（${cost} 灵丹）` : ''}`,
+      options: opts, defaultId: 'stay', cancelId: 'stay', forceAsk: true,
+    });
+    if (to === null) return;
+    p.pills -= cost;
+    this.teleport(seat, to, '踏入挪移阵');
+    this.state.turn.lastPath = [];
   }
 
   /** §17 禁制：停在他人布了禁制的洞府上 → 交罚金并被定身，禁制消耗。 */
@@ -998,7 +1326,7 @@ export class Game {
     const cfg = this.cfg.bankrupt;
     for (const id of this.board.lands) {
       const t = this.state.tiles[id];
-      if (t.owner === seat) { t.owner = null; t.level = 0; t.trap = false; }
+      if (t.owner === seat) { t.owner = null; t.level = 0; t.trap = false; delete t.special; }
     }
     for (const r of REGION_IDS) this.state.regionReach[r][seat] = ++this.state.seq;
     p.stones = cfg.resetStones;
@@ -1302,12 +1630,21 @@ export class Game {
       if (!st.turn.upgraded) {
         for (const id of this.board.lands) {
           const t = st.tiles[id];
-          if (t.owner !== seat || t.level >= 4) continue;
+          if (t.owner !== seat || t.level >= 4 || t.special) continue;
           const c = upgradeCost(this.data, this.board.node(id).price!, t.level + 1, st.turn.discount);
           if (p.stones < c.stones || p.pills < c.pills) continue;
           opts.push({
             id: `upgrade:${id}`, label: `升级 ${this.nodeName(id)} → ${this.data.board.buildings[t.level + 1].name}（${c.stones}${c.pills ? ` + ${c.pills} 灵丹` : ''}）`,
             value: { t: 'upgrade', node: id }, node: id,
+          });
+        }
+        for (const special of this.specialOptions(seat)) {
+          const id = p.pos;
+          const def = this.data.board.specials?.[special];
+          const c = upgradeCost(this.data, this.board.node(id).price!, 1, st.turn.discount);
+          opts.push({
+            id: `upgrade:${id}:${special}`, label: `改建 ${this.nodeName(id)} → ${def?.name ?? special}（${c.stones}）`,
+            value: { t: 'upgrade', node: id, special }, node: id, hint: def?.desc,
           });
         }
       }
@@ -1318,6 +1655,8 @@ export class Game {
         if (card === 'drain' && this.drainTargets(seat).length === 0) continue;
         if (card === 'bind' && this.bindTargets(seat).length === 0) continue;
         if (card === 'discount' && st.turn.discount) continue;
+        if (card === 'barrier' && this.barrierSpots(seat).length === 0) continue;
+        if (card === 'blast' && this.blastSpots(seat).length === 0) continue;
         opts.push({ id: `cast:${card}`, label: `${s.name}（${s.cost} 灵丹）`, value: { t: 'cast', card }, hint: s.desc });
       }
       if (this.ultAvailable(seat, 'action')) opts.push(this.ultOption(seat));
@@ -1334,7 +1673,11 @@ export class Game {
       });
       switch (act.t) {
         case 'end': return;
-        case 'upgrade': this.upgrade(seat, act.node, false); st.turn.upgraded = true; break;
+        case 'upgrade':
+          if (act.special) this.buildSpecial(seat, act.node, act.special);
+          else this.upgrade(seat, act.node, false);
+          st.turn.upgraded = true;
+          break;
         case 'ult': yield* this.useUlt(seat); break;
         case 'cast': yield* this.castAction(seat, act.card); break;
         case 'skill': yield* this.useSkill(seat); break;
@@ -1360,6 +1703,33 @@ export class Game {
     if (gain && !p.milestones.includes(key)) {
       p.milestones.push(key);
       this.addCult(seat, gain, `筑府·${this.data.board.buildings[lv].name}`);
+    }
+  }
+
+  /** §18.4 功能建筑 `seat` may build now: only on the own Lv0 land they stand on, for the Lv1 price. */
+  specialOptions(seat: number): SpecialKind[] {
+    const st = this.state;
+    const p = st.players[seat];
+    const n = this.board.node(p.pos);
+    const t = st.tiles[p.pos];
+    if (n.type !== 'land' || !t || t.owner !== seat || t.level !== 0 || t.special) return [];
+    if (p.stones < upgradeCost(this.data, n.price!, 1, st.turn.discount).stones) return [];
+    return ['garden', 'bazaar', 'portal'];
+  }
+
+  private buildSpecial(seat: number, node: NodeId, special: SpecialKind): void {
+    const st = this.state;
+    const p = st.players[seat];
+    const c = upgradeCost(this.data, this.board.node(node).price!, 1, st.turn.discount && st.current === seat);
+    p.stones -= c.stones;
+    st.tiles[node].special = special;
+    p.stats.specialsBuilt++;
+    const name = this.data.board.specials?.[special]?.name ?? special;
+    this.emit('special', `${this.pn(seat)} 将【${this.nodeName(node)}】改建为${name}（${c.stones} 灵石）`, { player: seat, node, special, amount: c.stones });
+    const key = `${node}:special`;
+    if (this.cfg.rules.specialCultivation && !p.milestones.includes(key)) {
+      p.milestones.push(key);
+      this.addCult(seat, this.cfg.rules.specialCultivation, `筑府·${name}`);
     }
   }
 
@@ -1399,7 +1769,8 @@ export class Game {
     const p = st.players[seat];
     return this.board.lands.filter((id) => {
       const t = st.tiles[id];
-      return t.owner !== null && t.owner !== seat && t.level <= 1 && buyoutPrice(this.data, this.board.node(id).price!, t.level) <= p.stones;
+      // §18.4 功能建筑 cannot be bought out
+      return t.owner !== null && t.owner !== seat && t.level <= 1 && !t.special && buyoutPrice(this.data, this.board.node(id).price!, t.level) <= p.stones;
     });
   }
 
@@ -1459,9 +1830,56 @@ export class Game {
         this.state.turn.discount = true;
         this.emit('status', `${this.pn(seat)} 本回合购地 / 升级 7 折`, { player: seat });
         return;
+      case 'barrier': {
+        const tg = yield* this.askTarget(seat, s.name, s.desc, this.barrierSpots(seat).map((node) => ({ t: 'node' as const, node })), 'barrier');
+        if (tg.t !== 'node') return;
+        this.payCard(seat, card);
+        const st = this.state;
+        st.barriers = st.barriers.filter((x) => x.seat !== seat); // one barrier per player
+        st.barriers.push({ node: tg.node, seat });
+        this.emit('barrier', `${this.pn(seat)} 在【${this.nodeName(tg.node)}】放下路障`, { player: seat, node: tg.node });
+        return;
+      }
+      case 'blast': {
+        const tg = yield* this.askTarget(seat, s.name, s.desc, this.blastSpots(seat).map((node) => ({ t: 'node' as const, node })), 'blast');
+        if (tg.t !== 'node') return;
+        this.payCard(seat, card);
+        this.state.blasts.push({ node: tg.node, seat });
+        this.emit('blastSet', `${this.pn(seat)} 暗中埋下一道爆炎阵`, { player: seat, node: tg.node });
+        return;
+      }
       default:
         throw new Error(`not an action card: ${card}`);
     }
+  }
+
+  /** §18.3 路障符: the 1..barrierRange cells ahead of `seat` along its heading, without a player or another barrier. */
+  barrierSpots(seat: number): NodeId[] {
+    const st = this.state;
+    const p = st.players[seat];
+    const b = this.board;
+    const out: NodeId[] = [];
+    let prev = b.isTwoWay(p.pos) ? p.cameFrom : null;
+    let n = p.pos;
+    for (let k = 0; k < this.cfg.rules.barrierRange; k++) {
+      const next = b.exits(n, prev, 1)[0];
+      if (next === undefined) break;
+      [prev, n] = [n, next];
+      if (n === ALTAR) break;
+      if (st.players.some((o) => o.pos === n) || st.barriers.some((x) => x.node === n) || st.roadblock?.node === n) continue;
+      out.push(n);
+    }
+    return out;
+  }
+
+  /** §18.3 爆炎阵: any cell without a player or another blast, except the altar, the start and the 医馆. */
+  blastSpots(_seat: number): NodeId[] {
+    const st = this.state;
+    return this.board.allNodeIds().filter((id) => {
+      const type = this.board.node(id).type;
+      if (type === 'altar' || type === 'start' || type === 'hospital') return false;
+      return !st.players.some((o) => o.pos === id) && !st.blasts.some((x) => x.node === id);
+    });
   }
 
   /** Defender may answer with 金光符. Returns true if the threat is blocked. */
@@ -1557,6 +1975,7 @@ export class Game {
         st.players[owner].stones += price;
         this.setOwner(tg.node, seat);
         this.emit('ownerChange', `${this.pn(seat)} 以 ${price} 灵石强购 ${this.pn(owner)} 的【${this.nodeName(tg.node)}】`, { player: seat, node: tg.node, amount: price });
+        this.checkStreet(seat, tg.node);
         this.updateVeinLords();
         return;
       }
@@ -1871,7 +2290,7 @@ export class Game {
         for (let k = 0; k < this.cfg.rules.auspiceLands; k++) {
           const cands = this.board.lands.filter((n) => {
             const t = st.tiles[n];
-            return t.owner === seat && t.level < 4 && !done.includes(n) && (t.level + 1 < 4 || p.pills >= this.cfg.lv4PillCost);
+            return t.owner === seat && t.level < 4 && !t.special && !done.includes(n) && (t.level + 1 < 4 || p.pills >= this.cfg.lv4PillCost);
           });
           if (cands.length === 0) break;
           const node = yield* this.ask({
@@ -1996,6 +2415,10 @@ export class Game {
   testUpdateBounty(): void { this.updateBounty(); }
   testDuel(attacker: number, defender: number): Flow { return this.duel(attacker, defender); }
   testUseSkill(seat: number): Flow<'moved' | 'ok' | 'cancel'> { return this.useSkill(seat); }
+  testSettle(seat: number, node: NodeId): Flow { this.state.current = seat; return this.settle(seat, node); }
+  testActionPhase(seat: number): Flow { this.state.current = seat; return this.actionPhase(seat); }
+  testRoundStart(): Flow { return this.roundStart(); }
+  testSpiritsWander(): void { this.spiritsWander(); }
   /** A full turn for `seat` (dice from the game rng). */
   testPlayTurn(seat: number): Flow {
     this.state.current = seat;

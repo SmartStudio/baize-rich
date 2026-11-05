@@ -5,7 +5,7 @@
 // answers with one of the option ids via `game.answer(id)`. Every decision in
 // the game, from "roll the dice" to "use 金光符?", goes through this one door,
 // which is what lets the same engine drive the UI, the AI and the headless sim.
-import type { NodeId, RegionId } from './types';
+import type { MiniGameId, MiniGameTier, NodeId, RegionId, SpecialKind } from './types';
 
 export type PreRollAct =
   | { t: 'roll' }
@@ -15,7 +15,8 @@ export type PreRollAct =
   | { t: 'skill' };
 
 export type ActionAct =
-  | { t: 'upgrade'; node: NodeId }
+  /** 升级一级；带 special 时改为把脚下的 Lv0 灵田改建为功能建筑（§18.4，与升级共用每回合 1 次）。 */
+  | { t: 'upgrade'; node: NodeId; special?: SpecialKind }
   | { t: 'cast'; card: string }
   | { t: 'ult' }
   | { t: 'skill' }
@@ -72,6 +73,20 @@ export interface ChoiceValueMap {
   duel: number | null;
   /** §17 斗法：押注几颗灵丹（每颗 +1 点，胜负都消耗）。 */
   duelBet: number;
+  /** §18.3 百宝阁：买哪件（null = 离开）。 */
+  shop: { card: string; price: number } | null;
+  /** §18.5 小游戏结果档位（option.id 即 tier），真人由界面小游戏产出。 */
+  miniGame: { game: MiniGameId; tier: MiniGameTier };
+  /** §18.5 灵骰台押注。 */
+  diceBet: DiceBet;
+  /** §18.4 挪移阵：传送到哪座（null = 留下）。 */
+  portal: NodeId | null;
+}
+
+export interface DiceBet {
+  /** 押注灵石（config.rules.diceStakes 之一） */
+  stake: number;
+  side: 'big' | 'small';
 }
 export type ChoiceKind = keyof ChoiceValueMap;
 
@@ -94,7 +109,11 @@ export interface ChoiceContext {
   threat?: ThreatKind;
   attacker?: number;
   purpose?: NodePurpose | 'thunder' | 'fivethunder' | 'drain' | 'bind' | 'buyout' | 'treasure'
-    | 'sworddash' | 'swap' | 'roadblock' | 'daze';
+    | 'sworddash' | 'swap' | 'roadblock' | 'daze' | 'barrier' | 'blast';
+  /** 小游戏：玩法（miniGame / diceBet） */
+  game?: MiniGameId;
+  /** 灵骰台：已押的注（miniGame 询问时可见） */
+  diceBet?: DiceBet;
   dice?: [number, number];
   base?: number;
   cost?: number;

@@ -7,10 +7,10 @@ import type { Game } from '../core/engine';
 import { Rng } from '../core/rng';
 import {
   breakthroughCost, breakthroughsAvailable, buyoutPrice, buyPrice, canBreakthrough, countOwned, cultivation,
-  isWardActive, nominalRent, rentFor, uniqueLeader, upgradeCost,
+  isWardActive, nominalRent, rentFor, spiritOf, uniqueLeader, upgradeCost,
 } from '../core/rules';
-import type { NodeId, RegionId } from '../core/types';
-import { DICE_DIST, predictWalk, type WalkPolicy } from './predict';
+import type { MiniGameTier, NodeId, RegionId, SpecialKind, SpiritKind } from '../core/types';
+import { DICE_DIST, predictWalk, type Prediction, type WalkPolicy } from './predict';
 
 const mainLine: WalkPolicy['fork'] = (_node, _remaining, options) => options[0];
 const passive: WalkPolicy = { fork: mainLine, altar: () => 'stop', canPayToll: false };
@@ -42,6 +42,25 @@ const PERSONAS: Record<Personality, Persona> = {
 
 /** Rough stone-equivalents used when comparing heterogeneous gains. */
 const VALUE = { pill: 50, cult: 400, card: 80, bound: 150 };
+
+/** §18.2 Stone-equivalent of catching each spirit (fox: rent ×1.5 and cheap land; heart: −pills and rent ×1.5). */
+const SPIRIT_VALUE: Record<SpiritKind, number> = { fox: 250, heart: -300 };
+
+/** §18.5 炼丹房: how often the AI hits each tier (it plays the timing game by chance). */
+const ALCHEMY_ODDS: Record<Difficulty, Record<MiniGameTier, number>> = {
+  easy: { perfect: 0.15, ok: 0.5, fail: 0.35 },
+  normal: { perfect: 0.3, ok: 0.5, fail: 0.2 },
+  hard: { perfect: 0.45, ok: 0.45, fail: 0.1 },
+};
+
+/** §18.3 What each 百宝阁 item is worth to hold, before persona scaling. */
+const SHOP_VALUE: Record<string, number> = {
+  dice: 160, barrier: 110, blast: 170, turnback: 90, goldlight: 120, evade: 150, swiftstep: 90, discount: 80,
+};
+const ATTACK_ITEMS = new Set(['barrier', 'blast']);
+
+/** Rough chance an opponent stops on a given cell each round, for long-run building values. */
+const VISITS_PER_ROUND = 0.25;
 
 /** P(attacker wins) when the attacker's total is offset by `off` over the defender's (ties go to the defender). */
 export function duelWinChance(off: number): number {
@@ -116,8 +135,8 @@ export class AIController implements Controller {
       case 'land': {
         const t = st.tiles[node];
         if (t.owner === null) {
-          const price = buyPrice(this.data, p, n.price!, false);
-          if (p.stones - price >= this.persona.buyReserve) s += 0.3 * price + 100 * countOwned(st, b, this.seat, n.region);
+          const price = buyPrice(this.st, this.data, p, n.price!, false);
+          if (p.stones - price >= this.persona.buyReserve) s += 0.3 * price + 100 * countOwned(st, b, this.seat, n.region) + this.streetPull(node);
         } else if (t.owner === this.seat) s += 10;
         else {
           const r = rentFor(st, b, this.data, node, this.seat).amount;
@@ -137,14 +156,72 @@ export class AIController implements Controller {
       case 'shrine': s += VALUE.pill + (p.seal ? 0 : 80); break;
       case 'altar': s += this.wantsAltar() ? 500 : 40; break;
       case 'gate': s += 0; break;
+      case 'shop': s += this.shopWorth(); break;
+      case 'minigame': s += n.game === 'dice' ? 20 : this.alchemyPills() * VALUE.pill; break;
+      case 'hospital': break;
     }
     return s;
   }
 
+  /**
+   * §18.1 Extra value of buying `node` for the street it sits on: 0 if a rival already holds part of it,
+   * otherwise growing with each own land there, and a big bonus when it completes the street.
+   */
+  streetPull(node: NodeId): number {
+    const lands = this.board.streetOf(node);
+    if (lands.length === 0) return 0;
+    let mine = 0;
+    for (const id of lands) {
+      const o = this.st.tiles[id].owner;
+      if (o === this.seat) mine++;
+      else if (o !== null && id !== node) return 0;
+    }
+    return mine + 1 === lands.length ? 300 : 60 * mine;
+  }
+
+  /** Landing plus what happens on the way: spirits met (§18.2) and duels. */
+  private moveValue(pr: Prediction): number {
+    return this.landingScore(pr.node, pr.passStart) + this.spiritValue(pr.path) + this.meetValue(pr.path);
+  }
+
+  /**
+   * §18.2 Value of the spirits met along `path`: catching the fox is good, catching the heart is bad,
+   * and while holding the heart, walking into another player hands it over.
+   */
+  spiritValue(path: NodeId[]): number {
+    const st = this.st;
+    let held = spiritOf(st, this.seat);
+    let v = 0;
+    for (const node of path.slice(1)) {
+      if (held === 'heart' && st.players.some((o) => o.seat !== this.seat && o.pos === node)) {
+        v -= SPIRIT_VALUE.heart;
+        held = null;
+      }
+      for (const sp of st.spirits) {
+        if (sp.node !== node || sp.kind === held) continue;
+        if (held) v -= SPIRIT_VALUE[held];
+        v += SPIRIT_VALUE[sp.kind];
+        held = sp.kind;
+      }
+    }
+    return v;
+  }
+
+  /** Expected 灵丹 from one visit to a 炼丹房. */
+  private alchemyPills(): number {
+    const odds = ALCHEMY_ODDS[this.difficulty];
+    const r = this.data.config.rules.miniGameRewards.alchemy;
+    return odds.perfect * r.perfect + odds.ok * r.ok + odds.fail * r.fail;
+  }
+
+  /** What stopping at a 百宝阁 is worth now. */
+  private shopWorth(): number {
+    return this.shopPick(false) ? 50 : 0;
+  }
+
   private scoreMove(steps: number, dir: 1 | -1, from?: NodeId): number {
     const n = this.me.dazed ? Math.max(1, Math.floor(steps / 2)) : steps;
-    const pr = predictWalk(this.board, this.st, this.seat, n, dir, this.policy(), from);
-    return this.landingScore(pr.node, pr.passStart) + this.meetValue(pr.path);
+    return this.moveValue(predictWalk(this.board, this.st, this.seat, n, dir, this.policy(), from));
   }
 
   /** Best duel EV among players met on a predicted path (0 if none worth it or already dueled). */
@@ -379,13 +456,13 @@ export class AIController implements Controller {
         const options = c.options.map((o) => o.value);
         if (this.difficulty === 'hard') {
           // one-step look-ahead: compare the landing value of the main line against each detour
-          const stay = this.landingScore(predictWalk(this.board, this.st, this.seat, remaining, 1, { ...this.policy(), fork: mainLine }, node).node);
+          const stay = this.moveValue(predictWalk(this.board, this.st, this.seat, remaining, 1, { ...this.policy(), fork: mainLine }, node));
           const altarward = this.board.altarward(options);
           let best = options[0];
           let bestScore = stay;
           for (const alt of options.slice(1)) {
             const pr = predictWalk(this.board, this.st, this.seat, remaining, 1, { ...this.policy(), fork: (n, _r, o) => (n === node ? alt : o[0]) }, node);
-            const score = this.landingScore(pr.node, pr.passStart) + (this.wantsAltar() && alt === altarward ? 200 : 0);
+            const score = this.moveValue(pr) + (this.wantsAltar() && alt === altarward ? 200 : 0);
             if (score > bestScore) { best = alt; bestScore = score; }
           }
           return best;
@@ -435,6 +512,25 @@ export class AIController implements Controller {
       case 'region': return this.bestBy(c.options.filter((o) => o.value !== 'cancel'), (o) => this.regionRent(o.value as RegionId));
       case 'duel': return this.duelChoice(c);
       case 'duelBet': return this.duelBet(c);
+      case 'shop': return this.shopPick(true) ?? 'leave';
+      case 'miniGame': {
+        if (c.options.length === 1) return c.options[0].id; // 灵骰台: the engine already rolled
+        const odds = ALCHEMY_ODDS[this.difficulty];
+        const x = this.rng.float();
+        return x < odds.perfect ? 'perfect' : x < odds.perfect + odds.ok ? 'ok' : 'fail';
+      }
+      case 'diceBet': return this.diceBet(c);
+      case 'portal': {
+        if (this.difficulty === 'easy') return 'stay';
+        let best = 'stay';
+        let bv = this.expectedRoll(1) + 30;
+        for (const o of c.options) {
+          if (o.value === null) continue;
+          const v = this.expectedRoll(1, [0], o.value);
+          if (v > bv) { bv = v; best = o.id; }
+        }
+        return best;
+      }
       case 'cliff': {
         if (c.options.some((o) => o.id === 'calm') && this.sparePills() >= 1) return 'calm';
         const payBar = this.data.config.cliffFee + this.persona.buyReserve + (this.personality === 'aggressive' ? 0 : 200);
@@ -455,8 +551,7 @@ export class AIController implements Controller {
   }
 
   private exitScore(exit: NodeId, remaining: number): number {
-    const pr = predictWalk(this.board, this.st, this.seat, remaining, 1, { ...this.policy(), exit, fork: mainLine }, ALTAR);
-    return this.landingScore(pr.node, pr.passStart);
+    return this.moveValue(predictWalk(this.board, this.st, this.seat, remaining, 1, { ...this.policy(), exit, fork: mainLine }, ALTAR));
   }
 
   private regionRent(region: RegionId): number {
@@ -502,8 +597,19 @@ export class AIController implements Controller {
     if (treasure && spare >= 2 && Math.max(...REGION_IDS.map((r) => this.regionRent(r))) * this.persona.attack >= 200) return treasure.id;
     const swift = has((v) => v.t === 'cast' && v.card === 'swiftstep');
     if (swift && spare >= 1 && this.expectedRoll(1, [1, 2, 3]) - base > 120) return swift.id;
-    const rev = has((v) => v.t === 'cast' && v.card === 'reverse');
-    if (rev && spare >= 1 && this.expectedRoll(-1) - base > 150) return rev.id;
+    const dice = has((v) => v.t === 'cast' && v.card === 'dice');
+    if (dice) {
+      const r = this.data.config.rules;
+      let best = -Infinity;
+      for (let v = r.diceCardMin; v <= r.diceCardMax; v++) best = Math.max(best, this.scoreMove(v, 1));
+      if (best - base > (this.difficulty === 'hard' ? 80 : 120)) return dice.id;
+    }
+    const turnback = has((v) => v.t === 'cast' && v.card === 'turnback');
+    const back = turnback ?? has((v) => v.t === 'cast' && v.card === 'reverse');
+    if (back && (turnback || spare >= 1)) {
+      const gain = this.expectedRoll(-1) - base;
+      if (gain > (turnback ? 100 : 150)) return back.id;
+    }
     return 'roll';
   }
 
@@ -538,15 +644,18 @@ export class AIController implements Controller {
     // 3) 点金符 is almost always worth a pill
     const gold = find((v) => v.t === 'cast' && v.card === 'goldtouch');
     if (gold && spare >= 1) return gold.id;
-    // 4) upgrades (with 折扣符 first when worthwhile)
-    const ups = c.options.filter((o) => o.value.t === 'upgrade');
+    // 4) §18.4 功能建筑 on the land underfoot, when it beats a plain building there
+    const special = this.bestSpecial(c.options.flatMap((o) => (o.value.t === 'upgrade' && o.value.special ? [o.value.special] : [])));
+    if (special) return `upgrade:${p.pos}:${special}`;
+    // 5) upgrades (with 折扣符 first when worthwhile)
+    const ups = c.options.filter((o) => o.value.t === 'upgrade' && !o.value.special);
     const bestUp = this.bestUpgrade(ups.map((o) => (o.value as { node: NodeId }).node));
     if (bestUp) {
       const disc = find((v) => v.t === 'cast' && v.card === 'discount');
       if (disc && spare >= 1 && bestUp.cost >= 300 && !st.turn.discount) return disc.id;
       return `upgrade:${bestUp.node}`;
     }
-    // 5) 定身 / 夺灵 on the leader
+    // 6) 定身 / 夺灵 on the leader
     if (attacks) {
       const leader = this.leaderOpponent();
       const bind = find((v) => v.t === 'cast' && v.card === 'bind');
@@ -554,13 +663,20 @@ export class AIController implements Controller {
       const drain = find((v) => v.t === 'cast' && v.card === 'drain');
       if (drain && spare >= 1 && leader !== null && st.players[leader].pills >= 3) return drain.id;
     }
-    // 6) active skill (free, on cooldown)
+    // 7) active skill (free, on cooldown)
     const skill = find((v) => v.t === 'skill');
     if (skill && (this.difficulty !== 'easy' || this.rng.float() < 0.5)) {
       const sk = this.bestSkill();
       if (sk && sk.value > 20) return skill.id;
     }
-    // 7) 禁制 on the tile opponents are most likely to stop on
+    // 8) §18.3 路障符 / 爆炎阵 (free once bought)
+    if (attacks) {
+      const barrier = find((v) => v.t === 'cast' && v.card === 'barrier');
+      if (barrier && (this.bestBarrier()?.value ?? 0) * this.persona.attack >= 12) return barrier.id;
+      const blast = find((v) => v.t === 'cast' && v.card === 'blast');
+      if (blast && (this.bestBlast()?.value ?? 0) * this.persona.attack >= 25) return blast.id;
+    }
+    // 9) 禁制 on the tile opponents are most likely to stop on
     const traps = c.options.filter((o) => o.value.t === 'trap');
     if (traps.length > 0 && attacks && spare >= this.data.config.rules.trapPillCost) {
       let best = traps[0];
@@ -572,6 +688,110 @@ export class AIController implements Controller {
       if (bv * this.persona.attack >= 20 || spare >= 3) return best.id;
     }
     return 'end';
+  }
+
+  /**
+   * §18.4 Which 功能建筑 to build on the land underfoot, or null to keep it upgradable.
+   * Values are summed over the remaining rounds; a plain building keeps the Lv2–Lv4 修为 milestones open.
+   */
+  private bestSpecial(kinds: SpecialKind[]): SpecialKind | null {
+    if (kinds.length === 0 || (this.difficulty === 'easy' && this.rng.float() < 0.5)) return null;
+    const st = this.st;
+    const node = this.me.pos;
+    const r = this.data.config.rules;
+    const price = this.board.node(node).price!;
+    const cost = upgradeCost(this.data, price, 1, st.turn.discount).stones;
+    if (this.me.stones < cost + this.persona.upgradeReserve) return null;
+    const rounds = Math.min(8, this.data.config.rounds - st.round + 1);
+    const rent0 = nominalRent(this.data, price, 0);
+    const mine = this.board.lands.filter((id) => st.tiles[id].owner === this.seat && st.tiles[id].special);
+    const portals = mine.filter((id) => st.tiles[id].special === 'portal').length;
+    // each 功能建筑 already owned halves the appeal of another: it gives up that land's 修为 milestones
+    const damp = 0.5 ** mine.length;
+    const value: Record<SpecialKind, number> = {
+      garden: rounds * r.gardenPills * VALUE.pill,
+      bazaar: rounds * VISITS_PER_ROUND * (r.bazaarFee - rent0 + 40) * this.persona.attack,
+      portal: rounds * (portals > 0 ? 40 : 25),
+    };
+    if (this.difficulty !== 'hard') for (const k of kinds) value[k] *= 0.6 + 0.8 * this.rng.float();
+    // a plain building keeps Lv2–Lv4 open (up to 3 修为, slow); a special pays its 修为 now but caps the land
+    const plain = rounds * VISITS_PER_ROUND * (nominalRent(this.data, price, 1) - rent0) + VALUE.cult * (rounds >= 4 ? 1.2 : 0.4);
+    const now = this.me.milestones.includes(`${node}:special`) ? 0 : r.specialCultivation * VALUE.cult * 0.8;
+    let best: SpecialKind | null = null;
+    let bv = plain;
+    for (const k of kinds) {
+      const v = value[k] * damp + now;
+      if (v > bv) { bv = v; best = k; }
+    }
+    return best;
+  }
+
+  /** §18.3 The 百宝阁 item to buy now, or null. `roll` draws among worthwhile items (only when really buying). */
+  private shopPick(roll: boolean): string | null {
+    const p = this.me;
+    if (p.hand.length >= this.data.config.handLimit) return null;
+    const worth: { id: string; score: number }[] = [];
+    for (const card of this.game.shopItems()) {
+      const price = card.price!;
+      if (p.stones - price < this.persona.buyReserve + 200) continue;
+      let v = (SHOP_VALUE[card.id] ?? 60) * (ATTACK_ITEMS.has(card.id) ? this.persona.attack : 1);
+      if (p.hand.includes(card.id)) v *= 0.4;
+      const score = v - price * 0.6;
+      if (score > 0) worth.push({ id: card.id, score });
+    }
+    if (worth.length === 0) return null;
+    if (!roll) return worth[0].id;
+    // weighted by score, so the AI does not always buy the same item
+    let x = this.rng.float() * worth.reduce((a, w) => a + w.score, 0);
+    for (const w of worth) if ((x -= w.score) < 0) return w.id;
+    return worth[worth.length - 1].id;
+  }
+
+  /** §18.5 灵骰台 bet: a stake loses 1/6 on average, so only bolder personas with spare stones gamble. */
+  private diceBet(c: PendingChoiceOf<'diceBet'>): string {
+    const side = this.rng.float() < 0.5 ? 'big' : 'small';
+    const cap = this.difficulty === 'hard' ? 0
+      : this.personality === 'aggressive' ? 200
+      : this.personality === 'steady' ? 100 : 0;
+    const pick = c.options
+      .filter((o) => o.value.side === side && o.value.stake <= cap && this.me.stones - o.value.stake >= this.persona.buyReserve + 300)
+      .sort((a, b) => b.value.stake - a.value.stake)[0];
+    return pick?.id ?? `${side}0`;
+  }
+
+  /** Chance-weighted stop odds of every opponent on each node for their next roll. */
+  private stopOdds(): Map<NodeId, number> {
+    const out = new Map<NodeId, number>();
+    for (const o of this.st.players) {
+      if (o.seat === this.seat || o.jailed || o.bound || o.hospitalTurns > 0) continue;
+      for (const { total, p } of DICE_DIST) {
+        const pr = predictWalk(this.board, this.st, o.seat, total, 1, passive);
+        out.set(pr.node, (out.get(pr.node) ?? 0) + p);
+      }
+    }
+    return out;
+  }
+
+  /** Best 路障符 spot (valued like 镇山: the next opponent is stopped there). */
+  private bestBarrier(): { node: NodeId; value: number } | null {
+    let best: { node: NodeId; value: number } | null = null;
+    for (const node of this.game.barrierSpots(this.seat)) {
+      const v = this.roadblockValue(node);
+      if (!best || v > best.value) best = { node, value: v };
+    }
+    return best;
+  }
+
+  /** Best 爆炎阵 spot: where opponents most likely stop next roll (a lost turn plus the walk back). */
+  private bestBlast(): { node: NodeId; value: number } | null {
+    const spots = new Set(this.game.blastSpots(this.seat));
+    let best: { node: NodeId; value: number } | null = null;
+    for (const [node, e] of this.stopOdds()) {
+      if (!spots.has(node)) continue;
+      const v = e * (VALUE.bound + 100);
+      if (!best || v > best.value) best = { node, value: v };
+    }
+    return best;
   }
 
   private bestUpgrade(nodes: NodeId[]): { node: NodeId; cost: number } | null {
@@ -640,6 +860,7 @@ export class AIController implements Controller {
     const region = this.board.node(node).region!;
     const mine = countOwned(this.st, this.board, this.seat, region);
     if (mine >= 2) reserve *= 0.5; // completing a 灵脉 / 独占 is worth stretching for
+    if (this.streetPull(node) >= 300) reserve *= 0.4; // §18.1 the last land of a street doubles its rent
     if (this.difficulty === 'hard') {
       // look-ahead: keep enough to survive the worst likely rent next roll
       let worst = 0;
@@ -707,7 +928,7 @@ export class AIController implements Controller {
         const n = this.board.node(o.value);
         const t = this.st.tiles[o.value];
         if (t.owner === this.seat) return 0;
-        const price = buyPrice(this.data, this.me, n.price!, false);
+        const price = buyPrice(this.st, this.data, this.me, n.price!, false);
         if (this.me.stones - price < this.persona.buyReserve * 0.5) return -1;
         return n.price! + 150 * countOwned(this.st, this.board, this.seat, n.region);
       });
@@ -735,6 +956,14 @@ export class AIController implements Controller {
     }
     if (purpose === 'sworddash' || purpose === 'swap' || purpose === 'daze' || purpose === 'roadblock') {
       return this.bestSkill()?.id ?? 'cancel';
+    }
+    if (purpose === 'barrier') {
+      const b = this.bestBarrier();
+      return b ? `node:${b.node}` : 'cancel';
+    }
+    if (purpose === 'blast') {
+      const b = this.bestBlast();
+      return b ? `node:${b.node}` : real[0].id;
     }
     if (purpose === 'drain') {
       return this.bestBy(real, (o) => (o.value.t === 'player' ? this.st.players[o.value.seat].pills + this.cult(o.value.seat) * 0.1 : 0));

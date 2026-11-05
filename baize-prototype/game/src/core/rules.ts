@@ -2,7 +2,7 @@
 // the AI and the UI (e.g. to preview rent / costs).
 import type { Board } from './board';
 import { REGION_IDS } from './board';
-import type { GameData, GameState, NodeId, PlayerState, RegionId } from './types';
+import type { GameData, GameState, NodeId, PlayerState, RegionId, SpiritKind } from './types';
 
 export function veinLordCount(state: GameState, seat: number): number {
   return REGION_IDS.filter((r) => state.veinLords[r] === seat).length;
@@ -39,11 +39,23 @@ export function upgradeCost(
   };
 }
 
-export function buyPrice(data: GameData, p: PlayerState, price: number, discount: boolean): number {
-  let m = 1;
-  if (p.hero === 'alch') m *= data.config.rules.alchBuyDiscount;
+export function buyPrice(state: GameState, data: GameData, p: PlayerState, price: number, discount: boolean): number {
+  let m = p.hero === 'alch' ? data.config.rules.alchBuyDiscount : 1;
+  // §18.2 灵狐's discount does not stack with 丹师's: the lower one applies.
+  if (spiritOf(state, p.seat) === 'fox') m = Math.min(m, data.config.rules.foxLandDiscount);
   if (discount) m *= data.config.rules.discountCardMult;
   return Math.floor(price * m);
+}
+
+/** §18.2 The spirit possessing `seat`, if any. */
+export function spiritOf(state: GameState, seat: number): SpiritKind | null {
+  return state.spirits.find((s) => s.holder === seat)?.kind ?? null;
+}
+
+/** §18.1 `seat` owns every land of the street `node` belongs to (false for a land without a street). */
+export function ownsStreet(state: GameState, board: Board, node: NodeId, seat: number): boolean {
+  const lands = board.streetOf(node);
+  return lands.length > 0 && lands.every((id) => state.tiles[id].owner === seat);
 }
 
 /** Land price + all upgrade costs (undiscounted) for a land at `level`. Used for assets & buyout. */
@@ -93,7 +105,16 @@ export function rentFor(state: GameState, board: Board, data: GameData, node: No
     return { amount: 0, base, mults, zeroReason: '天魔盘踞' };
   }
   const owner = state.players[t.owner];
+  // §18.4 集市: a fixed fee replaces the rent, no multipliers.
+  if (t.special === 'bazaar') {
+    const fee = cfg.rules.bazaarFee;
+    return { amount: fee, base: fee, mults: [{ label: '集市过路费', mult: 1 }] };
+  }
+  // 一域独占 implies every street of the region, so it replaces 整街 instead of stacking.
   if (ownsAllOfRegion(state, board, n.region!, t.owner)) mults.push({ label: '一域独占', mult: cfg.monopolyRentMult });
+  else if (ownsStreet(state, board, node, t.owner)) mults.push({ label: `整街·${board.streetName(n.street!)}`, mult: cfg.rules.streetRentMult });
+  if (spiritOf(state, t.owner) === 'fox') mults.push({ label: '福缘灵狐', mult: cfg.rules.foxRentMult });
+  if (payer !== undefined && spiritOf(state, payer) === 'heart') mults.push({ label: '心魔', mult: cfg.rules.heartRentMult });
   if (isEndgame(state, data)) mults.push({ label: '终局', mult: cfg.endgameRentMult });
   if (isManifestRound(state, data)) mults.push({ label: '灵雨', mult: cfg.manifestRentMult });
   if (owner.treasure.some((x) => x.region === n.region && x.round === state.round)) mults.push({ label: '聚宝符', mult: 2 });
@@ -137,7 +158,8 @@ export function totalAssets(state: GameState, board: Board, data: GameData, seat
   let v = p.stones + p.pills * data.config.pillValueInStones;
   for (const id of board.lands) {
     const t = state.tiles[id];
-    if (t.owner === seat) v += investedValue(data, board.node(id).price!, t.level);
+    // A 功能建筑 cost as much as a Lv1 building.
+    if (t.owner === seat) v += investedValue(data, board.node(id).price!, t.special ? 1 : t.level);
   }
   return v;
 }
