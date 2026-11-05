@@ -1,16 +1,19 @@
-// Board rendering: tiles, objects, buildings, owner bars/flags, tokens, demon, and the 白泽现世 light
-// on the altar. Everything here lives in board (world) coordinates; sprite scales come from SPRITE.
+// Board rendering: ground and roads (Ground.ts), tiles, objects, buildings, owner bars/flags, tokens,
+// demon, and the 白泽现世 light on the altar. Everything here lives in world coordinates (WorldMap);
+// GameScene's camera scrolls and zooms it. Sprite scales come from SPRITE.
 import Phaser from 'phaser';
 import { ALTAR, type Board } from '../core/board';
 import type { GameState, HeroId, NodeId } from '../core/types';
 import { addImg, setFrame } from './assets';
-import { ALTAR_RECT, BOARD, cellXY, SPRITE, type Rect } from './layout';
+import { drawWorld, tileRect } from './Ground';
+import { SPRITE, type Rect } from './layout';
 import { COLORS, FS, HEX, PLAYER_COLORS, PLAYER_HEX, txt } from './theme';
+import { rectCentre, WorldMap, type Point } from './world';
 
-const S = BOARD.scale;
-const C = BOARD.cell;
-/** Board-local offsets are authored on the 64 px art grid; `u` maps them to screen pixels. */
-const u = (v: number): number => v * S;
+/** Tile-local offsets are authored on the 64 px art grid; `u` maps them to world pixels. */
+const u = (v: number): number => v * SPRITE.ground;
+/** Depth for overlays that sit above every y-sorted sprite on any board size. */
+const TOP = 100000;
 /** Altar sprite: its statue's centre sits this far above the sprite centre (native px). */
 const STATUE_DY = -6;
 /** Token feet around the altar statue, relative to the footprint centre. */
@@ -34,19 +37,22 @@ export class BoardView {
   private highlights: Phaser.GameObjects.Rectangle[] = [];
   private hoverFn: ((n: NodeId | null) => void) | null = null;
   private clickFn: ((n: NodeId) => void) | null = null;
+  private pressFn: ((n: NodeId) => void) | null = null;
   private clickable = new Set<NodeId>();
   private currentMark: Phaser.GameObjects.Rectangle;
   /** §12 镇山 mountain marker. */
   private rock: Phaser.GameObjects.Text;
 
-  constructor(private scene: Phaser.Scene, private board: Board, heroes: HeroId[]) {
+  readonly world: WorldMap;
+
+  constructor(private scene: Phaser.Scene, board: Board, heroes: HeroId[]) {
     const s = scene;
-    s.add.rectangle(BOARD.x, BOARD.y, BOARD.size, BOARD.size, COLORS.panel).setOrigin(0, 0).setDepth(-1);
-    addImg(s, BOARD.x + C, BOARD.y + C, 'centre_bg').setOrigin(0, 0).setDepth(0).setScale(SPRITE.ground);
+    this.world = new WorldMap(board.data);
+    drawWorld(s, this.world, board.data);
     for (const id of board.allNodeIds()) {
       const n = board.node(id);
       if (id === ALTAR) continue;
-      const { x, y } = cellXY(n.pos[0], n.pos[1]);
+      const { x, y, w: C } = tileRect(this.world, id);
       const tileFrame = n.type === 'land' ? `tile_land_${n.region}` : `tile_${n.type}`;
       addImg(s, x, y, tileFrame).setOrigin(0, 0).setDepth(1).setScale(SPRITE.ground);
       const foot = y + u(48);
@@ -56,21 +62,22 @@ export class BoardView {
         const owner = addImg(s, x, y + u(54), 'owner_p1').setOrigin(0, 0).setDepth(2).setVisible(false).setScale(SPRITE.ground);
         const flag = addImg(s, x + u(9), y + u(24), 'flag_p1').setOrigin(0.5, 1).setDepth(foot + 1).setVisible(false).setScale(SPRITE.prop);
         const trap = txt(s, x + C - u(4), y + u(4), '禁', { size: FS.sm, bold: true, stroke: HEX.ink, origin: [1, 0] })
-          .setDepth(2500).setVisible(false);
+          .setDepth(TOP + 500).setVisible(false);
         this.lands.set(id, { decor, bld, owner, flag, trap });
       } else {
         addImg(s, x + C / 2, foot, `obj_${n.type}`).setOrigin(0.5, 1).setDepth(foot).setScale(SPRITE.prop);
       }
-      this.addZone(id, x, y, C, C);
+      const cell = this.world.cellRect(id);
+      this.addZone(id, cell.x, cell.y, cell.w, cell.h);
     }
-    const ax = ALTAR_RECT.x + ALTAR_RECT.w / 2;
-    const ay = ALTAR_RECT.y + ALTAR_RECT.h / 2;
-    addImg(s, ax, ay, 'altar').setOrigin(0.5, 0.5).setDepth(ALTAR_RECT.y + ALTAR_RECT.h).setScale(SPRITE.altar);
-    this.addZone(ALTAR, ALTAR_RECT.x, ALTAR_RECT.y, ALTAR_RECT.w, ALTAR_RECT.h);
-    this.manifest = new Manifest(s, ax, ay + STATUE_DY * SPRITE.altar, ALTAR_RECT.y + ALTAR_RECT.h + 1);
+    const altar = this.world.cellRect(ALTAR);
+    const { x: ax, y: ay } = rectCentre(altar);
+    addImg(s, ax, ay, 'altar').setOrigin(0.5, 0.5).setDepth(altar.y + altar.h).setScale(SPRITE.altar);
+    this.addZone(ALTAR, altar.x, altar.y, altar.w, altar.h);
+    this.manifest = new Manifest(s, ax, ay + STATUE_DY * SPRITE.altar, altar.y + altar.h + 1);
     this.demon = addImg(s, 0, 0, 'demon').setOrigin(0.5, 1).setVisible(false).setScale(SPRITE.demon);
-    this.rock = txt(s, 0, 0, '山', { size: FS.lg, bold: true, color: HEX.gold, stroke: HEX.ink, origin: [0.5, 0.5] }).setDepth(2600).setVisible(false);
-    this.currentMark = s.add.rectangle(0, 0, C, C, COLORS.gold, 0.16).setOrigin(0, 0).setStrokeStyle(4, COLORS.gold).setDepth(3).setVisible(false);
+    this.rock = txt(s, 0, 0, '山', { size: FS.lg, bold: true, color: HEX.gold, stroke: HEX.ink, origin: [0.5, 0.5] }).setDepth(TOP + 600).setVisible(false);
+    this.currentMark = s.add.rectangle(0, 0, 10, 10, COLORS.gold, 0.16).setOrigin(0, 0).setStrokeStyle(4, COLORS.gold).setDepth(3).setVisible(false);
     s.tweens.add({ targets: this.currentMark, alpha: 0.45, duration: 520, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
 
     heroes.forEach((h, seat) => {
@@ -82,23 +89,30 @@ export class BoardView {
     });
   }
 
+  /** A tile's click lands on release, so a press that turns into a camera drag never counts as a click. */
   private addZone(id: NodeId, x: number, y: number, w: number, h: number): void {
     const z = this.scene.add.zone(x, y, w, h).setOrigin(0, 0).setInteractive({ useHandCursor: false });
     z.on('pointerover', () => this.hoverFn?.(id));
     z.on('pointerout', () => this.hoverFn?.(null));
-    z.on('pointerdown', () => this.clickFn?.(id));
+    z.on('pointerdown', () => this.pressFn?.(id));
+    z.on('pointerup', () => this.clickFn?.(id));
   }
 
   onHover(fn: (n: NodeId | null) => void): void { this.hoverFn = fn; }
-  /** Fires for every node; `isClickable` says whether it is a current choice target. */
+  onPress(fn: (n: NodeId) => void): void { this.pressFn = fn; }
+  /** Fires for every node on release; `isClickable` says whether it is a current choice target. */
   onClick(fn: (n: NodeId) => void): void { this.clickFn = fn; }
   isClickable(id: NodeId): boolean { return this.clickable.has(id); }
 
+  /** The drawn tile in world px: the whole footprint for the altar, the cell minus its road gap otherwise. */
   nodeRect(id: NodeId): Rect {
-    if (id === ALTAR) return { ...ALTAR_RECT };
-    const n = this.board.node(id);
-    const { x, y } = cellXY(n.pos[0], n.pos[1]);
-    return { x, y, w: C, h: C };
+    return id === ALTAR ? this.world.cellRect(ALTAR) : tileRect(this.world, id);
+  }
+
+  /** The point the camera keeps on screen for a seat: its token's body, wherever it is mid-move. */
+  tokenFocus(seat: number): Point {
+    const t = this.tokens[seat];
+    return { x: t.x, y: t.y - 24 };
   }
 
   /** World-space box around a seat's token, for keeping modals off it. */
@@ -113,7 +127,8 @@ export class BoardView {
   tokenXY(id: NodeId, seat: number): { x: number; y: number } {
     if (id === ALTAR) {
       const [dx, dy] = ALTAR_SEATS[seat];
-      return { x: ALTAR_RECT.x + ALTAR_RECT.w / 2 + dx, y: ALTAR_RECT.y + ALTAR_RECT.h / 2 + dy };
+      const c = this.world.centre(ALTAR);
+      return { x: c.x + dx, y: c.y + dy };
     }
     const r = this.nodeRect(id);
     return { x: r.x + u(32 + (seat - 1.5) * 10), y: r.y + u(48 + (seat % 2) * 4) };
@@ -160,7 +175,7 @@ export class BoardView {
   floatText(seat: number, text: string, color: string, delay = 0): void {
     const tok = this.tokens[seat];
     const t = txt(this.scene, tok.x, tok.y - 48 * tok.scaleY, text, { size: FS.md, bold: true, color, stroke: HEX.ink, origin: [0.5, 1] })
-      .setDepth(8000).setAlpha(0);
+      .setDepth(TOP + 8000).setAlpha(0);
     this.scene.tweens.add({ targets: t, alpha: 1, duration: 120, delay });
     this.scene.tweens.add({ targets: t, y: t.y - 30, duration: 1100, delay, ease: 'Sine.easeOut' });
     this.scene.tweens.add({ targets: t, alpha: 0, duration: 300, delay: delay + 900, onComplete: () => t.destroy() });
@@ -223,7 +238,7 @@ export class BoardView {
     for (const id of nodes) {
       const r = this.nodeRect(id);
       const h = this.scene.add.rectangle(r.x + 2, r.y + 2, r.w - 4, r.h - 4, COLORS.gold, 0.18)
-        .setOrigin(0, 0).setStrokeStyle(2, COLORS.gold).setDepth(2000);
+        .setOrigin(0, 0).setStrokeStyle(2, COLORS.gold).setDepth(TOP);
       this.scene.tweens.add({ targets: h, alpha: 0.45, duration: 500, yoyo: true, repeat: -1 });
       this.highlights.push(h);
     }

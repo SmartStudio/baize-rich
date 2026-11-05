@@ -1,21 +1,22 @@
-// Screen layout (1280×720). The board fills the full height, centred; the HUD floats in the
-// margins on its own overlay scene (`HudScene`), so it stays put when the board camera moves.
+// Screen layout (1280×720). The board is a scrolling world drawn by GameScene's camera; the HUD floats
+// over it in the screen margins on its own overlay scene (`HudScene`), so it stays put when the camera moves.
 export const W = 1280;
 export const H = 720;
-/** Source art is drawn on a 64 px grid; ground tiles are scaled by `BOARD.scale` to fill a cell. */
+/** Source art is drawn on a 64 px grid. */
 export const TILE = 64;
-const CELL = 80;
-const SIZE = 9 * CELL;
-export const BOARD = { x: (W - SIZE) / 2, y: (H - SIZE) / 2, cell: CELL, scale: CELL / TILE, size: SIZE };
+/** World px per board grid cell. At zoom 1 a 9-row board exactly fills the screen height. */
+export const CELL = 80;
+/** Gap around each tile inside its cell, where the roads between nodes show through. */
+export const INSET = 4;
 
 /**
- * Sprite scales on the board, relative to the source art. Ground (tiles, owner bars, centre art)
- * stretches to the cell; everything standing on a tile is drawn at native pixel size so props,
- * buildings, tokens, the altar and the demon keep one consistent pixel density and fit inside
- * their tile (the tallest building, 58 px, stands within an 80 px cell).
+ * Sprite scales on the board, relative to the source art, in world px (the camera zoom scales them all).
+ * Ground (tiles, owner bars) stretches to the tile; everything standing on a tile is drawn at native
+ * pixel size so props, buildings, tokens, the altar and the demon keep one consistent pixel density
+ * and fit inside their tile (the tallest building, 58 px, stands within a 72 px tile).
  */
 export const SPRITE = {
-  ground: CELL / TILE,
+  ground: (CELL - 2 * INSET) / TILE,
   prop: 1,
   token: 1.15,
   tokenActive: 1.35,
@@ -26,22 +27,20 @@ export const SPRITE = {
 };
 
 const M = 8;
-const SIDE_W = BOARD.x - 2 * M;
+/** Width of each HUD margin column: the screen left over beside a 9-cell-wide board at zoom 1. */
+const SIDE_W = (W - 9 * CELL) / 2 - 2 * M;
 /** Left margin: round line, one chip per seat, 战报 ticker. */
 export const LEFT = { x: M, w: SIDE_W, lineY: M, lineH: 30, chipY: 48, chipH: 60, chipGap: 8, tickerY: H - M - 28, tickerH: 28 };
 /** Right margin: utility pills on top, the action dock at the bottom. */
 export const RIGHT = { x: W - M - SIDE_W, w: SIDE_W, utilY: M, utilH: 28 };
 /** Dock rows, top to bottom. The dock is bottom-anchored; AI-only games show only the header. */
 export const DOCK = { pad: 10, headH: 46, rollH: 58, btnH: 32, handH: 64, gap: 8 };
-/** Transient overlays in screen space: dice, ribbons. */
-export const STAGE = { cx: W / 2, cy: H / 2, diceY: 150, turnRibbonY: 84, dice: 1.6 };
-
-export function cellXY(col: number, row: number): { x: number; y: number } {
-  return { x: BOARD.x + col * BOARD.cell, y: BOARD.y + row * BOARD.cell };
-}
-
-/** Altar footprint (cells (3,3)–(5,5)). */
-export const ALTAR_RECT = { x: BOARD.x + 3 * CELL, y: BOARD.y + 3 * CELL, w: 3 * CELL, h: 3 * CELL };
+/** Minimap under the utility pills (shown only when the world is bigger than the screen). */
+export const MINI = { maxH: 150, gap: 6, btnH: 24 };
+/** Transient overlays in screen space: dice, ribbons, toasts. */
+export const STAGE = { cx: W / 2, cy: H / 2, diceY: 150, turnRibbonY: 84, toastY: H - 98, dice: 1.6 };
+/** Screen area no HUD column covers. The camera keeps what matters (moving token, choice targets) inside it. */
+export const SAFE = { x: M + SIDE_W + M, y: 16, w: W - 2 * (M + SIDE_W + M), h: H - 32 };
 
 export interface Rect {
   x: number;

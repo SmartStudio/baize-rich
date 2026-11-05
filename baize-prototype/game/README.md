@@ -28,7 +28,9 @@ URL 参数：
 
 开局流程：标题（开场文案，任意键跳过）→ 选修士（点一位作为「你」，坐 1 号位，其余三位由 AI 扮演，统一选一个难度）→ 对阵过场 → 对局。选人界面的「高级设置」进入逐席位设置（多人同屏、AI 性格、种子）。「玩法说明」是 5 页图文浮层，标题界面随时可开；第一次点「开始游戏」会自动弹出一次（`localStorage` 键 `baize.tutorialSeen`，读不到就当没看过）。
 
-快捷键（GDD §14）：空格 掷骰 / 确认，B 升级，C 出符（含大招、技能、布禁制），K 发动技能，Enter 结束回合，Esc 取消，F 切换倍速（0.5/1/2/4），L 展开 / 收起战报，S 下载对局记录；弹窗内数字键 1–9 直接选择。
+快捷键（GDD §14）：空格 掷骰 / 确认，B 升级，C 出符（含大招、技能、布禁制），K 发动技能，Enter 结束回合，Esc 取消，F 切换倍速（0.5/1/2/4），L 展开 / 收起战报，S 下载对局记录，H（或 Home）回到棋子；弹窗内数字键 1–9 直接选择。
+
+棋盘镜头：拖动棋盘平移，滚轮 / 双指捏合缩放。镜头平时跟着行动中的棋子走；手动拖动或缩放后暂停跟随，直到下一回合开始、掷骰或按「回到棋子 · H」。需要点格子的选择（岔路、出灵台、传送和技能目标）会自动把所有可选格框进画面。地图比屏幕大时，右上角出现小地图：点击或拖动它跳到那里。
 
 ### 存档与对局记录
 
@@ -61,8 +63,8 @@ src/
   ai/          AI 控制器（GDD §13）：难度 easy/normal/hard，性格 稳健/激进/守财；predict.ts 为移动预测
   sim/         无头驱动 headless.ts、批量模拟库 simulate.ts、命令行 run.ts、参数扫描 sweep.ts、对局记录复盘 replay.ts
   scenes/      Phaser 场景：Boot（载图集/生成占位）→ Title → HeroSelect →（Setup 高级设置）→ Versus → Game → Result；Hud 是叠在 Game 上的屏幕层，放全部面板
-  ui/          画面组件：BoardView（棋盘与白泽现世光效）、TopBar（左上轮次）、PlayerCards（左侧玩家小卡）、LogPanel（战报）、ActionDock（右下行动坞与手牌）、Tooltip（共用提示框）、TileInfo（地块提示）、Cutscene（过场横幅）、ChoiceModal、HowToPlay（玩法说明浮层）、session（开局配置）、saves（自动存档 / 教程标记）、assets、theme、layout
-tests/         vitest：移动/岔路/灵台/地形、租金、突破、灵脉、破产、胜负、确定性回放、对局记录、选人开局
+  ui/          画面组件：world（棋盘世界坐标与镜头数学，不依赖 Phaser，有单测）、Ground（按 board.json 生成的地面、道路与方向箭头、装饰）、BoardView（格子、棋子、建筑与白泽现世光效）、BoardCamera（跟随 / 框选 / 拖动缩放）、Minimap（小地图）、TopBar（左上轮次）、PlayerCards（左侧玩家小卡）、LogPanel（战报）、ActionDock（右下行动坞与手牌）、Tooltip（共用提示框）、TileInfo（地块提示）、Cutscene（过场横幅）、ChoiceModal、HowToPlay（玩法说明浮层）、session（开局配置）、saves（自动存档 / 教程标记）、assets、theme、layout
+tests/         vitest：移动/岔路/灵台/地形、租金、突破、灵脉、破产、胜负、确定性回放、对局记录、选人开局、棋盘世界坐标与镜头夹取
 scripts/       screenshots.cjs（Playwright 冒烟测试 + 截图）
 ```
 
@@ -108,6 +110,7 @@ UI 侧（`GameScene`）就是另一个 Controller：`preRoll` / `action` 选择�
 1. `data/board.json` 的 `nodes`：每格写 `id`、`type`、`pos`、`next`（前进方向的后继格，多于一个是岔路，`next[0]` 是主线）。灵田加 `region`、`name`、`price`；外环格标 `outer: true`；神道格标 `road`，并把内外两个邻格都写进 `next`。
 2. 必须有一个 `start`、一个 `cliff`，以及 id 为 `ALTAR` 的灵台。需要提供的字段和各条规则的对应关系见 `NOTES.md` 第 10 节。
 3. 在 `tests/` 里加一条走法测试（参考 `tests/graph.test.ts`）。
+4. 画面不用改：`grid` 决定世界大小（每格 80 世界像素），格子按 `pos` 摆放，灵台按 `rect` 占格；道路沿 `next` 画，只写了单向的边带箭头；地面颜色取最近的带 `region` 的格子。地图比屏幕大时镜头会自动滚动，并出现小地图。
 
 **加一名英雄**
 1. `data/heroes.json` 加条目；`types.ts` 的 `HeroId` 与 `core/heroes.ts` 的 `HERO_IDS` 加 id。
