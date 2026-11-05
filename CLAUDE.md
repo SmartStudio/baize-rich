@@ -33,7 +33,7 @@ npm run shots                       # 需先 build；用 Playwright 打开 dist�
 BAIZE_NO_ATLAS=1 npm run build      # 强制使用占位图构建
 ```
 
-`npm run shots` 使用全局预装的 `playwright`（不是项目依赖）。改了平衡相关的规则后，用 `npm run sim` / `npm run sweep` 和 GDD §16 的目标对比（英雄胜率 22–28%、12–15 轮等），把结果更新到 NOTES.md。
+`npm run shots` 使用全局预装的 `playwright`（不是项目依赖）。改了平衡相关的规则后，用 `npm run sim` / `npm run sweep` 和 GDD §16 的目标对比（英雄胜率 22–28%、平均 9–12 轮、多数对局冲到修为 8 结束等），把结果更新到 NOTES.md。
 
 ## 架构
 
@@ -49,9 +49,9 @@ BAIZE_NO_ATLAS=1 npm run build      # 强制使用占位图构建
 
 **引擎中的关键位置**：`settle()`（落点结算，按地块类型 `case`）、`enterNode()`（经过效果）、`castPreroll()` / `castAction()`（符箓，按 `timing` 区分）、`ultAvailable()` / `useUlt()`（英雄大招）。英雄被动散落在 `p.hero ===` 的判断里。`core/rules.ts` 放租金、升级费、总资产等纯计算，UI 和 AI 共用。
 
-**棋盘（`core/board.ts`）**：外环 R0–R31（顺时针 = 索引递增，每条边 8 格对应一个灵域：木/火/水/土），四座山门各有一条 2 格神道通向中央的 ALTAR（白泽灵台）。
+**棋盘（`core/board.ts`）是通用有向路网。** `data/board.json` 每个节点有 `pos` 和有序的 `next`（`next[0]` 是主线），`prev` 由数据推出。`next` 有多项就是岔路。双向的神道在 `next` 里写两端并带 `road` 键，`outer: true` 标记只在外环生效的规则。棋盘中心是 `ALTAR`（白泽灵台）。新地图必须满足的约束见 `game/NOTES.md` §10 和 README「改地图」。
 
-**AI 和 UI 都是 Controller。** `ai/ai.ts` 的 `AIController.decide(c)` 在 `switch (c.kind)` 里处理收窄后的选择，难度和性格只调整阈值（GDD §13），困难难度用 `ai/predict.ts` 做一步前瞻。`scenes/GameScene.ts` 把 `preRoll` / `action` 映射到右栏按钮、手牌和快捷键，其余决策交给通用的 `ui/ChoiceModal`。场景顺序：Boot → Setup → Game → Result。
+**AI 和 UI 都是 Controller。** `ai/ai.ts` 的 `AIController.decide(c)` 在 `switch (c.kind)` 里处理收窄后的选择，难度和性格只调整阈值（GDD §13），困难难度用 `ai/predict.ts` 做一步前瞻。`scenes/GameScene.ts` 持有棋盘和世界相机，`scenes/HudScene.ts` 是叠在上面的固定 HUD（`ui/ActionDock` 行动坞、`ui/PlayerCards` 玩家小卡、`ui/TileInfo` 点击详情）。HUD 只通过 `GameScene.toScreen(rect)` 换算棋盘坐标。`preRoll` / `action` 映射到行动坞按钮、手牌和快捷键，其余决策交给通用的 `ui/ChoiceModal`。场景顺序：Boot → Title → HeroSelect →（Setup = 高级设置）→ Versus → Game → Result。
 
 **美术可选**：`vite.config.ts` 在启动时检查 `../assets/atlas.*` 是否存在，并注入 `__HAS_ATLAS__`。缺少的帧由 `BootScene` 按 `ui/assets.ts` 的 `frameSpecs()` 用 Canvas 生成同名占位纹理。`publicDir` 指向 `../assets`。替换图集后需要重启 dev server。画面固定 1280×720，布局常量在 `ui/layout.ts`。
 
