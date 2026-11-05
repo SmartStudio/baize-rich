@@ -26,12 +26,13 @@ export class Button extends Phaser.GameObjects.Container {
     this.fill = o.fill ?? COLORS.panelLight;
     this.bg = scene.add.rectangle(0, 0, o.w, o.h, this.fill).setOrigin(0, 0).setStrokeStyle(2, COLORS.outline);
     const hasHint = !!o.hint;
-    this.label = txt(scene, o.w / 2, hasHint ? o.h / 2 - 8 : o.h / 2, o.label, {
-      size: o.size ?? 14, color: o.textColor ?? HEX.parchment, origin: [0.5, 0.5], bold: true,
+    const size = o.size ?? 14;
+    this.label = txt(scene, o.w / 2, hasHint ? o.h / 2 - Math.max(8, size * 0.45) : o.h / 2, o.label, {
+      size, color: o.textColor ?? HEX.parchment, origin: [0.5, 0.5], bold: true,
     });
     this.add([this.bg, this.label]);
     if (hasHint) {
-      this.hintText = txt(scene, o.w / 2, o.h / 2 + 9, o.hint!, { size: 11, color: o.hintColor ?? HEX.dim, origin: [0.5, 0.5], wrap: o.w - 12, align: 'center' });
+      this.hintText = txt(scene, o.w / 2, o.h / 2 + Math.max(9, size * 0.6), o.hint!, { size: 11, color: o.hintColor ?? HEX.dim, origin: [0.5, 0.5], wrap: o.w - 12, align: 'center' });
       this.add(this.hintText);
     }
     this.setSize(o.w, o.h);

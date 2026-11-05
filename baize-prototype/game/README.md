@@ -26,7 +26,7 @@ URL 参数：
 | `?seed=123` | 固定随机种子（设置界面与 auto 模式都生效） |
 | `?speed=1` | auto 模式的动画倍速 |
 
-快捷键（GDD §14）：空格 掷骰 / 确认，B 升级，C 出符，Enter 结束回合，Esc 取消，F 切换倍速（1/2/4/8），S 下载对局记录；弹窗内数字键 1–9 直接选择。
+快捷键（GDD §14）：空格 掷骰 / 确认，B 升级，C 出符，Enter 结束回合，Esc 取消，F 切换倍速（1/2/4/8），L 展开 / 收起战报，S 下载对局记录；弹窗内数字键 1–9 直接选择。
 
 ### 存档与对局记录
 
@@ -59,7 +59,7 @@ src/
   ai/          AI 控制器（GDD §13）：难度 easy/normal/hard，性格 稳健/激进/守财；predict.ts 为移动预测
   sim/         无头驱动 headless.ts、批量模拟库 simulate.ts、命令行 run.ts、参数扫描 sweep.ts、对局记录复盘 replay.ts
   scenes/      Phaser 场景：Boot（载图集/生成占位）→ Setup → Game → Result
-  ui/          画面组件：BoardView、PlayerCards（左栏）、TopBar、SidePanel（右栏）、ChoiceModal、assets、theme、layout
+  ui/          画面组件：BoardView、TopBar（左栏顶部轮次）、PlayerCards（左栏）、LogPanel（战报）、SidePanel（右栏与回合坞）、Cutscene（过场横幅）、ChoiceModal、assets、theme、layout
 tests/         vitest：移动/岔路/灵台/地形、租金、突破、灵脉、破产、胜负、确定性回放、对局记录
 scripts/       screenshots.cjs（Playwright 冒烟测试 + 截图）
 ```

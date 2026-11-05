@@ -1,20 +1,18 @@
-// Right column: current tile info, hand, 战报 log, action buttons, dice button.
+// Right column: utility buttons, tile card, hand, action buttons, roll dock (whose turn + dice + 掷骰子).
 import Phaser from 'phaser';
 import type { Game } from '../core/engine';
 import { nominalRent, rentFor } from '../core/rules';
 import type { GameState, NodeId } from '../core/types';
 import { addImg, setFrame } from './assets';
 import { RIGHT } from './layout';
-import { COLORS, HEX, PLAYER_HEX, panel, tab, txt, type Tab } from './theme';
+import { COLORS, HEX, PLAYER_COLORS, PLAYER_HEX, panel, tab, txt, type Tab } from './theme';
 import { Button } from './widgets';
 
 const REGION_HEX: Record<string, string> = { wood: '#6FCF7F', fire: '#E0663A', water: '#5FB7E0', earth: '#B48BE0' };
 const CAT_HEX: Record<string, string> = { attack: HEX.bad, guard: '#5FB7E0', move: HEX.good, wealth: HEX.gold };
-const TILE_TAB = { label: '当前地块', fill: 0x3f8a4f };
+const TILE_TAB = { label: '地块', fill: 0x3f8a4f };
 const CARD_TAB = { label: '符箓', fill: 0x6a55c8 };
 const CARD = { w: 88, h: 120, gap: 6 };
-/** 战报 panel; text rows live between `textY` and `textBottom`. */
-const LOG = { y: 430, h: 106, textY: 444, textBottom: 532, maxLines: 200, wheelPx: 34 };
 
 export class SidePanel {
   private tileTab: Tab;
@@ -27,15 +25,18 @@ export class SidePanel {
   private prevCard: Phaser.GameObjects.Image;
   private handTab: Phaser.GameObjects.Text;
   private handLayer: Phaser.GameObjects.Container;
-  private logText: Phaser.GameObjects.Text;
-  /** Each logged line, pre-wrapped into display rows. */
-  private logEntries: string[][] = [];
-  /** Rows scrolled up from the newest line; 0 = stuck to the bottom. */
-  private logScroll = 0;
-  private logRows: number;
-  private logWheel = 0;
-  private logThumb: Phaser.GameObjects.Rectangle;
+  private dock: Phaser.GameObjects.Rectangle;
+  private turnPortrait: Phaser.GameObjects.Image;
+  private turnName: Phaser.GameObjects.Text;
+  private turnHint: Phaser.GameObjects.Text;
   private dice: Phaser.GameObjects.Image[];
+  private rollGlow: Phaser.GameObjects.Rectangle;
+  private rollPulse: Phaser.Tweens.Tween;
+  private rollWaiting = false;
+  private lastTurn: [GameState, boolean] | null = null;
+  readonly btnSpeed: Button;
+  readonly btnLog: Button;
+  readonly btnSave: Button;
   readonly btnUpgrade: Button;
   readonly btnCast: Button;
   readonly btnEnd: Button;
@@ -47,49 +48,44 @@ export class SidePanel {
   constructor(private scene: Phaser.Scene, private game: Game) {
     const s = scene;
     const x = RIGHT.x;
-    // --- tile info (y 80–252)
-    panel(s, x, 80, RIGHT.w, 172);
-    this.tileTab = tab(s, x + RIGHT.w / 2, 80, TILE_TAB.label, TILE_TAB.fill);
-    s.add.rectangle(x + 10, 98, 68, 68, COLORS.outline).setOrigin(0, 0);
-    this.prevTile = addImg(s, x + 12, 100, 'tile_gate').setOrigin(0, 0);
-    this.prevObj = addImg(s, x + 44, 148, 'obj_gate').setOrigin(0.5, 1);
-    this.prevCard = addImg(s, x + 44, 132, 'card_attack').setScale(0.5).setVisible(false);
-    this.tileTitle = txt(s, x + 90, 96, '', { size: 18, bold: true });
-    this.tileSub = txt(s, x + 90, 122, '', { size: 12, color: HEX.good });
-    this.tileBody = txt(s, x + 90, 140, '', { size: 12, wrap: RIGHT.w - 100, lineSpacing: 2 });
-    this.tileNote = txt(s, x + 10, 172, '', { size: 11, color: HEX.dim, wrap: 74 });
-    // --- hand (y 266–416)
-    panel(s, x, 266, RIGHT.w, 150);
-    this.handTab = tab(s, x + RIGHT.w / 2, 266, '符箓', CARD_TAB.fill).label;
+    const w = RIGHT.w;
+    // --- utility row
+    const uw = (w - 8) / 3;
+    this.btnSpeed = new Button(s, x, RIGHT.utilY, { w: uw, h: RIGHT.utilH, label: '', size: 12 });
+    this.btnLog = new Button(s, x + uw + 4, RIGHT.utilY, { w: uw, h: RIGHT.utilH, label: '战报 · L', size: 12 });
+    this.btnSave = new Button(s, x + 2 * (uw + 4), RIGHT.utilY, { w: uw, h: RIGHT.utilH, label: '记录 · S', size: 12 });
+    // --- tile card
+    const ty = RIGHT.tileY;
+    panel(s, x, ty, w, RIGHT.tileH);
+    this.tileTab = tab(s, x + w / 2, ty, TILE_TAB.label, TILE_TAB.fill);
+    s.add.rectangle(x + 10, ty + 18, 68, 68, COLORS.outline).setOrigin(0, 0);
+    this.prevTile = addImg(s, x + 12, ty + 20, 'tile_gate').setOrigin(0, 0);
+    this.prevObj = addImg(s, x + 44, ty + 68, 'obj_gate').setOrigin(0.5, 1);
+    this.prevCard = addImg(s, x + 44, ty + 52, 'card_attack').setScale(0.5).setVisible(false);
+    this.tileTitle = txt(s, x + 88, ty + 16, '', { size: 17, bold: true });
+    this.tileSub = txt(s, x + 88, ty + 40, '', { size: 11, color: HEX.good, wrap: w - 96 });
+    this.tileBody = txt(s, x + 88, ty + 58, '', { size: 11, wrap: w - 96, lineSpacing: 1 });
+    this.tileNote = txt(s, x + 10, ty + 92, '', { size: 11, color: HEX.dim, wrap: 72 });
+    // --- hand
+    panel(s, x, RIGHT.handY, w, RIGHT.handH);
+    this.handTab = tab(s, x + w / 2, RIGHT.handY, '符箓', CARD_TAB.fill).label;
     this.handLayer = s.add.container(0, 0);
-    // --- log (y 430–536)
-    panel(s, x, LOG.y, RIGHT.w, LOG.h);
-    tab(s, x + RIGHT.w / 2, LOG.y, '战报', 0xb03a40);
-    this.logText = txt(s, x + 10, LOG.textY, 'x', { size: 12, wrap: RIGHT.w - 26, lineSpacing: 3 });
-    const oneRow = this.logText.height;
-    const rowH = this.logText.setText('x\nx').height - oneRow;
-    this.logRows = 1 + Math.floor((LOG.textBottom - LOG.textY - oneRow) / rowH);
-    this.logText.setText('');
-    s.add.rectangle(x + RIGHT.w - 10, LOG.textY, 6, LOG.textBottom - LOG.textY, COLORS.outline).setOrigin(0, 0);
-    this.logThumb = s.add.rectangle(x + RIGHT.w - 9, LOG.textY, 4, 10, COLORS.dim).setOrigin(0, 0).setVisible(false);
-    s.input.on('wheel', (ptr: Phaser.Input.Pointer, _objs: unknown, _dx: number, dy: number) => {
-      if (ptr.x < x || ptr.x > x + RIGHT.w || ptr.y < LOG.y || ptr.y > LOG.y + LOG.h) return;
-      this.logWheel += dy;
-      const rows = Math.trunc(this.logWheel / LOG.wheelPx);
-      if (rows === 0) return;
-      this.logWheel -= rows * LOG.wheelPx;
-      this.logScroll -= rows;
-      this.renderLog();
-    });
-    // --- buttons (y 546)
-    const bw = (RIGHT.w - 16) / 3;
-    this.btnUpgrade = new Button(s, x, 546, { w: bw, h: 34, label: '升级' });
-    this.btnCast = new Button(s, x + (bw + 8), 546, { w: bw, h: 34, label: '出符' });
-    this.btnEnd = new Button(s, x + 2 * (bw + 8), 546, { w: bw, h: 34, label: '结束', fill: 0xc03a40 });
-    // --- dice + roll (y 590–712)
-    panel(s, x, 590, RIGHT.w, 122, COLORS.panel, COLORS.gold);
-    this.dice = [addImg(s, x + 36, 650, 'die_1'), addImg(s, x + 72, 660, 'die_6')];
-    this.btnRoll = new Button(s, x + 104, 604, { w: RIGHT.w - 118, h: 94, label: '掷骰子', size: 26, fill: COLORS.gold, textColor: HEX.ink });
+    // --- action buttons (key hints on the buttons replace the old legend)
+    const bw = (w - 16) / 3;
+    const by = RIGHT.btnY;
+    this.btnUpgrade = new Button(s, x, by, { w: bw, h: RIGHT.btnH, label: '升级', hint: 'B' });
+    this.btnCast = new Button(s, x + (bw + 8), by, { w: bw, h: RIGHT.btnH, label: '出符', hint: 'C' });
+    this.btnEnd = new Button(s, x + 2 * (bw + 8), by, { w: bw, h: RIGHT.btnH, label: '结束回合', hint: 'Enter', fill: 0xc03a40, hintColor: HEX.parchment });
+    // --- roll dock: whose turn, dice, 掷骰子
+    const dy = RIGHT.dockY;
+    this.dock = panel(s, x, dy, w, RIGHT.dockH, COLORS.panel, COLORS.gold);
+    this.turnPortrait = addImg(s, x + 12, dy + 12, 'por_body').setOrigin(0, 0).setScale(48 / 64);
+    this.turnName = txt(s, x + 70, dy + 14, '', { size: 16, bold: true });
+    this.turnHint = txt(s, x + 70, dy + 38, '', { size: 12, color: HEX.dim, wrap: w - 80 });
+    this.dice = [addImg(s, x + w / 2 - 36, dy + 110, 'die_1').setScale(2), addImg(s, x + w / 2 + 36, dy + 110, 'die_6').setScale(2)];
+    this.btnRoll = new Button(s, x + 12, dy + 158, { w: w - 24, h: 86, label: '掷骰子', hint: '空格', size: 28, fill: COLORS.gold, textColor: HEX.ink, hintColor: HEX.ink });
+    this.rollGlow = s.add.rectangle(x + 6, dy + 152, w - 12, 98).setOrigin(0, 0).setStrokeStyle(4, COLORS.parchment).setAlpha(0);
+    this.rollPulse = s.tweens.add({ targets: this.rollGlow, alpha: { from: 0.15, to: 1 }, duration: 450, yoyo: true, repeat: -1, paused: true });
   }
 
   onCardClick(fn: (card: string) => void): void {
@@ -100,6 +96,27 @@ export class SidePanel {
     this.castable = new Set(cards);
   }
 
+  /** Dock header: whose turn it is. A human's own turn lights the dock up. */
+  setTurn(state: GameState, human: boolean): void {
+    this.lastTurn = [state, human];
+    const p = state.players[state.current];
+    setFrame(this.turnPortrait, `por_${p.hero}`);
+    this.turnName.setText(state.over ? '对局结束' : `${p.name} 的回合`).setColor(PLAYER_HEX[p.seat]);
+    this.turnHint.setText(state.over ? '' : human ? (this.rollWaiting ? '轮到你了：掷骰，或先升级、出符' : '可升级、出符，或结束回合') :'AI 正在行动…').setColor(human ? HEX.gold : HEX.dim);
+    this.dock.setStrokeStyle(human && !state.over ? 4 : 2, human && !state.over ? PLAYER_COLORS[p.seat] : COLORS.gold);
+  }
+
+  /** The roll button breathes while it waits for a human to press it. */
+  setRollWaiting(on: boolean): void {
+    this.rollWaiting = on;
+    if (this.lastTurn) this.setTurn(...this.lastTurn);
+    if (on) this.rollPulse.resume();
+    else {
+      this.rollPulse.pause();
+      this.rollGlow.setAlpha(0);
+    }
+  }
+
   showTile(id: NodeId | null, state: GameState): void {
     const g = this.game;
     if (this.hoverCard) return;
@@ -108,6 +125,7 @@ export class SidePanel {
     const node = id ?? state.players[state.current].pos;
     const n = g.board.node(node);
     const tt = g.data.board.tileTypes[n.type];
+    this.tileTab.label.setText(id ? '地块' : '脚下地块');
     this.prevTile.setVisible(n.type !== 'altar');
     this.prevObj.setVisible(n.type !== 'altar');
     if (n.type === 'land') {
@@ -117,7 +135,7 @@ export class SidePanel {
       setFrame(this.prevObj, t.level > 0 ? `bld_${t.level}` : `decor_${n.region}`);
       this.tileTitle.setText(n.name);
       this.tileSub.setText(`${region.name} · ${t.owner === null ? '无主灵田' : `${g.pn(t.owner)} 的${g.data.board.buildings[t.level].name}`}`).setColor(REGION_HEX[n.region!]);
-      const lines = [`售价 ${n.price}${t.owner !== null ? `   当前租金 ${rentFor(state, g.board, g.data, node).amount}` : ''}`];
+      const lines = [`售价 ${n.price}${t.owner !== null ? `  当前租金 ${rentFor(state, g.board, g.data, node).amount}` : ''}`];
       for (let lv = 0; lv <= 4; lv++) {
         lines.push(`${t.level === lv && t.owner !== null ? '▶' : '  '}Lv${lv} ${g.data.board.buildings[lv].name}  租 ${nominalRent(g.data, n.price!, lv)}`);
       }
@@ -135,7 +153,7 @@ export class SidePanel {
     }
   }
 
-  /** While a hand card is hovered, the info panel shows that card instead of the tile. */
+  /** While a hand card is hovered, the tile card shows that card instead. */
   private showCard(card: string): void {
     const g = this.game;
     const spell = g.spellById.get(card)!;
@@ -165,24 +183,27 @@ export class SidePanel {
     const p = viewer === null ? null : state.players[viewer];
     const shown = p ?? state.players[state.current];
     const n = shown.hand.length;
+    const x = RIGHT.x;
+    const top = RIGHT.handY + 18;
+    const room = RIGHT.handH - 26;
     // shrink cards so the whole hand fits side by side in the panel
-    const k = Math.min(1, (RIGHT.w - 20 - (n - 1) * CARD.gap) / (Math.max(1, n) * CARD.w));
+    const k = Math.min(1, (RIGHT.w - 20 - (n - 1) * CARD.gap) / (Math.max(1, n) * CARD.w), room / CARD.h);
     const cw = CARD.w * k;
     const ch = CARD.h * k;
     const step = cw + CARD.gap;
-    const by = 346 - ch / 2;
+    const left = x + (RIGHT.w - (n * step - CARD.gap)) / 2;
+    const by = top + (room - ch) / 2;
     this.handTab.setText(`符箓 ${n} / ${limit}`);
     if (!p) {
-      this.handLayer.add(txt(s, RIGHT.x + RIGHT.w / 2, 300, `${shown.name} 的手牌（不可见）`, { size: 12, color: HEX.dim, origin: [0.5, 0.5] }));
+      this.handLayer.add(txt(s, x + RIGHT.w / 2, top + 10, `${shown.name} 的手牌（不可见）`, { size: 12, color: HEX.dim, origin: [0.5, 0.5] }));
       shown.hand.forEach((_, i) => {
-        const bx = RIGHT.x + 10 + i * step;
-        this.handLayer.add(s.add.rectangle(bx, 318, cw, Math.min(90, ch), COLORS.panelLight).setOrigin(0, 0).setStrokeStyle(2, COLORS.outline));
+        this.handLayer.add(s.add.rectangle(left + i * step, by + 16, cw, Math.min(90, ch) - 16, COLORS.panelLight).setOrigin(0, 0).setStrokeStyle(2, COLORS.outline));
       });
       return;
     }
     p.hand.forEach((card, i) => {
       const spell = g.spellById.get(card)!;
-      const bx = RIGHT.x + 10 + i * step;
+      const bx = left + i * step;
       const can = this.castable.has(card);
       const c = s.add.container(bx, by);
       const img = addImg(s, 0, 0, `card_${spell.cat}`).setOrigin(0, 0).setScale(k);
@@ -203,7 +224,7 @@ export class SidePanel {
       img.on('pointerdown', () => { if (this.castable.has(card)) this.cardClick?.(card); });
       this.handLayer.add(c);
     });
-    if (n === 0) this.handLayer.add(txt(s, RIGHT.x + RIGHT.w / 2, 340, `${p.name} 暂无符箓`, { size: 12, color: PLAYER_HEX[p.seat], origin: [0.5, 0.5] }));
+    if (n === 0) this.handLayer.add(txt(s, x + RIGHT.w / 2, top + room / 2, `${p.name} 暂无符箓`, { size: 12, color: PLAYER_HEX[p.seat], origin: [0.5, 0.5] }));
   }
 
   setDice(d: [number, number]): void {
@@ -223,29 +244,6 @@ export class SidePanel {
         },
       });
     });
-  }
-
-  log(line: string): void {
-    const rows = this.logText.getWrappedText(line);
-    this.logEntries.push(rows);
-    if (this.logEntries.length > LOG.maxLines) this.logEntries.shift();
-    // reading older lines: keep the same rows in view while new ones arrive
-    if (this.logScroll > 0) this.logScroll += rows.length;
-    this.renderLog();
-  }
-
-  private renderLog(): void {
-    const all = this.logEntries.flat();
-    const maxScroll = Math.max(0, all.length - this.logRows);
-    this.logScroll = Phaser.Math.Clamp(this.logScroll, 0, maxScroll);
-    const end = all.length - this.logScroll;
-    this.logText.setText(all.slice(Math.max(0, end - this.logRows), end).join('\n'));
-    this.logThumb.setVisible(maxScroll > 0);
-    if (maxScroll > 0) {
-      const track = LOG.textBottom - LOG.textY;
-      const h = Math.max(8, (track * this.logRows) / all.length);
-      this.logThumb.setSize(4, h).setY(LOG.textY + (track - h) * (1 - this.logScroll / maxScroll));
-    }
   }
 }
 
