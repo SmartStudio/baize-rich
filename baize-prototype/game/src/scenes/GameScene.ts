@@ -9,7 +9,8 @@ import { Game } from '../core/engine';
 import type { GameEvent, GameEventType } from '../core/events';
 import { toRecord, type GameRecord } from '../core/record';
 import { countOwned, cultivation, nominalRent, realmName, totalAssets } from '../core/rules';
-import type { GameState, NodeId, RoadId } from '../core/types';
+import { ALTAR } from '../core/board';
+import type { GameState, NodeId } from '../core/types';
 import { BoardView } from '../ui/BoardView';
 import { ChoiceModal, type ModalOption, type ModalSpec } from '../ui/ChoiceModal';
 import { Cutscene, type BannerSpec } from '../ui/Cutscene';
@@ -412,7 +413,7 @@ export class GameScene extends Phaser.Scene {
     this.nodeOptions.clear();
     for (const o of c.options) if (o.node && !this.nodeOptions.has(o.node)) this.nodeOptions.set(o.node, o.id);
     if (c.kind === 'exitRoad' || c.kind === 'altarPass') {
-      for (const o of c.options) if (o.id !== 'stop') this.nodeOptions.set(g.board.gateOf(o.id as RoadId), o.id);
+      for (const o of c.options) if (o.id !== 'stop') this.nodeOptions.set(g.board.corridorEnd(ALTAR, o.id), o.id);
     }
     this.boardView.setClickable([...this.nodeOptions.keys()]);
     const p = g.state.players[c.player];

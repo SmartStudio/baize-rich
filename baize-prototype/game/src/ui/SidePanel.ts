@@ -147,7 +147,7 @@ export class SidePanel {
         setFrame(this.prevObj, `obj_${n.type}`);
       }
       this.tileTitle.setText(n.name);
-      this.tileSub.setText(n.ringIndex >= 0 ? `外环 ${node}` : n.type === 'altar' ? '秘境中心' : `问道之路 ${node}`).setColor(HEX.dim);
+      this.tileSub.setText(n.outer ? `外环 ${node}` : n.type === 'altar' ? '秘境中心' : `问道之路 ${node}`).setColor(HEX.dim);
       this.tileBody.setText(tt.desc);
       this.tileNote.setText('');
     }

@@ -5,7 +5,7 @@
 // answers with one of the option ids via `game.answer(id)`. Every decision in
 // the game, from "roll the dice" to "use 金光符?", goes through this one door,
 // which is what lets the same engine drive the UI, the AI and the headless sim.
-import type { NodeId, RegionId, RoadId } from './types';
+import type { NodeId, RegionId } from './types';
 
 export type PreRollAct =
   | { t: 'roll' }
@@ -44,11 +44,12 @@ export interface ChoiceValueMap {
   adjust: number;
   /** 迷踪: +1 clockwise, -1 counter-clockwise. */
   direction: 1 | -1;
-  fork: 'ring' | 'road';
-  /** At the altar with steps left: stop, or pay toll and exit by a road. */
-  altarPass: 'stop' | RoadId;
-  /** Leaving the altar at the start of a move. */
-  exitRoad: RoadId;
+  /** At a fork: the next node to step to. */
+  fork: NodeId;
+  /** At the altar with steps left: stop, or pay toll and leave through this neighbour. */
+  altarPass: 'stop' | NodeId;
+  /** Leaving the altar at the start of a move: the neighbour to step to. */
+  exitRoad: NodeId;
   buy: boolean;
   /** 避劫符 when paying rent. */
   rentReact: boolean;

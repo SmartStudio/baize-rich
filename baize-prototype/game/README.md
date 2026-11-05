@@ -51,7 +51,7 @@ src/
   core/        纯 TS 规则引擎（禁止 import Phaser）
     types.ts     JSON 数据类型 + GameState（纯 JSON，可序列化）
     data.ts      读取 ../data/*.json
-    board.ts     由 board.json 构建的棋盘图：外环 R0–R31（顺时针 = 索引递增）、四条 2 格神道、ALTAR
+    board.ts     由 board.json 构建的有向路网：沿 next 前进（多个即岔路）、反向边 prev、双向神道、外环距离
     rules.ts     纯计算：租金、升级费、突破费、灵脉之主、总资产……（UI / AI 也用）
     engine.ts    Game 类：回合流程、移动、结算、符箓、英雄、天魔、白泽、任务、胜负
     choices.ts   决策接口：PendingChoice / Controller 类型
@@ -99,10 +99,15 @@ UI 侧（`GameScene`）就是另一个 Controller：`preRoll` / `action` 选择�
 4. 在 `tests/` 里加一条测试。
 
 **加一种地块**
-1. `data/board.json`：在 `tileTypes` 里加类型说明，并把某个 `ring` / 神道节点的 `type` 改成它；在 `types.ts` 的 `TileType` 里加上名字。
+1. `data/board.json`：在 `tileTypes` 里加类型说明，并把 `nodes` 里某个节点的 `type` 改成它；在 `types.ts` 的 `TileType` 里加上名字。
 2. `engine.ts` 的 `settle()` 里加 `case`；如果"经过"也有效果，加到 `enterNode()`。
 3. 美术：图集里加 `tile_<type>` 与 `obj_<type>`；占位图在 `ui/assets.ts` 的 `TYPE_FILL` 里加一行。
 4. AI：在 `AIController.landingScore()` 里给它估值。
+
+**改地图**
+1. `data/board.json` 的 `nodes`：每格写 `id`、`type`、`pos`、`next`（前进方向的后继格，多于一个是岔路，`next[0]` 是主线）。灵田加 `region`、`name`、`price`；外环格标 `outer: true`；神道格标 `road`，并把内外两个邻格都写进 `next`。
+2. 必须有一个 `start`、一个 `cliff`，以及 id 为 `ALTAR` 的灵台。需要提供的字段和各条规则的对应关系见 `NOTES.md` 第 10 节。
+3. 在 `tests/` 里加一条走法测试（参考 `tests/graph.test.ts`）。
 
 **加一名英雄**
 1. `data/heroes.json` 加条目；`types.ts` 的 `HeroId` 与 `core/heroes.ts` 的 `HERO_IDS` 加 id。

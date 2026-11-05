@@ -13,7 +13,7 @@
 // serialisable, but a game is fully reproducible from (setup, answer history):
 // see Game.replay().
 // ---------------------------------------------------------------------------
-import { ALTAR, Board, REGION_IDS, ROAD_IDS } from './board';
+import { ALTAR, Board, REGION_IDS } from './board';
 import type {
   ActionAct, ChoiceKind, ChoiceOption, ChoiceSpec, ChoiceValueMap, PendingChoice, PendingChoiceOf,
   PreRollAct, Target, ThreatKind,
@@ -27,7 +27,7 @@ import {
   upgradeCost,
 } from './rules';
 import type {
-  ActiveTask, EventCardData, GameData, GameSetup, GameState, HeroData, NodeId, PlayerState, RegionId, RoadId,
+  ActiveTask, EventCardData, GameData, GameSetup, GameState, HeroData, NodeId, PlayerState, RegionId,
   SpellData, TaskData, TurnState,
 } from './types';
 
@@ -204,7 +204,7 @@ export class Game {
       winner: null,
       endReason: null,
       players: this.setup.players.map((sp, i) => ({
-        seat: i, name: sp.name, hero: sp.hero, pos: this.board.startId, roadDir: 'in',
+        seat: i, name: sp.name, hero: sp.hero, pos: this.board.startId, cameFrom: null,
         stones: cfg.startStones + cfg.seatBonusStones[i], pills: cfg.startPills, cultBase: 0, peakCult: 0, btEarned: 0, btUsed: 0,
         hand: [], divines: [], tasks: [], seal: false, jailed: false, jailTurns: 0, bound: false,
         wardUntilRound: 0, tremorRound: 0, treasure: [], rentImmuneUntilTurn: -1, turnsTaken: 0, ultUses: 0,
@@ -459,6 +459,7 @@ export class Game {
     }
     const from = p.pos;
     p.pos = this.board.cliffId;
+    p.cameFrom = null;
     p.jailed = true;
     p.jailTurns = 0;
     this.emit('teleport', `${this.pn(seat)} 前往思过崖面壁`, { player: seat, node: p.pos, from });
@@ -506,7 +507,7 @@ export class Game {
     const t = this.state.turn;
     for (;;) {
       const opts: ChoiceOption<PreRollAct>[] = [{ id: 'roll', label: '掷骰子', value: { t: 'roll' } }];
-      const onRing = this.board.isRing(p.pos);
+      const onRing = this.board.node(p.pos).outer;
       for (const card of new Set(p.hand)) {
         const s = this.spellById.get(card)!;
         if (s.timing !== 'preroll' && card !== 'discount') continue;
@@ -518,7 +519,7 @@ export class Game {
         opts.push({ id: `cast:${card}`, label: `${s.name}（${s.cost} 灵丹）`, value: { t: 'cast', card }, hint: s.desc });
       }
       if (this.ultAvailable(seat, 'preroll')) opts.push(this.ultOption(seat));
-      if (p.divines.includes('shrink') && this.state.round >= p.shrinkReadyRound && onRing) {
+      if (p.divines.includes('shrink') && this.state.round >= p.shrinkReadyRound && onRing && this.board.node(p.pos).region) {
         opts.push({ id: 'shrink', label: '神通【缩地成寸】', value: { t: 'shrink' } });
       }
       if (this.skillAvailable(seat, 'preroll')) opts.push(this.skillOption(seat));
@@ -562,7 +563,8 @@ export class Game {
       case 'reverse': t.reverse = true; return 'ok';
       case 'discount': t.discount = true; return 'ok';
       case 'burrow': {
-        const { gate, path } = this.board.nearestGateAhead(p.pos, 1);
+        const path = this.board.pathToGate(p.pos);
+        const gate = path[path.length - 1];
         let from = p.pos;
         for (const n of path) {
           p.pos = n;
@@ -571,6 +573,7 @@ export class Game {
           from = n;
         }
         this.emit('info', `${this.pn(seat)} 遁地至【${this.nodeName(gate)}】`, { player: seat, node: gate });
+        p.cameFrom = null;
         t.lastPath = [];
         return 'moved';
       }
@@ -580,8 +583,8 @@ export class Game {
 
   private *useShrink(seat: number): Flow {
     const p = this.state.players[seat];
-    const region = this.board.sideRegion(p.pos)!;
-    const opts = this.board.sideNodes(region).filter((n) => n !== p.pos).map((n) => ({
+    const region = this.board.node(p.pos).region!;
+    const opts = this.board.regionNodes(region).filter((n) => n !== p.pos).map((n) => ({
       id: n, label: this.nodeLabel(n), value: n, node: n,
     }));
     const node = yield* this.ask({
@@ -606,7 +609,7 @@ export class Game {
     }
     let dir: 1 | -1 = 1;
     if (t.reverse) dir = -1;
-    else if (p.mazeAvailable && this.board.isRing(p.pos)) {
+    else if (p.mazeAvailable && this.board.node(p.pos).outer) {
       dir = yield* this.ask({
         player: seat, kind: 'direction', title: '迷踪', desc: `本次移动 ${total} 步，可选择逆时针`,
         options: [
@@ -651,8 +654,8 @@ export class Game {
   }
 
   /**
-   * Step-by-step movement (§3.3 / §3.4): forks at gates, roads inward, altar stop/toll,
-   * outward exit, start salary, mire, water slide, passing effects.
+   * Step-by-step movement (§3.3 / §3.4) along the board graph: forks, altar stop/toll,
+   * start salary, mire, water slide, passing effects.
    */
   *walk(seat: number, steps: number, dir: 1 | -1): Flow {
     const p = this.state.players[seat];
@@ -660,54 +663,30 @@ export class Game {
     const b = this.board;
     let remaining = steps;
     let node = p.pos;
+    let cameFrom = b.isTwoWay(node) ? p.cameFrom : null;
     const path: NodeId[] = [node];
     let gates = 0;
-    let mode: 'ring' | 'in' | 'out';
-    let road: RoadId | null = null;
-    let noForkAt: NodeId | null = null;
     let blocked = false;
+    let forced: NodeId | null = null;
 
     if (node === ALTAR) {
-      road = yield* this.ask({
+      forced = yield* this.ask({
         player: seat, kind: 'exitRoad', title: '离开白泽灵台', desc: `选择一条神道向外走（${remaining} 步）`,
-        options: ROAD_IDS.map((r) => ({ id: r, label: this.exitLabel(r), value: r, node: b.roads[r].nodes[1] })),
+        options: b.node(ALTAR).next.map((x) => ({ id: x, label: this.exitLabel(x), value: x, node: x })),
         ctx: { remaining },
       });
-      mode = 'out';
-    } else if (b.isRoadNode(node)) {
-      road = b.node(node).road!;
-      mode = p.roadDir;
-    } else {
-      mode = 'ring';
     }
 
     while (remaining > 0) {
-      if (mode === 'ring' && b.node(node).type === 'gate' && node !== noForkAt) {
-        const gr = b.node(node).road!;
-        const ch = yield* this.ask({
-          player: seat, kind: 'fork', title: `岔路 · ${this.nodeName(node)}`, desc: `剩余 ${remaining} 步：继续外环，或拐入${this.roadName(gr)}？`,
-          options: [
-            { id: 'ring', label: '继续外环', value: 'ring', node: b.ringStep(node, dir) },
-            { id: 'road', label: `拐入${this.roadName(gr)}`, value: 'road', node: b.roads[gr].nodes[0] },
-          ],
-          defaultId: 'ring', ctx: { remaining, node },
-        });
-        if (ch === 'road') {
-          mode = 'in';
-          road = gr;
-          p.stats.roadEntries++;
-          this.emit('fork', `${this.pn(seat)} 拐入${this.roadName(gr)}`, { player: seat, node });
-        }
-      }
-      let next: NodeId;
-      if (mode === 'ring') next = b.ringStep(node, dir);
-      else if (mode === 'in') next = b.roadInward(node, road!);
-      else {
-        next = b.roadOutward(node, road!);
-        if (b.node(next).type === 'gate') { mode = 'ring'; noForkAt = next; }
+      let next = forced;
+      forced = null;
+      if (next === null) {
+        const exits = b.exits(node, cameFrom, dir);
+        next = exits.length > 1 ? yield* this.askFork(seat, node, exits, remaining) : exits[0];
       }
       remaining--;
       this.enterNode(seat, node, next, remaining, false);
+      cameFrom = node;
       node = next;
       path.push(next);
       const nn = b.node(next);
@@ -735,35 +714,33 @@ export class Game {
             player: seat, kind: 'altarPass', title: '白泽灵台', desc: `剩余 ${remaining} 步：停留结算，或付 ${this.cfg.altarToll} 灵丹借道离开？`,
             options: [
               { id: 'stop', label: '停留灵台', value: 'stop' as const },
-              ...ROAD_IDS.map((r) => ({
-                id: r, label: `借道 · ${this.exitLabel(r)}`, value: r, node: b.roads[r].nodes[1],
-              })),
+              ...nn.next.map((x) => ({ id: x, label: `借道 · ${this.exitLabel(x)}`, value: x, node: x })),
             ],
             defaultId: 'stop', ctx: { remaining },
           });
           if (ch === 'stop') remaining = 0;
           else {
             p.pills -= this.cfg.altarToll;
-            mode = 'out';
-            road = ch;
-            this.emit('toll', `${this.pn(seat)} 付 ${this.cfg.altarToll} 灵丹借道，经${this.roadName(ch)}离开`, { player: seat, node: ALTAR });
+            forced = ch;
+            this.emit('toll', `${this.pn(seat)} 付 ${this.cfg.altarToll} 灵丹借道，经${b.roadName(b.node(ch).road!)}离开`, { player: seat, node: ALTAR });
           }
         } else {
           remaining = 0;
         }
       }
     }
-    // 寒冰滑行: ending a ring move on water slides one more cell in the same direction.
+    // 寒冰滑行: ending a move on water slides one more cell in the same direction.
     const fin = b.node(node);
-    if (mode === 'ring' && !blocked && fin.type === 'land' && fin.region === 'water') {
-      const next = b.ringStep(node, dir);
+    if (!blocked && fin.type === 'land' && fin.region === 'water') {
+      const next = b.exits(node, cameFrom, dir)[0];
       this.emit('slide', `${this.pn(seat)} 踏上寒冰，滑行 1 格`, { player: seat, node: next, from: node });
       this.enterNode(seat, node, next, 0, true);
+      cameFrom = node;
       node = next;
       path.push(next);
     }
     p.pos = node;
-    p.roadDir = mode === 'out' ? 'out' : 'in';
+    p.cameFrom = cameFrom;
     t.lastPath = path;
     t.lastDir = dir;
     if (gates >= 2) p.stats.twoGateMoves++;
@@ -771,6 +748,27 @@ export class Game {
       const def = this.taskById.get(task.id)!;
       if (def.check.kind === 'gatesInOneMove' && gates >= def.check.value) task.base = -1; // mark achieved
     }
+  }
+
+  private *askFork(seat: number, node: NodeId, exits: NodeId[], remaining: number): Flow<NodeId> {
+    const b = this.board;
+    const here = b.node(node);
+    const label = (x: NodeId): string => {
+      const n = b.node(x);
+      if (n.road && n.road !== here.road) return `拐入${b.roadName(n.road)}`;
+      return n.outer ? '继续外环' : `前往【${n.name}】`;
+    };
+    const options = exits.map((x) => ({ id: x, label: label(x), value: x, node: x }));
+    const ch = yield* this.ask({
+      player: seat, kind: 'fork', title: `岔路 · ${here.name}`, desc: `剩余 ${remaining} 步：${options.map((o) => o.label).join('，或')}？`,
+      options, defaultId: exits[0], ctx: { remaining, node },
+    });
+    const road = b.node(ch).road;
+    if (road && road !== here.road) {
+      this.state.players[seat].stats.roadEntries++;
+      this.emit('fork', `${this.pn(seat)} 拐入${b.roadName(road)}`, { player: seat, node });
+    }
+    return ch;
   }
 
   /** Entering a node during a walk: emits a step and applies passing effects. */
@@ -799,13 +797,10 @@ export class Game {
     }
   }
 
-  private roadName(r: RoadId): string {
-    return { S: '南神道', W: '西神道', N: '北神道', E: '东神道' }[r];
-  }
-
-  private exitLabel(r: RoadId): string {
-    const gate = this.board.gateOf(r);
-    return `${this.roadName(r)} → ${gate} ${this.nodeName(gate)}`;
+  /** An exit from the altar, named by its 神道 and the node where that road ends. */
+  private exitLabel(exit: NodeId): string {
+    const end = this.board.corridorEnd(ALTAR, exit);
+    return `${this.board.roadName(this.board.node(exit).road!)} → ${end} ${this.nodeName(end)}`;
   }
 
   nodeLabel(id: NodeId): string {
@@ -815,18 +810,18 @@ export class Game {
       const own = t.owner === null ? '无主' : `${this.pn(t.owner)} Lv${t.level}`;
       return `${n.name}（${own}）`;
     }
-    return n.name + (n.ringIndex >= 0 ? `·${id}` : `·${id}`);
+    return `${n.name}·${id}`;
   }
 
   private teleport(seat: number, node: NodeId, why: string): void {
     const p = this.state.players[seat];
     const from = p.pos;
     p.pos = node;
-    p.roadDir = 'in';
+    p.cameFrom = null;
     this.emit('teleport', `${this.pn(seat)} ${why}，来到【${this.nodeName(node)}】`, { player: seat, node, from });
   }
 
-  /** 误入幻阵: step back along the path just walked (then the ring/road backwards). */
+  /** 误入幻阵: step back along the path just walked, then back along the main line (two-way nodes head outward). */
   private *moveBack(seat: number, steps: number, depth: number): Flow {
     const p = this.state.players[seat];
     const t = this.state.turn;
@@ -837,14 +832,12 @@ export class Game {
     for (let k = 0; k < steps; k++) {
       let prev: NodeId;
       if (i > 0) prev = path[--i];
-      else if (b.isRing(node)) prev = b.ringStep(node, (t.seat === seat ? -t.lastDir : -1) as 1 | -1);
-      else if (node === ALTAR) prev = b.roads.S.nodes[1];
-      else prev = b.roadOutward(node, b.node(node).road!);
+      else prev = b.mainStep(node, (b.isTwoWay(node) || t.seat !== seat ? -1 : -t.lastDir) as 1 | -1);
       this.emit('step', '', { player: seat, node: prev, from: node });
       node = prev;
     }
     p.pos = node;
-    p.roadDir = 'in';
+    p.cameFrom = null;
     t.lastPath = [];
     yield* this.settle(seat, node, { depth: depth + 1 });
   }
@@ -1697,18 +1690,21 @@ export class Game {
         if (st.turn.duelDone) return [];
         return others.filter((o) => this.duelEligible(o.seat) && o.pos !== p.pos).map((o) => o.seat);
       case 'swap':
-        if (!this.board.isRing(p.pos)) return [];
+        if (!this.board.node(p.pos).outer) return [];
         return others
-          .filter((o) => !o.jailed && this.board.isRing(o.pos) && o.pos !== p.pos && this.board.ringDistance(p.pos, o.pos) <= this.cfg.rules.swapRange)
+          .filter((o) => {
+            const d = this.board.outerDistance(p.pos, o.pos);
+            return !o.jailed && o.pos !== p.pos && d >= 0 && d <= this.cfg.rules.swapRange;
+          })
           .map((o) => o.seat);
       case 'daze':
         return others.filter((o) => !o.dazed && !isWardActive(st, o.seat)).map((o) => o.seat);
       case 'roadblock': {
-        if (!this.board.isRing(p.pos) || st.roadblock) return [];
+        if (!this.board.node(p.pos).outer || st.roadblock) return [];
         const out: NodeId[] = [];
         let n = p.pos;
         for (let k = 0; k < this.cfg.rules.roadblockRange; k++) {
-          n = this.board.ringStep(n, 1);
+          n = this.board.mainStep(n, 1);
           if (!st.players.some((o) => o.pos === n)) out.push(n);
         }
         return out;
@@ -1755,7 +1751,7 @@ export class Game {
       case 'sworddash': {
         const to = o.pos;
         this.teleport(seat, to, `剑遁追至 ${this.pn(tg.seat)} 身前`);
-        p.roadDir = o.roadDir;
+        p.cameFrom = o.cameFrom;
         st.turn.lastPath = [];
         yield* this.duel(seat, tg.seat);
         yield* this.settle(seat, p.pos);
@@ -1766,6 +1762,7 @@ export class Game {
         const theirs = o.pos;
         p.pos = theirs;
         o.pos = mine;
+        [p.cameFrom, o.cameFrom] = [o.cameFrom, p.cameFrom];
         this.emit('teleport', `${this.pn(seat)} 乾坤挪移，与 ${this.pn(tg.seat)} 互换位置`, { player: seat, node: theirs, from: mine });
         this.emit('teleport', '', { player: tg.seat, node: mine, from: theirs });
         return 'ok';
@@ -1784,7 +1781,7 @@ export class Game {
     const st = this.state;
     const d = st.demon!;
     let node = d.node;
-    for (let k = 0; k < this.cfg.demon.movePerRound; k++) node = this.board.ringStep(node, 1);
+    for (let k = 0; k < this.cfg.demon.movePerRound; k++) node = this.board.mainStep(node, 1);
     const from = d.node;
     d.node = node;
     this.emit('demonMove', `天魔移动至【${this.nodeName(node)}】`, { node, from });

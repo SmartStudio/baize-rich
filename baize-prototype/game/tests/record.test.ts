@@ -55,7 +55,7 @@ describe('对局记录', () => {
     };
     expect(errorOf(null)).toMatch('不是白泽秘境的对局记录');
     expect(errorOf({ ...good, format: 'other' })).toMatch('不是白泽秘境的对局记录');
-    expect(errorOf({ ...good, version: 2 })).toMatch('不支持的记录版本 2');
+    expect(errorOf({ ...good, version: 1 })).toMatch('不支持的记录版本 1');
     expect(errorOf({ ...good, dataVersion: '0.1' })).toMatch('数据版本不符');
     const newer = cloneData();
     newer.config.version = '9.9';

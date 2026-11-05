@@ -12,7 +12,7 @@ describe('movement: fork, road, altar', () => {
     p.pills = 2;
     const seen: PendingChoice[] = [];
     // 7 steps: S1, S2, ALTAR (4 left) -> toll via E: E2, E1, R28(gate, no fork), R29
-    g.runFlow(g.debugMove(0, 7), script({ fork: 'road', altarPass: 'E', buy: 'no' }, seen));
+    g.runFlow(g.debugMove(0, 7), script({ fork: 'S1', altarPass: 'E2', buy: 'no' }, seen));
     // no fork at R28 when coming out of the road; landing on unowned R29 offers a buy
     expect(seen.map((c) => c.kind)).toEqual(['fork', 'altarPass', 'buy']);
     expect(g.state.turn.lastPath).toEqual(['R4', 'S1', 'S2', 'ALTAR', 'E2', 'E1', 'R28', 'R29']);
@@ -25,7 +25,7 @@ describe('movement: fork, road, altar', () => {
     const g = newGame();
     const p = g.state.players[0];
     p.pos = 'R4';
-    g.runFlow(g.debugMove(0, 2), script({ fork: 'ring' }));
+    g.runFlow(g.debugMove(0, 2), script({ fork: 'R5' }));
     expect(p.pos).toBe('R6');
   });
 
@@ -34,7 +34,7 @@ describe('movement: fork, road, altar', () => {
     const p = g.state.players[0];
     p.pos = 'R2';
     const seen: PendingChoice[] = [];
-    g.runFlow(g.debugMove(0, 4), script({ fork: 'road' }, seen));
+    g.runFlow(g.debugMove(0, 4), script({ fork: 'S1' }, seen));
     expect(seen[0].kind).toBe('fork');
     expect(seen[0].ctx.remaining).toBe(2);
     expect(p.pos).toBe('S2');
@@ -50,7 +50,7 @@ describe('movement: fork, road, altar', () => {
     p.pos = 'R4';
     p.pills = 0;
     const seen: PendingChoice[] = [];
-    g.runFlow(g.debugMove(0, 8), script({ fork: 'road' }, seen));
+    g.runFlow(g.debugMove(0, 8), script({ fork: 'S1' }, seen));
     expect(p.pos).toBe('ALTAR');
     expect(seen.map((c) => c.kind)).toEqual(['fork', 'altar']); // no altarPass offered
   });
@@ -61,7 +61,7 @@ describe('movement: fork, road, altar', () => {
     p.pos = 'R4';
     p.pills = 5;
     const seen: PendingChoice[] = [];
-    g.runFlow(g.debugMove(0, 3), script({ fork: 'road' }, seen));
+    g.runFlow(g.debugMove(0, 3), script({ fork: 'S1' }, seen));
     expect(p.pos).toBe('ALTAR');
     expect(seen.map((c) => c.kind)).toEqual(['fork', 'altar']);
     expect(p.pills).toBe(5);
@@ -72,7 +72,7 @@ describe('movement: fork, road, altar', () => {
     const p = g.state.players[0];
     p.pos = 'R4';
     p.pills = 3;
-    g.runFlow(g.debugMove(0, 9), script({ fork: 'road', altarPass: 'stop' }));
+    g.runFlow(g.debugMove(0, 9), script({ fork: 'S1', altarPass: 'stop' }));
     expect(p.pos).toBe('ALTAR');
     expect(p.pills).toBe(3);
   });
@@ -82,7 +82,7 @@ describe('movement: fork, road, altar', () => {
     const p = g.state.players[0];
     p.pos = 'ALTAR';
     const seen: PendingChoice[] = [];
-    g.runFlow(g.debugMove(0, 5), script({ exitRoad: 'N' }, seen));
+    g.runFlow(g.debugMove(0, 5), script({ exitRoad: 'N2' }, seen));
     expect(seen[0].kind).toBe('exitRoad');
     expect(g.state.turn.lastPath).toEqual(['ALTAR', 'N2', 'N1', 'R20', 'R21', 'R22']);
   });
@@ -92,7 +92,7 @@ describe('movement: fork, road, altar', () => {
     const p = g.state.players[0];
     p.pos = 'R5';
     const seen: PendingChoice[] = [];
-    g.runFlow(g.debugMove(0, 2, -1), script({ fork: 'road' }, seen));
+    g.runFlow(g.debugMove(0, 2, -1), script({ fork: 'S1' }, seen));
     expect(seen[0].kind).toBe('fork');
     expect(g.state.turn.lastPath).toEqual(['R5', 'R4', 'S1']);
   });
@@ -144,7 +144,7 @@ describe('terrain', () => {
     // same turn: no second mire
     g.state.turn.lastPath = [];
     const walk = g.walk(0, 2, 1);
-    g.runFlow(walk, script({ fork: 'ring', buy: 'no' }));
+    g.runFlow(walk, script({ buy: 'no' }));
     expect(p.pos).toBe('R28');
   });
 

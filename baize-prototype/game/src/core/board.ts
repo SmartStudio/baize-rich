@@ -1,9 +1,10 @@
-// Board graph built from data/board.json.
+// Board graph built from data/board.json: nodes linked by directed `next` edges.
 //
-//   Ring  R0..R31, clockwise = increasing index (wraps).
-//   Roads gate(Rx) -> X1 (trial) -> X2 (spring) -> ALTAR   (inward)
-//         ALTAR -> X2 -> X1 -> gate -> ring                 (outward)
-//   Altar a single logical node 'ALTAR' occupying a 3×3 rect.
+//   Forward moves follow `next`; more than one entry is a fork, next[0] is the main line.
+//   Reverse moves follow `prev`, derived from `next` in data order.
+//   A node whose next and prev hold the same nodes is two-way (the 神道 and the altar):
+//   walks never turn back on it, so the node a walker came from fixes its heading.
+//   The altar is the single node 'ALTAR'; its `rect` is only for drawing.
 import type { BoardData, NodeId, RegionId, RoadId, TileType } from './types';
 
 export interface BoardNode {
@@ -14,55 +15,51 @@ export interface BoardNode {
   name: string;
   region?: RegionId;
   price?: number;
-  /** For gates: the road that starts here. For road nodes: the road they belong to. */
   road?: RoadId;
-  /** Ring index (0..31) or -1 for road/altar nodes. */
-  ringIndex: number;
-  /** Road nodes: 1 = first (outer) node, 2 = second (inner) node. */
-  roadStep?: 1 | 2;
+  outer: boolean;
+  next: NodeId[];
+  prev: NodeId[];
 }
 
 export const ALTAR: NodeId = 'ALTAR';
-export const ROAD_IDS: RoadId[] = ['S', 'W', 'N', 'E'];
 export const REGION_IDS: RegionId[] = ['wood', 'fire', 'water', 'earth'];
 
 export class Board {
   readonly nodes = new Map<NodeId, BoardNode>();
-  readonly ring: NodeId[] = [];
-  readonly roads: Record<RoadId, { gate: NodeId; nodes: [NodeId, NodeId] }>;
   readonly lands: NodeId[] = [];
   readonly startId: NodeId;
   readonly cliffId: NodeId;
+  private readonly toAltar = new Map<NodeId, number>();
 
   constructor(readonly data: BoardData) {
-    for (const t of data.ring) {
-      const idx = this.ring.length;
-      this.ring.push(t.id);
-      const name = t.name ?? data.tileTypes[t.type].name;
+    for (const t of data.nodes) {
       this.nodes.set(t.id, {
-        id: t.id, type: t.type, pos: t.pos, name, region: t.region, price: t.price, road: t.road, ringIndex: idx,
+        id: t.id, type: t.type, pos: t.pos, name: t.name ?? data.tileTypes[t.type].name,
+        region: t.region, price: t.price, road: t.road, outer: t.outer ?? false, next: t.next, prev: [],
       });
       if (t.type === 'land') this.lands.push(t.id);
     }
-    const roads = {} as Record<RoadId, { gate: NodeId; nodes: [NodeId, NodeId] }>;
-    for (const rid of Object.keys(data.roads) as RoadId[]) {
-      const r = data.roads[rid];
-      r.nodes.forEach((n, i) => {
-        this.nodes.set(n.id, {
-          id: n.id, type: n.type, pos: n.pos, name: data.tileTypes[n.type].name, road: rid, ringIndex: -1,
-          roadStep: (i + 1) as 1 | 2,
-        });
-      });
-      roads[rid] = { gate: r.gate, nodes: [r.nodes[0].id, r.nodes[1].id] };
+    for (const n of this.nodes.values()) {
+      if (n.next.length === 0) throw new Error(`board node ${n.id} has no next`);
+      for (const x of n.next) this.node(x).prev.push(n.id);
     }
-    this.roads = roads;
-    const [c0, r0, c1, r1] = data.altar.rect;
-    this.nodes.set(ALTAR, {
-      id: ALTAR, type: 'altar', pos: [Math.floor((c0 + c1) / 2), Math.floor((r0 + r1) / 2)],
-      name: data.tileTypes.altar.name, ringIndex: -1,
-    });
-    this.startId = this.ring.find((id) => this.node(id).type === 'start')!;
-    this.cliffId = this.ring.find((id) => this.node(id).type === 'cliff')!;
+    if (this.node(ALTAR).type !== 'altar') throw new Error(`${ALTAR} must be the altar`);
+    this.startId = this.firstOfType('start');
+    this.cliffId = this.firstOfType('cliff');
+    const queue = [ALTAR];
+    this.toAltar.set(ALTAR, 0);
+    for (let i = 0; i < queue.length; i++) {
+      const d = this.toAltar.get(queue[i])! + 1;
+      for (const p of this.node(queue[i]).prev) {
+        if (!this.toAltar.has(p)) { this.toAltar.set(p, d); queue.push(p); }
+      }
+    }
+  }
+
+  private firstOfType(type: TileType): NodeId {
+    const id = this.allNodeIds().find((x) => this.node(x).type === type);
+    if (!id) throw new Error(`board has no ${type} node`);
+    return id;
   }
 
   node(id: NodeId): BoardNode {
@@ -75,87 +72,82 @@ export class Board {
     return [...this.nodes.keys()];
   }
 
-  isRing(id: NodeId): boolean {
-    return this.node(id).ringIndex >= 0;
-  }
-
-  isRoadNode(id: NodeId): boolean {
+  isTwoWay(id: NodeId): boolean {
     const n = this.node(id);
-    return n.ringIndex < 0 && n.type !== 'altar';
+    return n.next.length === n.prev.length && n.next.every((x) => n.prev.includes(x));
   }
 
-  /** Next ring node in direction dir (+1 clockwise / -1 counter-clockwise). */
-  ringStep(id: NodeId, dir: 1 | -1): NodeId {
-    const i = this.node(id).ringIndex;
-    if (i < 0) throw new Error(`${id} is not on the ring`);
-    const n = this.ring.length;
-    return this.ring[(((i + dir) % n) + n) % n];
+  /**
+   * Where a walker on `id` may step next in direction dir, never straight back to `cameFrom`.
+   * Without `cameFrom` a two-way node heads along its main line.
+   */
+  exits(id: NodeId, cameFrom: NodeId | null, dir: 1 | -1): NodeId[] {
+    const n = this.node(id);
+    if (cameFrom === null) return this.isTwoWay(id) ? [n.next[0]] : dir === 1 ? n.next : n.prev;
+    return (dir === 1 ? n.next : n.prev).filter((x) => x !== cameFrom);
   }
 
-  gateOf(road: RoadId): NodeId {
-    return this.roads[road].gate;
+  /** One step along the main line (first next / first prev). */
+  mainStep(id: NodeId, dir: 1 | -1): NodeId {
+    const n = this.node(id);
+    return (dir === 1 ? n.next : n.prev)[0];
   }
 
-  /** Inward successor on a road: gate->X1, X1->X2, X2->ALTAR. */
-  roadInward(id: NodeId, road: RoadId): NodeId {
-    const [x1, x2] = this.roads[road].nodes;
-    if (id === this.roads[road].gate) return x1;
-    if (id === x1) return x2;
-    if (id === x2) return ALTAR;
-    throw new Error(`${id} not on road ${road}`);
+  /** Main-line nodes after `id` up to and including the first gate. */
+  pathToGate(id: NodeId): NodeId[] {
+    const path: NodeId[] = [];
+    let cur = id;
+    for (let k = 0; k < this.nodes.size; k++) {
+      cur = this.mainStep(cur, 1);
+      path.push(cur);
+      if (this.node(cur).type === 'gate') return path;
+    }
+    throw new Error(`no gate ahead of ${id}`);
   }
 
-  /** Outward successor on a road: ALTAR->X2, X2->X1, X1->gate. */
-  roadOutward(id: NodeId, road: RoadId): NodeId {
-    const [x1, x2] = this.roads[road].nodes;
-    if (id === ALTAR) return x2;
-    if (id === x2) return x1;
-    if (id === x1) return this.roads[road].gate;
-    throw new Error(`${id} not on road ${road}`);
+  /** Fewest steps between two outer nodes over outer nodes in either direction (-1 if either is off the outer ring). */
+  outerDistance(a: NodeId, b: NodeId): number {
+    if (!this.node(a).outer || !this.node(b).outer) return -1;
+    const dist = new Map([[a, 0]]);
+    const queue = [a];
+    for (let i = 0; i < queue.length; i++) {
+      const cur = queue[i];
+      if (cur === b) return dist.get(cur)!;
+      const n = this.node(cur);
+      for (const x of [...n.next, ...n.prev]) {
+        if (this.node(x).outer && !dist.has(x)) { dist.set(x, dist.get(cur)! + 1); queue.push(x); }
+      }
+    }
+    return -1;
+  }
+
+  /** Steps forward to the altar along the shortest route (Infinity if it cannot be reached). */
+  altarDistance(id: NodeId): number {
+    return this.toAltar.get(id) ?? Infinity;
+  }
+
+  /** The node that leads to the altar fastest; ties keep the earlier one. */
+  altarward(options: NodeId[]): NodeId {
+    return options.reduce((best, x) => (this.altarDistance(x) < this.altarDistance(best) ? x : best));
+  }
+
+  /** Follows two-way nodes from `from` through `to` and returns the first node that is not two-way. */
+  corridorEnd(from: NodeId, to: NodeId): NodeId {
+    let prev = from;
+    let cur = to;
+    for (let k = 0; k < this.nodes.size && this.isTwoWay(cur); k++) [prev, cur] = [cur, this.exits(cur, prev, 1)[0]];
+    return cur;
+  }
+
+  roadName(road: RoadId): string {
+    return this.data.roads[road].name;
+  }
+
+  regionNodes(region: RegionId): NodeId[] {
+    return this.allNodeIds().filter((id) => this.node(id).region === region);
   }
 
   landsInRegion(region: RegionId): NodeId[] {
     return this.lands.filter((id) => this.node(id).region === region);
-  }
-
-  /** Steps between two ring nodes along the shorter way round (-1 if either is off the ring). */
-  ringDistance(a: NodeId, b: NodeId): number {
-    const i = this.node(a).ringIndex;
-    const j = this.node(b).ringIndex;
-    if (i < 0 || j < 0) return -1;
-    const d = Math.abs(i - j);
-    return Math.min(d, this.ring.length - d);
-  }
-
-  /**
-   * The "灵域 side" of a ring node, used by 缩地成寸 (move within the current region).
-   * Each side of 8 cells (corner + 7 edge cells) maps to the region of its land tiles:
-   * R0–R7 wood, R8–R15 fire, R16–R23 water, R24–R31 earth.
-   */
-  sideRegion(id: NodeId): RegionId | null {
-    const i = this.node(id).ringIndex;
-    if (i < 0) return null;
-    const side = Math.floor(i / 8);
-    for (let k = side * 8; k < side * 8 + 8; k++) {
-      const r = this.node(this.ring[k]).region;
-      if (r) return r;
-    }
-    return null;
-  }
-
-  sideNodes(region: RegionId): NodeId[] {
-    return this.ring.filter((id) => this.sideRegion(id) === region);
-  }
-
-  /** Nearest gate strictly ahead on the ring in direction dir. */
-  nearestGateAhead(id: NodeId, dir: 1 | -1): { gate: NodeId; path: NodeId[] } {
-    const path: NodeId[] = [];
-    let cur = id;
-    for (let k = 0; k < this.ring.length; k++) {
-      cur = this.ringStep(cur, dir);
-      path.push(cur);
-      if (this.node(cur).type === 'gate') return { gate: cur, path };
-    }
-    throw new Error('no gate on ring');
   }
 }
