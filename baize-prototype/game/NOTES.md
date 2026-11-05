@@ -392,3 +392,17 @@
 4. 困难难度的座位差和剑修，见上。
 5. 一域独占要 11 块，基本不会出现。建议改成「一街独占」（地段连锁，`street` 字段已经填好），需要改 `rules.ts` 的 `rentFor` 并重新跑平衡。
 6. 内环格在地块提示上显示「外环」（`ui/TileInfo.ts`），需要画面那边改文字。
+
+## 12. 2026-11-05 第三层画面部件：小游戏浮层与新增占位美术（尚未接入对局）
+
+`ui/MiniGame.ts` 的 `playMiniGame(scene, spec, opts)` 是独立浮层，返回 `'fail' | 'ok' | 'perfect'`。接入 `GameScene` 要等规则分支合并。可以用 `?preview=minigame` 试玩。
+- **炼丹房**：指针在火候条上来回扫，空格 / 回车 / 点击收火。停在绿区为成丹，停在正中金线为极品。2.6 秒不操作算炸炉，整个流程最长约 4 秒。亲手玩时按真实时间运行，指针速度不受倍速影响，难度在任何倍速下都一样。绿区的位置是纯画面随机，不进引擎，不影响重放。
+- **灵骰台**：点数和输赢都由引擎决定，浮层只负责演出。`spec` 里带上引擎给的 `roll` 和 `win`，画面不重新判断大小（7 点怎么算由规则决定）。赢了返回 `perfect`，输了返回 `fail`。
+- **观战**：传 `{ auto: 档次 }`，1 倍速约 1.2 秒，按倍速缩短。
+
+**新增占位帧**（`ui/assets.ts` 的 `frameSpecs()`，像素图在 `ui/sprites.ts`；图集里有同名帧时优先用图集）：
+`tile_shop`、`tile_minigame`、`tile_hospital`、`obj_shop`、`obj_minigame`（备用）、`obj_minigame_alchemy`、`obj_minigame_dice`、`obj_hospital`、`bld_garden`、`bld_bazaar`、`bld_portal`、`spirit_fox`、`spirit_heart`、`mg_cup`、`card_dice`、`card_barrier`、`card_blast`、`card_turnback`。灵兽的待机动画和附身光环在 `ui/Spirits.ts`（`addSpirit`、`possessionAura`），都是代码动画，不需要额外的帧。
+
+**待策划确认**
+1. 新道具 `turnback` 叫「回首符」，和现有的符箓 `reverse`（回首符）重名，需要给其中一个改名。
+2. 地块类型 `minigame` 用 `obj_minigame_${game}` 区分炼丹房和灵骰台。`docs/assets.md` 的帧名清单还没有这些新帧，需要美术补上。
