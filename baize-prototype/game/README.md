@@ -28,7 +28,7 @@ URL 参数：
 
 开局流程：标题（开场文案，任意键跳过）→ 选修士（点一位作为「你」，坐 1 号位，其余三位由 AI 扮演，统一选一个难度）→ 对阵过场 → 对局。选人界面的「高级设置」进入逐席位设置（多人同屏、AI 性格、种子）。「玩法说明」是 5 页图文浮层，标题界面随时可开；第一次点「开始游戏」会自动弹出一次（`localStorage` 键 `baize.tutorialSeen`，读不到就当没看过）。
 
-快捷键（GDD §14）：空格 掷骰 / 确认，B 升级，C 出符，Enter 结束回合，Esc 取消，F 切换倍速（1/2/4/8），L 展开 / 收起战报，S 下载对局记录；弹窗内数字键 1–9 直接选择。
+快捷键（GDD §14）：空格 掷骰 / 确认，B 升级，C 出符（含大招、技能、布禁制），K 发动技能，Enter 结束回合，Esc 取消，F 切换倍速（1/2/4/8），L 展开 / 收起战报，S 下载对局记录；弹窗内数字键 1–9 直接选择。
 
 ### 存档与对局记录
 
@@ -109,6 +109,7 @@ UI 侧（`GameScene`）就是另一个 Controller：`preRoll` / `action` 选择�
 2. 被动：在引擎里搜索 `p.hero ===`，在对应时机加判断（如 `enterNode()`、`buyPrice()`、`thunderTargets()`）。
 3. 大招：`ultAvailable()`（何时可用、在掷骰前还是行动阶段）与 `useUlt()`（效果）各加一个分支。
 4. AI：`preRoll()` / `action()` 中加估值；美术帧 `tok_<id>`、`por_<id>`，占位颜色在 `HERO_FILL`。
+5. 主动技能：`heroes.json` 的 `skill`（`id`、`name`、`timing`、`desc`），`types.ts` 的 `HeroSkillId` 加 id；引擎里 `skillTargets()`（可选目标）和 `useSkill()`（效果）各加一个分支，数值放 `config.rules`；AI 在 `ai.ts` 的技能估值里加一个分支。
 
 ## 未完成 / 占位
 

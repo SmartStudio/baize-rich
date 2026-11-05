@@ -45,13 +45,20 @@ if (json) {
     console.log(`  ${heroName[h]} (${h})`.padEnd(18) + `${pct(w, games)}  (${w}/${games})`);
   }
   console.log(`先手(1号位)胜率: ${pct(count(r.seatWinRate[0]), games)}  (公平值 25%，各席位: ${r.seatWinRate.map((s) => pct(count(s), games)).join(' / ')})`);
-  console.log(`平均轮数: ${r.avgRounds.toFixed(2)}  (目标 12–15)`);
+  const cfg = defaultData.config;
+  console.log(`平均轮数: ${r.avgRounds.toFixed(2)}  (上限 ${cfg.rounds} 轮)`);
   const byCult = count(r.cultivationEndRate);
-  console.log(`结束方式: 修为 10 飞升 ${pct(byCult, games)} / 第 15 轮封顶 ${pct(games - byCult, games)}`);
-  console.log(`平均每人突破次数: ${pp.breakthroughs.toFixed(2)}  (目标 1.5–2.5)`);
+  console.log(`结束方式: 修为 ${cfg.winCultivation} 飞升 ${pct(byCult, games)} / 第 ${cfg.rounds} 轮封顶 ${pct(games - byCult, games)}`);
+  console.log(`平均每人突破次数: ${pp.breakthroughs.toFixed(2)}  (目标 1–2)`);
   console.log(`平均每人进入神道次数: ${pp.roadEntries.toFixed(2)}`);
   console.log(`平均每人最终修为: ${pp.finalCult.toFixed(2)}`);
   console.log(`平均每人破产重整: ${pp.bankruptcies.toFixed(2)}   平均每人完成任务: ${pp.tasksDone.toFixed(2)}`);
   console.log(`第 ${LEADER_CHECK_ROUND} 轮领先者最终获胜: ${pct(r.leaderAtR10Wins, 1)}  (n=${r.gamesReachingR10} 局到达第 ${LEADER_CHECK_ROUND} 轮)`);
   console.log(`平均每人无事可做回合: ${pp.idleTurns.toFixed(2)}  (占其回合 ${pct(pp.idleTurns, pp.turns)})`);
+  const ix = r.interaction;
+  console.log('—'.repeat(60));
+  console.log('玩家互动（每局）');
+  console.log(`  斗法 ${ix.duels.toFixed(2)} · 悬赏令领取 ${ix.bountyClaims.toFixed(2)} · 禁制布置 ${ix.trapsSet.toFixed(2)} / 触发 ${ix.trapTriggers.toFixed(2)} · 山岳拦人 ${ix.roadblockHits.toFixed(2)}`);
+  console.log(`  技能使用: ${HERO_IDS.map((h) => `${heroName[h]} ${ix.skillUsesByHero[h].toFixed(2)}`).join(' / ')}`);
+  console.log(`  回合占比: 有互动 ${pct(ix.interactionTurnRate, 1)} · 付租 ${pct(ix.rentTurnRate, 1)} · 斗法 ${pct(ix.duelTurnRate, 1)} · 用符/大招 ${pct(ix.castTurnRate, 1)}`);
 }

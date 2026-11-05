@@ -12,7 +12,25 @@ export type GameEventType =
   | 'jail' | 'release' | 'bind' | 'status'
   | 'breakthrough' | 'divine' | 'heaven' | 'manifest'
   | 'demonSpawn' | 'demonMove' | 'demonHit' | 'demonGone' | 'eruption'
-  | 'veinLord' | 'bankrupt' | 'doubles' | 'win' | 'gameEnd' | 'info';
+  | 'veinLord' | 'bankrupt' | 'doubles' | 'win' | 'gameEnd' | 'info'
+  | 'duel' | 'bounty' | 'trapSet' | 'trap' | 'skill' | 'roadblock' | 'roadblockHit' | 'roadblockGone';
+
+/** §17 斗法结果（index 0 = 攻方, 1 = 守方）。 */
+export interface DuelResult {
+  attacker: number;
+  defender: number;
+  bets: [number, number];
+  rolls: [number, number];
+  /** 英雄加成（剑修攻 / 体修守） */
+  bonus: [number, number];
+  totals: [number, number];
+  winner: number;
+  loser: number;
+  /** 败者交给胜者的灵石 */
+  amount: number;
+  /** 胜者是否因此领取悬赏令修为 */
+  bounty: boolean;
+}
 
 export interface GameEvent {
   seq: number;
@@ -24,6 +42,7 @@ export interface GameEvent {
   from?: NodeId;
   amount?: number;
   dice?: [number, number];
+  duel?: DuelResult;
   /** Deep copy of the state right after this event (only when Game option snapshots=true). */
   snap?: GameState;
 }

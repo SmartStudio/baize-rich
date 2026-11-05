@@ -1,5 +1,5 @@
 // Lightweight movement predictor for AI look-ahead. Mirrors engine.walk() rules
-// (forks, roads, altar stop/toll, mire, slide, start salary) without mutating
+// (forks, roads, altar stop/toll, mire, 镇山 roadblock, slide, start salary) without mutating
 // state or asking anybody; fork / altar decisions come from a policy callback.
 import { ALTAR, type Board } from '../core/board';
 import type { GameState, NodeId, RoadId } from '../core/types';
@@ -33,6 +33,8 @@ export function predictWalk(
   let mireUsed = state.turn.seat === seat ? state.turn.mireUsed : false;
   let passStart = 0;
   let stoppedAtAltar = false;
+  let blocked = false;
+  const rb = state.roadblock;
   const path = [node];
   if (node === ALTAR) { road = policy.exitRoad; mode = 'out'; }
   else if (board.isRoadNode(node)) { road = board.node(node).road!; mode = (from ? 'in' : p.roadDir); }
@@ -53,6 +55,7 @@ export function predictWalk(
     remaining--;
     node = next;
     path.push(next);
+    if (rb && rb.node === next && rb.seat !== seat) { blocked = true; break; }
     const n = board.node(next);
     if (n.type === 'start' && remaining > 0) passStart++;
     if (n.type === 'land' && n.region === 'earth' && !mireUsed) {
@@ -68,7 +71,7 @@ export function predictWalk(
     }
   }
   const fin = board.node(node);
-  if (mode === 'ring' && fin.type === 'land' && fin.region === 'water') {
+  if (mode === 'ring' && !blocked && fin.type === 'land' && fin.region === 'water') {
     node = board.ringStep(node, dir);
     path.push(node);
   }

@@ -118,6 +118,15 @@ export class Board {
     return this.lands.filter((id) => this.node(id).region === region);
   }
 
+  /** Steps between two ring nodes along the shorter way round (-1 if either is off the ring). */
+  ringDistance(a: NodeId, b: NodeId): number {
+    const i = this.node(a).ringIndex;
+    const j = this.node(b).ringIndex;
+    if (i < 0 || j < 0) return -1;
+    const d = Math.abs(i - j);
+    return Math.min(d, this.ring.length - d);
+  }
+
   /**
    * The "灵域 side" of a ring node, used by 缩地成寸 (move within the current region).
    * Each side of 8 cells (corner + 7 edge cells) maps to the region of its land tiles:

@@ -26,7 +26,12 @@ import type { ResultData } from './ResultScene';
 const SLOW_EVENTS = new Set<GameEvent['type']>([
   'buy', 'rent', 'upgrade', 'downgrade', 'ownerChange', 'divine', 'heaven', 'cult',
   'eruption', 'demonHit', 'demonGone', 'taskDone', 'event', 'cast', 'block', 'jail', 'veinLord',
+  'bounty', 'trapSet', 'trap', 'skill', 'roadblock', 'roadblockHit', 'roadblockGone',
 ]);
+
+/** preRoll / action option ids reached through the 出符 menu (C) rather than their own button. */
+const isCastId = (id: string): boolean =>
+  id.startsWith('cast:') || id.startsWith('trap:') || id === 'ult' || id === 'shrink' || id === 'skill';
 
 /**
  * Animation budget per beat, in ms at 1×. AI turns run on the brisk profile; a human seat's own
@@ -62,6 +67,7 @@ const CUTSCENES: Partial<Record<GameEventType, (g: Game, e: GameEvent) => Banner
     const ult = g.data.heroes.find((h) => h.id === p.hero)!.ult;
     return { title: `大招·${ult.name}`, sub: `${p.name}：${ult.desc}`, icon: portrait(g, e), color: PLAYER_COLORS[e.player!] };
   },
+  duel: (g, e) => ({ title: '斗法', sub: e.text, icon: portrait(g, e), color: PLAYER_COLORS[e.player!] }),
   bankrupt: (g, e) => ({ title: '破产重整', sub: e.text, icon: portrait(g, e), color: COLORS.bad }),
   win: (g, e) => ({ title: g.state.endReason === 'cultivation' ? '渡劫飞升' : '夺得魁首', sub: e.text, icon: portrait(g, e), color: COLORS.gold }),
 };
@@ -364,7 +370,7 @@ export class GameScene extends Phaser.Scene {
     this.side.setRollWaiting(ids.includes('roll'));
     this.side.btnEnd.setEnabled(ids.includes('end'));
     this.side.btnUpgrade.setEnabled(ids.some((i) => i.startsWith('upgrade:')));
-    this.side.btnCast.setEnabled(ids.some((i) => i.startsWith('cast:') || i === 'ult' || i === 'shrink'));
+    this.side.btnCast.setEnabled(ids.some(isCastId));
     this.side.setCastable(ids.filter((i) => i.startsWith('cast:')).map((i) => i.slice(5)));
     this.side.renderHand(this.shownState ?? this.engine.state, this.handViewer(this.engine.state));
   }
@@ -386,13 +392,13 @@ export class GameScene extends Phaser.Scene {
   private async openSubMenu(which: 'upgrade' | 'cast'): Promise<void> {
     const c = this.mainChoice;
     if (!c) return;
-    const opts = c.options.filter((o) => which === 'upgrade' ? o.id.startsWith('upgrade:') : (o.id.startsWith('cast:') || o.id === 'ult' || o.id === 'shrink'));
+    const opts = c.options.filter((o) => which === 'upgrade' ? o.id.startsWith('upgrade:') : isCastId(o.id));
     if (opts.length === 0) return;
     this.nodeOptions.clear();
     for (const o of opts) if (o.node) this.nodeOptions.set(o.node, o.id);
     this.boardView.setClickable([...this.nodeOptions.keys()]);
     const id = await this.modal.open({
-      title: which === 'upgrade' ? '升级洞府（每回合 1 次）' : '施放符箓 / 大招 / 神通',
+      title: which === 'upgrade' ? '升级洞府（每回合 1 次）' : '符箓 / 大招 / 神通 / 技能 / 禁制',
       options: opts.map((o) => ({ id: o.id, label: o.label, hint: o.hint })),
       closable: true, cancelId: null, placement: which === 'upgrade' ? 'side' : 'center',
     });
@@ -490,5 +496,6 @@ export class GameScene extends Phaser.Scene {
     else if (k === 'Enter') this.mainAnswer('end');
     else if (k === 'b' || k === 'B') void this.openSubMenu('upgrade');
     else if (k === 'c' || k === 'C') void this.openSubMenu('cast');
+    else if (k === 'k' || k === 'K') this.mainAnswer('skill');
   }
 }

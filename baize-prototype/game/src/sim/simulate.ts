@@ -3,12 +3,16 @@ import { HERO_IDS } from '../core/heroes';
 import { Rng } from '../core/rng';
 import type { PendingChoice } from '../core/choices';
 import type { Game } from '../core/engine';
+import type { GameEventType } from '../core/events';
 import type { GameData, HeroId } from '../core/types';
 import { defaultData } from '../core/data';
 import { randomPersonality, type Difficulty } from '../ai/ai';
 import { runHeadless } from './headless';
 
 export const LEADER_CHECK_ROUND = 10;
+
+/** Events that mean the active player touched another player this turn. */
+const INTERACTION_EVENTS: GameEventType[] = ['rent', 'duel', 'trap', 'roadblockHit', 'skill'];
 
 export interface SimOptions {
   games: number;
@@ -35,6 +39,24 @@ export interface PerPlayerStats {
   turns: number;
 }
 
+/** Player-interaction counts, per game. */
+export interface InteractionStats {
+  duels: number;
+  bountyClaims: number;
+  trapsSet: number;
+  trapTriggers: number;
+  roadblockHits: number;
+  /** Skill uses per game by the seat playing each hero. */
+  skillUsesByHero: Record<HeroId, number>;
+  /** Fractions of completed turns. */
+  rentTurnRate: number;
+  duelTurnRate: number;
+  /** A 符箓 or 大招 was used during the turn (any player). */
+  castTurnRate: number;
+  /** Rent, duel, 禁制 trigger, 山岳 stop or an active skill happened during the turn. */
+  interactionTurnRate: number;
+}
+
 export interface SimReport {
   games: number;
   seed: number;
@@ -49,6 +71,7 @@ export interface SimReport {
   /** Fraction of the games reaching the end of round 10 whose ranking()[0] at that moment is the final winner (0 when none reach it). */
   leaderAtR10Wins: number;
   gamesReachingR10: number;
+  interaction: InteractionStats;
 }
 
 function isDefaultOnly(c: PendingChoice): boolean {
@@ -66,6 +89,9 @@ export function simulate({ games, seed, difficulty, onGameEnd }: SimOptions, dat
   let playerCount = 0;
   let reachedR10 = 0;
   let leaderWon = 0;
+  const ix = { duels: 0, bountyClaims: 0, trapsSet: 0, trapTriggers: 0, roadblockHits: 0 };
+  const skillUses: Record<string, number> = {};
+  const turnHits = { rent: 0, duel: 0, cast: 0, any: 0 };
 
   for (let g = 0; g < games; g++) {
     const gs = seed * 100003 + g;
@@ -73,19 +99,29 @@ export function simulate({ games, seed, difficulty, onGameEnd }: SimOptions, dat
     const heroes = rng.shuffle([...HERO_IDS]);
     const setup = { seed: gs, players: heroes.map((h, i) => ({ name: `P${i + 1}·${heroName[h]}`, hero: h })) };
     const seats = heroes.map(() => ({ difficulty, personality: randomPersonality(rng) }));
-    let turn: { seat: number; idle: boolean } | null = null;
+    let turn: { seat: number; idle: boolean; seen: Set<GameEventType> } | null = null;
     let r10Leader: number | null = null;
     const { game } = runHeadless(setup, seats, data, {
       onChoice: (c) => {
         if (turn && c.player === turn.seat && !isDefaultOnly(c)) turn.idle = false;
       },
       onEvent: (e, game) => {
-        if (e.type === 'turnStart') turn = { seat: e.player!, idle: true };
+        if (e.type === 'duel') ix.duels++;
+        else if (e.type === 'trapSet') ix.trapsSet++;
+        else if (e.type === 'trap') ix.trapTriggers++;
+        else if (e.type === 'roadblockHit') ix.roadblockHits++;
+        if (e.type === 'turnStart') turn = { seat: e.player!, idle: true, seen: new Set() };
         else if (e.type === 'turnEnd' && turn) {
           totals.turns++;
           if (turn.idle) totals.idleTurns++;
+          const seen = turn.seen;
+          if (seen.has('rent')) turnHits.rent++;
+          if (seen.has('duel')) turnHits.duel++;
+          if (seen.has('cast') || seen.has('ult')) turnHits.cast++;
+          if (INTERACTION_EVENTS.some((t) => seen.has(t))) turnHits.any++;
           turn = null;
-        } else if (e.type === 'roundEnd' && e.round === LEADER_CHECK_ROUND) r10Leader = game.ranking()[0];
+        } else if (turn) turn.seen.add(e.type);
+        if (e.type === 'roundEnd' && e.round === LEADER_CHECK_ROUND) r10Leader = game.ranking()[0];
       },
     });
     const st = game.state;
@@ -105,6 +141,8 @@ export function simulate({ games, seed, difficulty, onGameEnd }: SimOptions, dat
       totals.finalCult += game.cult(p.seat);
       totals.bankruptcies += p.stats.bankruptcies;
       totals.tasksDone += p.stats.tasksDone;
+      ix.bountyClaims += p.stats.bountyClaims;
+      skillUses[p.hero] = (skillUses[p.hero] ?? 0) + p.stats.skillUses;
       playerCount++;
     }
     onGameEnd?.(game, g);
@@ -122,5 +160,17 @@ export function simulate({ games, seed, difficulty, onGameEnd }: SimOptions, dat
     perPlayer,
     leaderAtR10Wins: reachedR10 ? leaderWon / reachedR10 : 0,
     gamesReachingR10: reachedR10,
+    interaction: {
+      duels: ix.duels / games,
+      bountyClaims: ix.bountyClaims / games,
+      trapsSet: ix.trapsSet / games,
+      trapTriggers: ix.trapTriggers / games,
+      roadblockHits: ix.roadblockHits / games,
+      skillUsesByHero: Object.fromEntries(HERO_IDS.map((h) => [h, (skillUses[h] ?? 0) / (plays[h] ?? 1)])) as Record<HeroId, number>,
+      rentTurnRate: turnHits.rent / Math.max(1, totals.turns),
+      duelTurnRate: turnHits.duel / Math.max(1, totals.turns),
+      castTurnRate: turnHits.cast / Math.max(1, totals.turns),
+      interactionTurnRate: turnHits.any / Math.max(1, totals.turns),
+    },
   };
 }

@@ -117,6 +117,12 @@ export class PlayerCards {
     if (p.tremorRound === state.round) tags.push({ label: '地脉异动', desc: '本轮你收取的所有租金减半。' });
     if (p.mazeAvailable) tags.push({ label: '迷踪', desc: '上回合停在木灵田上：本回合可以选择逆时针移动。' });
     if (p.chooseRoll) tags.push({ label: '灵兽引路', desc: '下次移动的点数可在 1–6 中任选。' });
+    if (state.bountySeat === i) {
+      tags.push({ label: '悬赏令', desc: `修为独占鳌头：谁在斗法中击败你，谁就修为 +${cfg.rules.bountyDuelCultivation}，悬赏令随之揭下。` });
+    }
+    if (p.dazed) tags.push({ label: '迷魂', desc: '中了迷魂丹：下一次掷骰移动的步数减半（向下取整，至少 1）。' });
+    const traps = g.board.lands.filter((id) => state.tiles[id].owner === i && state.tiles[id].trap).length;
+    if (traps) tags.push({ label: `禁制 ${traps}/${cfg.rules.trapMaxPerPlayer}`, desc: `在自己的洞府上布下的禁制：他人停留时交 ${cfg.rules.trapStones} 灵石并被定身 1 回合，触发后消耗。` });
     for (const [r, seat] of Object.entries(state.veinLords) as [keyof typeof state.veinLords, number | null][]) {
       if (seat !== i) continue;
       const region = g.data.board.regions[r];
@@ -126,6 +132,11 @@ export class PlayerCards {
       });
     }
     const hero = g.data.heroes.find((h) => h.id === p.hero)!;
+    const wait = p.skillReadyTurn - p.turnsTaken;
+    tags.push({
+      label: wait > 0 ? `技能 冷却 ${wait}` : '技能 就绪',
+      desc: `【${hero.skill.name}】${hero.skill.desc}。不花灵丹，用后冷却 ${cfg.rules.skillCooldownTurns} 个自己的回合（按 K 或在「出符」菜单发动）。`,
+    });
     tags.push({
       label: `大招 ${p.ultUses}/${cfg.ult.maxUses}`,
       desc: `【${hero.ult.name}】${hero.ult.desc}。消耗 ${cfg.ult.pillCost} 灵丹，每局最多 ${cfg.ult.maxUses} 次（已用 ${p.ultUses} 次）。\n被动【${hero.passive.name}】${hero.passive.desc}。`,
@@ -157,11 +168,12 @@ export class PlayerCards {
         : next !== undefined ? `修为（历史最高）达到 ${next} 时获得下一次突破机会。` : '突破机会已全部获得。',
       '',
       '修为来源：',
-      `· 洞府首次建成${b[3].name} / ${b[4].name}：各 +${cfg.cultivationOnBuild['3']}`,
+      `· 洞府首次建成${Object.keys(cfg.cultivationOnBuild).map((lv) => `${b[Number(lv)].name} +${cfg.cultivationOnBuild[lv]}`).join(' / ')}`,
       `· 灵脉之主（某灵域灵田最多且 ≥${cfg.veinLordMinLands} 块）：+${cfg.veinLordCultivation}`,
       '· 完成宗门任务：每张 +1',
       `· 对天魔造成最后一击：+${cfg.rules.demonLastHitCultivation}`,
       `· 五雷符让修为唯一第一者的洞府降级：+${cfg.rules.bountyCultivation}`,
+      `· 斗法击败持悬赏令者：+${cfg.rules.bountyDuelCultivation}`,
       `· 白泽现世时选中「白泽图」：+${cfg.rules.chartCultivation}`,
       '破产重整会失去修为。',
     ];
