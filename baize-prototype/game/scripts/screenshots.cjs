@@ -18,6 +18,40 @@ const PORT = 4179;
 const BASE = `http://localhost:${PORT}/`;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+const activeScenes = (page) => page.evaluate(() => window.__phaser.scene.getScenes(true).map((s) => s.sys.settings.key));
+async function waitScene(page, key, ms = 8000) {
+  const t0 = Date.now();
+  while (Date.now() - t0 < ms) {
+    if ((await activeScenes(page)).includes(key)) return;
+    await sleep(100);
+  }
+  throw new Error(`scene ${key} never became active`);
+}
+
+// New game from a clean slate: 标题 → 选修士（默认第一位，作为「你」）→ 对阵 → 对局.
+// The tutorial is marked seen and the autosave cleared so 空格 always means 开始游戏.
+async function startQuickGame(page, url, shots = {}) {
+  await page.goto(url);
+  await page.evaluate(() => { localStorage.setItem('baize.tutorialSeen', '1'); localStorage.removeItem('baize.autosave'); });
+  await page.goto(url);
+  await waitScene(page, 'Title');
+  await sleep(1500);
+  if (shots.title) await shot(page, shots.title);
+  await page.keyboard.press('x'); // skip the intro
+  await sleep(1000);
+  if (shots.menu) await shot(page, shots.menu);
+  await page.keyboard.press('Space'); // 开始游戏
+  await waitScene(page, 'HeroSelect');
+  await sleep(700);
+  if (shots.select) await shot(page, shots.select);
+  await page.keyboard.press('Space'); // 开始对局
+  await waitScene(page, 'Versus');
+  await sleep(1400);
+  if (shots.versus) await shot(page, shots.versus);
+  await page.keyboard.press('Space'); // skip the versus splash
+  await waitScene(page, 'Game');
+}
+
 async function waitForServer(url, tries = 50) {
   for (let i = 0; i < tries; i++) {
     try { const r = await fetch(url); if (r.ok) return; } catch { /* not up yet */ }
@@ -38,13 +72,10 @@ async function waitForServer(url, tries = 50) {
     page.on('console', (m) => { if (m.type() === 'error') errors.push(`console: ${m.text()}`); });
     page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
 
-    // 1) setup screen (seed 2: P1's first roll lands on unowned land -> buy dialog)
-    await page.goto(`${BASE}?seed=2`);
-    await sleep(1500);
-    await shot(page, '01-setup.png');
+    // 1) title → hero select → versus (seed 2: 你's first roll lands on unowned land -> buy dialog)
+    await startQuickGame(page, `${BASE}?seed=2`, { title: '00-title.png', menu: '00b-title-menu.png', select: '01-hero-select.png', versus: '01b-versus.png' });
 
-    // 2) human seat: start, roll once -> 购买灵田 dialog
-    await page.keyboard.press('Space');
+    // 2) human seat: roll once -> 购买灵田 dialog
     await sleep(1500);
     await shot(page, '02-human-turn.png');
     await page.keyboard.press('Space');
@@ -91,9 +122,8 @@ async function waitForServer(url, tries = 50) {
     console.log('auto game after 40 s:', JSON.stringify(info2));
 
     // 5) human soak test: 1 human + 3 AI, keep confirming defaults with Space / Enter
-    await page.goto(`${BASE}?seed=11`);
+    await startQuickGame(page, `${BASE}?seed=11`);
     await sleep(1200);
-    await page.keyboard.press('Space');
     const t0 = Date.now();
     while (Date.now() - t0 < 45000) {
       await page.keyboard.press('Space');
