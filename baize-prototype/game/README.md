@@ -28,7 +28,7 @@ URL 参数：
 
 开局流程：标题（开场文案，任意键跳过）→ 选修士（点一位作为「你」，坐 1 号位，其余三位由 AI 扮演，统一选一个难度）→ 对阵过场 → 对局。选人界面的「高级设置」进入逐席位设置（多人同屏、AI 性格、种子）。「玩法说明」是 5 页图文浮层，标题界面随时可开；第一次点「开始游戏」会自动弹出一次（`localStorage` 键 `baize.tutorialSeen`，读不到就当没看过）。
 
-快捷键（GDD §14）：空格 掷骰 / 确认，B 升级，C 出符，Enter 结束回合，Esc 取消，F 切换倍速（1/2/4/8），L 展开 / 收起战报，S 下载对局记录；弹窗内数字键 1–9 直接选择。
+快捷键（GDD §14）：空格 掷骰 / 确认，B 升级，C 出符，Enter 结束回合，Esc 取消，F 切换倍速（0.5/1/2/4），L 展开 / 收起战报，S 下载对局记录；弹窗内数字键 1–9 直接选择。
 
 ### 存档与对局记录
 
@@ -60,8 +60,8 @@ src/
     record.ts    对局记录 GameRecord：生成、校验、重放
   ai/          AI 控制器（GDD §13）：难度 easy/normal/hard，性格 稳健/激进/守财；predict.ts 为移动预测
   sim/         无头驱动 headless.ts、批量模拟库 simulate.ts、命令行 run.ts、参数扫描 sweep.ts、对局记录复盘 replay.ts
-  scenes/      Phaser 场景：Boot（载图集/生成占位）→ Title → HeroSelect →（Setup 高级设置）→ Versus → Game → Result
-  ui/          画面组件：BoardView、TopBar（左栏顶部轮次）、PlayerCards（左栏）、LogPanel（战报）、SidePanel（右栏与回合坞）、Cutscene（过场横幅）、ChoiceModal、HowToPlay（玩法说明浮层）、session（开局配置）、saves（自动存档 / 教程标记）、assets、theme、layout
+  scenes/      Phaser 场景：Boot（载图集/生成占位）→ Title → HeroSelect →（Setup 高级设置）→ Versus → Game → Result；Hud 是叠在 Game 上的屏幕层，放全部面板
+  ui/          画面组件：BoardView（棋盘与白泽现世光效）、TopBar（左上轮次）、PlayerCards（左侧玩家小卡）、LogPanel（战报）、ActionDock（右下行动坞与手牌）、Tooltip（共用提示框）、TileInfo（地块提示）、Cutscene（过场横幅）、ChoiceModal、HowToPlay（玩法说明浮层）、session（开局配置）、saves（自动存档 / 教程标记）、assets、theme、layout
 tests/         vitest：移动/岔路/灵台/地形、租金、突破、灵脉、破产、胜负、确定性回放、对局记录、选人开局
 scripts/       screenshots.cjs（Playwright 冒烟测试 + 截图）
 ```

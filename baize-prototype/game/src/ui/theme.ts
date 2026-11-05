@@ -35,6 +35,9 @@ export const PLAYER_HEX = ['#F2B93B', '#E6E4F0', '#D9434B', '#3A6FD8'];
  */
 export const FONT = '"Fusion Pixel 12px", "Ark Pixel 12px", "Noto Sans SC", "Noto Sans CJK SC", sans-serif';
 
+/** Font size steps for the in-game HUD and board text. */
+export const FS = { xs: 10, sm: 12, md: 14, lg: 18, xl: 24, hero: 40 };
+
 /**
  * Text texture resolution. Keep it at 1: the framebuffer is always 1280×720 (Scale.FIT only stretches it with CSS),
  * so a 2× texture gets downsampled and drops 1-px strokes, e.g. "+225" renders as "−225".
@@ -107,6 +110,9 @@ export function tab(scene: Phaser.Scene, cx: number, y: number, label: string, f
   scene.add.rectangle(cx, y - 7, 146, 2, COLORS.gold).setOrigin(0.5, 0.5);
   return { ribbon, label: txt(scene, cx, y + 1, label, { size: 12, bold: true, origin: [0.5, 0.5], color: HEX.parchment }) };
 }
+
+/** Floating HUD panels: translucent ink so the board shows through at the edges. */
+export const FLOAT_ALPHA = 0.88;
 
 /** Simple bordered panel rectangle. */
 export function panel(

@@ -13,13 +13,15 @@ import type { GameState, NodeId, RoadId } from '../core/types';
 import { BoardView } from '../ui/BoardView';
 import { ChoiceModal, type ModalOption, type ModalSpec } from '../ui/ChoiceModal';
 import { Cutscene, type BannerSpec } from '../ui/Cutscene';
-import { BOARD, BOARD_CENTER } from '../ui/layout';
+import { BOARD, STAGE, type Rect } from '../ui/layout';
 import { LogPanel } from '../ui/LogPanel';
 import { PlayerCards } from '../ui/PlayerCards';
 import { downloadRecord, saveAutosave } from '../ui/saves';
 import type { SessionConfig } from '../ui/session';
-import { SidePanel } from '../ui/SidePanel';
-import { COLORS, HEX, PLAYER_COLORS, txt } from '../ui/theme';
+import { ActionDock } from '../ui/ActionDock';
+import { COLORS, FS, HEX, PLAYER_COLORS, txt } from '../ui/theme';
+import { tileTip } from '../ui/TileInfo';
+import { Tooltip } from '../ui/Tooltip';
 import { TopBar } from '../ui/TopBar';
 import type { ResultData } from './ResultScene';
 
@@ -29,14 +31,16 @@ const SLOW_EVENTS = new Set<GameEvent['type']>([
 ]);
 
 /**
- * Animation budget per beat, in ms at 1×. AI turns run on the brisk profile; a human seat's own
- * turn runs slower so its results can be read. `think` is the pause before an AI answers.
+ * Animation budget per beat, in ms at 1×. The AI profile lands an AI turn at about 4–5 s; a human
+ * seat's own turn runs slower still so its results can be read. `step` is one hop between cells,
+ * `rollHold` how long the rolled pair stays up, `think` the pause before an AI answers.
  */
 interface Pace {
   step: number;
   slide: number;
   teleport: number;
   roll: number;
+  rollHold: number;
   demon: number;
   slow: number;
   turnStart: number;
@@ -45,12 +49,13 @@ interface Pace {
 }
 
 const PACE: Record<'ai' | 'human', Pace> = {
-  ai: { step: 70, slide: 200, teleport: 260, roll: 260, demon: 360, slow: 120, turnStart: 160, think: 60, thinkModal: 120 },
-  human: { step: 130, slide: 300, teleport: 380, roll: 480, demon: 450, slow: 260, turnStart: 950, think: 0, thinkModal: 0 },
+  ai: { step: 200, slide: 400, teleport: 450, roll: 450, rollHold: 280, demon: 550, slow: 300, turnStart: 300, think: 80, thinkModal: 220 },
+  human: { step: 240, slide: 480, teleport: 540, roll: 700, rollHold: 600, demon: 650, slow: 650, turnStart: 1100, think: 0, thinkModal: 0 },
 };
-const ROUND_WAIT = 380;
-const CUTSCENE_MS = 1150;
-const WIN_MS = 1600;
+const ROUND_WAIT = 700;
+const CUTSCENE_MS = 1500;
+const WIN_MS = 2000;
+const SPEEDS = [0.5, 1, 2, 4];
 
 /** Big events get a full-width cutscene banner. */
 const CUTSCENES: Partial<Record<GameEventType, (g: Game, e: GameEvent) => BannerSpec>> = {
@@ -84,7 +89,8 @@ export class GameScene extends Phaser.Scene {
   private boardView!: BoardView;
   private cards!: PlayerCards;
   private top!: TopBar;
-  private side!: SidePanel;
+  private side!: ActionDock;
+  private tip!: Tooltip;
   private modal!: ChoiceModal;
   private logPanel!: LogPanel;
   private fx!: Cutscene;
@@ -113,7 +119,7 @@ export class GameScene extends Phaser.Scene {
     this.queue = [];
     this.mainChoice = null;
     this.mainResolve = null;
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => { this.alive = false; });
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => { this.alive = false; this.game.scene.stop('Hud'); });
     this.cameras.main.setBackgroundColor(COLORS.bg);
 
     // Resuming replays the saved answers before any listener is attached, so nothing animates.
@@ -124,15 +130,20 @@ export class GameScene extends Phaser.Scene {
     this.ais = session.seats.map((s, i) => (s.human ? null : new AIController(this.engine, i, { difficulty: s.difficulty, personality: s.personality, seed: session.setup.seed })));
     const labels = session.seats.map((s) => (s.human ? '玩家' : `AI·${DIFFICULTY_LABEL[s.difficulty]}·${PERSONALITY_LABEL[s.personality]}`));
 
-    this.top = new TopBar(this, this.engine);
+    // The board lives in this scene's world; every widget lives on the Hud overlay scene, whose camera
+    // never scrolls or zooms, so the HUD stays put whatever this camera does.
+    this.game.scene.start('Hud');
+    const hud = this.scene.get('Hud');
     this.boardView = new BoardView(this, this.engine.board, session.setup.players.map((p) => p.hero));
-    this.cards = new PlayerCards(this, this.engine, labels);
-    this.side = new SidePanel(this, this.engine);
-    this.modal = new ChoiceModal(this);
-    this.logPanel = new LogPanel(this);
-    this.fx = new Cutscene(this);
+    this.tip = new Tooltip(hud);
+    this.top = new TopBar(hud, this.engine, this.tip);
+    this.cards = new PlayerCards(hud, this.engine, labels, this.tip);
+    this.side = new ActionDock(hud, this.engine, this.tip, session.seats.some((s) => s.human));
+    this.modal = new ChoiceModal(hud);
+    this.logPanel = new LogPanel(hud);
+    this.fx = new Cutscene(hud);
     this.lastSnap = null;
-    this.toastText = txt(this, BOARD_CENTER.x, BOARD.y + BOARD.size - BOARD.cell - 18, '', { size: 16, bold: true, color: HEX.gold, stroke: HEX.ink, origin: [0.5, 0.5] }).setDepth(9000);
+    this.toastText = txt(hud, STAGE.cx, BOARD.y + BOARD.size - BOARD.cell - 18, '', { size: FS.lg, bold: true, color: HEX.gold, stroke: HEX.ink, origin: [0.5, 0.5] }).setDepth(9000);
 
     this.side.btnSpeed.onClick(() => this.cycleSpeed());
     this.side.btnLog.onClick(() => this.logPanel.toggle());
@@ -142,7 +153,7 @@ export class GameScene extends Phaser.Scene {
     this.side.btnUpgrade.onClick(() => void this.openSubMenu('upgrade'));
     this.side.btnCast.onClick(() => void this.openSubMenu('cast'));
     this.side.onCardClick((card) => this.mainAnswer(`cast:${card}`));
-    this.boardView.onHover((n) => { this.hovered = n; this.side.showTile(n, this.shownState); });
+    this.boardView.onHover((n) => { this.hovered = n; this.showTile(); });
     this.boardView.onClick((n) => this.nodeClicked(n));
     this.input.keyboard?.on('keydown', (ev: KeyboardEvent) => this.onKey(ev));
     this.setMainButtons(null);
@@ -233,7 +244,7 @@ export class GameScene extends Phaser.Scene {
         break;
       case 'roll':
         if (e.dice) {
-          await Promise.all([this.fx.rollDice(e.dice, this.ms(pace.roll)), this.side.shakeDice(this.ms(pace.roll))]);
+          await Promise.all([this.fx.rollDice(e.dice, this.ms(pace.roll), this.ms(pace.rollHold)), this.side.shakeDice(this.ms(pace.roll))]);
           this.side.setDice(e.dice);
         }
         break;
@@ -274,7 +285,7 @@ export class GameScene extends Phaser.Scene {
     const left = cfg.baizeManifestRound - st.round;
     const sub = st.round === cfg.rounds ? '最终轮！修为最高者将夺得魁首'
       : left > 0 ? `白泽现世还有 ${left} 轮` : `修为先到 ${cfg.winCultivation} 即胜`;
-    this.fx.ribbon(`第 ${st.round} / ${cfg.rounds} 轮`, sub, COLORS.gold, BOARD_CENTER.y, this.ms(1100));
+    this.fx.ribbon(`第 ${st.round} / ${cfg.rounds} 轮`, sub, COLORS.gold, STAGE.cy, this.ms(1400));
   }
 
   /** AI turns get a quick ribbon; a human seat's turn gets a full "轮到你了" moment. */
@@ -282,7 +293,7 @@ export class GameScene extends Phaser.Scene {
     this.renderAll(st, false);
     const p = st.players[seat];
     if (!this.isHuman(seat)) {
-      this.fx.ribbon(`${p.name} 的回合`, '', PLAYER_COLORS[seat], BOARD.y + BOARD.cell * 1.6, this.ms(800));
+      this.fx.ribbon(`${p.name} 的回合`, '', PLAYER_COLORS[seat], STAGE.turnRibbonY, this.ms(PACE.ai.turnStart + 400));
       await this.wait(this.ms(PACE.ai.turnStart));
       return;
     }
@@ -317,7 +328,7 @@ export class GameScene extends Phaser.Scene {
     this.top.render(state);
     this.side.setTurn(state, this.isHuman(state.current));
     this.side.btnSpeed.setLabel(`倍速 ×${this.speed} · F`);
-    this.side.showTile(this.hovered, state);
+    this.showTile();
     this.side.renderHand(state, this.handViewer(state));
   }
 
@@ -394,7 +405,7 @@ export class GameScene extends Phaser.Scene {
     const id = await this.modal.open({
       title: which === 'upgrade' ? '升级洞府（每回合 1 次）' : '施放符箓 / 大招 / 神通',
       options: opts.map((o) => ({ id: o.id, label: o.label, hint: o.hint })),
-      closable: true, cancelId: null, placement: which === 'upgrade' ? 'side' : 'center',
+      closable: true, cancelId: null, placement: which === 'upgrade' ? 'side' : 'center', avoid: this.tokenScreenRect(c.player),
     });
     this.boardView.setClickable([]);
     this.nodeOptions.clear();
@@ -443,6 +454,7 @@ export class GameScene extends Phaser.Scene {
       cardFrame: c.kind === 'heavenPick' ? 'card_heaven' : 'card_divine',
       cardLabel: c.kind === 'heavenPick' ? '天赐' : '神通',
       numbered: c.kind !== 'rollValue',
+      avoid: this.tokenScreenRect(c.player),
     });
     this.boardView.setClickable([]);
     this.nodeOptions.clear();
@@ -451,9 +463,35 @@ export class GameScene extends Phaser.Scene {
 
   private nodeClicked(n: NodeId): void {
     const id = this.nodeOptions.get(n);
-    if (!id) return;
+    if (!id) {
+      this.tip.toggle(`tile:${n}`, this.toScreen(this.boardView.nodeRect(n)), tileTip(this.engine, this.shownState, n));
+      return;
+    }
     if (this.mainChoice) this.mainAnswer(id);
     else if (this.modal.isOpen) this.modal.close(id);
+  }
+
+  /** Hovered tile's popover; a pinned tile popover follows the latest state. */
+  private showTile(): void {
+    const pinned = this.tip.pinned;
+    if (pinned?.startsWith('tile:')) {
+      const n = pinned.slice(5) as NodeId;
+      this.tip.unpin();
+      this.tip.toggle(pinned, this.toScreen(this.boardView.nodeRect(n)), tileTip(this.engine, this.shownState, n));
+      return;
+    }
+    if (this.hovered === null) this.tip.hide();
+    else this.tip.show(this.toScreen(this.boardView.nodeRect(this.hovered)), tileTip(this.engine, this.shownState, this.hovered));
+  }
+
+  /** Board (world) rect to HUD (screen) coordinates through this scene's camera. */
+  private toScreen(r: Rect): Rect {
+    const cam = this.cameras.main;
+    return { x: (r.x - cam.worldView.x) * cam.zoom, y: (r.y - cam.worldView.y) * cam.zoom, w: r.w * cam.zoom, h: r.h * cam.zoom };
+  }
+
+  private tokenScreenRect(seat: number): Rect {
+    return this.toScreen(this.boardView.tokenRect(seat));
   }
 
   private toast(s: string): void {
@@ -463,8 +501,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private cycleSpeed(): void {
-    const speeds = [1, 2, 4, 8];
-    this.speed = speeds[(speeds.indexOf(this.speed) + 1) % speeds.length];
+    this.speed = SPEEDS[(SPEEDS.indexOf(this.speed) + 1) % SPEEDS.length];
     this.side.btnSpeed.setLabel(`倍速 ×${this.speed} · F`);
     this.toast(`速度 ${this.speed}×`);
   }
@@ -479,6 +516,7 @@ export class GameScene extends Phaser.Scene {
     if (k === 'f' || k === 'F') { this.cycleSpeed(); return; }
     if (k === 'l' || k === 'L') { this.logPanel.toggle(); return; }
     if (k === 'Escape' && this.logPanel.isOpen) { this.logPanel.toggle(false); return; }
+    if (k === 'Escape' && this.tip.pinned && !this.modal.isOpen) { this.tip.unpin(); return; }
     if (this.modal.isOpen) {
       const key = k === ' ' ? 'SPACE' : k === 'Escape' ? 'ESC' : k === 'Enter' ? 'SPACE' : k;
       if (this.modal.handleKey(key)) ev.preventDefault();

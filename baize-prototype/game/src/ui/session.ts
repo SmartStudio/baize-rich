@@ -14,7 +14,7 @@ export interface SeatConfig {
 export interface SessionConfig {
   setup: GameSetup;
   seats: SeatControl[];
-  /** Animation speed multiplier (F cycles 1/2/4/8×). */
+  /** Animation speed multiplier (F cycles 0.5/1/2/4×). */
   speed: number;
   /** Started via ?auto=1 (4 AI). Not autosaved, so a demo never overwrites a human game. */
   auto?: boolean;
