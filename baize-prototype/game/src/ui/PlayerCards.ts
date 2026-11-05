@@ -1,23 +1,21 @@
-// Left column: one compact strip per seat (portrait, name, 修为 bar, 灵石, 灵丹, 符, 神通, status). Details live in tooltips.
+// Player chips floating in the left margin: portrait, name, 修为, 灵石 and who is acting.
+// Hovering the 修为 line explains it; clicking a chip pins a popover with everything else.
 import Phaser from 'phaser';
 import type { Game } from '../core/engine';
 import { breakthroughCost, breakthroughsAvailable, cultivation, isWardActive, realmName } from '../core/rules';
 import type { GameState } from '../core/types';
-import { addImg, setFrame } from './assets';
-import { LEFT } from './layout';
-import { COLORS, HEX, PLAYER_COLORS, PLAYER_HEX, panel, txt } from './theme';
-import { Tooltip, type TipContent } from './Tooltip';
+import { addImg } from './assets';
+import { LEFT, type Rect } from './layout';
+import { COLORS, FLOAT_ALPHA, FS, HEX, PLAYER_COLORS, PLAYER_HEX, txt } from './theme';
+import type { Tooltip, TipContent } from './Tooltip';
 
-interface CardView {
+interface ChipView {
+  rect: Rect;
   frame: Phaser.GameObjects.Rectangle;
-  badge: Phaser.GameObjects.Container;
+  marker: Phaser.GameObjects.Triangle;
+  cult: Phaser.GameObjects.Text;
   cultBar: Phaser.GameObjects.Rectangle;
-  cultText: Phaser.GameObjects.Text;
   stones: Phaser.GameObjects.Text;
-  pills: Phaser.GameObjects.Text;
-  cards: Phaser.GameObjects.Text;
-  divines: Phaser.GameObjects.Image[];
-  status: Phaser.GameObjects.Text;
 }
 
 interface StatusTag {
@@ -25,51 +23,39 @@ interface StatusTag {
   desc: string;
 }
 
-const BAR_W = LEFT.w - 86;
+const PORTRAIT = 44;
+const TEXT_X = 60;
+const BAR_W = LEFT.w - TEXT_X - 10;
 
 export class PlayerCards {
-  private views: CardView[] = [];
+  private views: ChipView[] = [];
   private tags: StatusTag[][] = [];
   private state: GameState;
   private viewer: number | null = null;
-  private tip: Tooltip;
 
-  constructor(scene: Phaser.Scene, private game: Game, labels: string[]) {
+  constructor(scene: Phaser.Scene, private game: Game, private labels: string[], private tip: Tooltip) {
     const s = scene;
     this.state = game.state;
-    this.tip = new Tooltip(s);
     game.state.players.forEach((p, i) => {
       const x = LEFT.x;
-      const y = LEFT.y + i * (LEFT.cardH + LEFT.gap);
-      const frame = panel(s, x, y, LEFT.w, LEFT.cardH);
-      s.add.rectangle(x, y, 5, LEFT.cardH, PLAYER_COLORS[i]).setOrigin(0, 0);
-      addImg(s, x + 12, y + 10, `por_${p.hero}`).setOrigin(0, 0).setScale(56 / 64);
-      const badge = s.add.container(x + 40, y + 74, [
-        s.add.rectangle(0, 0, 56, 16, PLAYER_COLORS[i]).setStrokeStyle(2, COLORS.outline),
-        txt(s, 0, 0, '行动中', { size: 11, bold: true, color: HEX.ink, origin: [0.5, 0.5] }),
-      ]).setVisible(false);
-      txt(s, x + 76, y + 8, p.name, { size: 14, color: PLAYER_HEX[i], bold: true });
-      txt(s, x + LEFT.w - 8, y + 11, labels[i], { size: 10, color: HEX.dim, origin: [1, 0] });
-      s.add.rectangle(x + 76, y + 30, BAR_W, 8, COLORS.outline).setOrigin(0, 0);
-      const cultBar = s.add.rectangle(x + 77, y + 31, 0, 6, COLORS.gold).setOrigin(0, 0);
-      for (let k = 1; k < 10; k++) s.add.rectangle(x + 76 + (BAR_W * k) / 10, y + 30, 1, 8, COLORS.outline).setOrigin(0, 0);
-      const cultText = txt(s, x + 76, y + 42, '', { size: 12 });
-      addImg(s, x + 76, y + 62, 'ic_stone').setOrigin(0, 0);
-      const stones = txt(s, x + 95, y + 62, '', { size: 12 });
-      addImg(s, x + 146, y + 62, 'ic_pill').setOrigin(0, 0);
-      const pills = txt(s, x + 165, y + 62, '', { size: 12 });
-      const cards = txt(s, x + 198, y + 62, '', { size: 12, color: HEX.dim });
-      const divines: Phaser.GameObjects.Image[] = [];
-      for (let k = 0; k < 4; k++) {
-        const dx = x + 12 + k * 26;
-        s.add.rectangle(dx, y + 90, 24, 24, COLORS.outline).setOrigin(0, 0);
-        divines.push(addImg(s, dx, y + 90, 'div_swift').setOrigin(0, 0).setVisible(false));
-        this.tip.attach(dx, y + 90, 24, 24, () => this.divineTip(i, k));
-      }
-      const status = txt(s, x + 118, y + 86, '', { size: 11, color: HEX.gold, wrap: LEFT.w - 126 });
-      this.tip.attach(x + 76, y + 26, BAR_W, 32, () => this.cultTip(i));
-      this.tip.attach(x + 116, y + 82, LEFT.w - 120, LEFT.cardH - 84, () => this.statusTip(i));
-      this.views.push({ frame, badge, cultBar, cultText, stones, pills, cards, divines, status });
+      const y = LEFT.chipY + i * (LEFT.chipH + LEFT.chipGap);
+      const rect = { x, y, w: LEFT.w, h: LEFT.chipH };
+      const frame = s.add.rectangle(x, y, LEFT.w, LEFT.chipH, COLORS.panel, FLOAT_ALPHA).setOrigin(0, 0).setStrokeStyle(2, COLORS.outline);
+      s.add.rectangle(x, y, 4, LEFT.chipH, PLAYER_COLORS[i]).setOrigin(0, 0);
+      const marker = s.add.triangle(x + LEFT.w + 8, y + LEFT.chipH / 2, 0, 0, 0, 14, 9, 7, PLAYER_COLORS[i]).setStrokeStyle(1, COLORS.outline).setVisible(false);
+      addImg(s, x + 9, y + (LEFT.chipH - PORTRAIT) / 2, `por_${p.hero}`).setOrigin(0, 0).setScale(PORTRAIT / 64);
+      txt(s, x + TEXT_X, y + 6, p.name, { size: FS.md, color: PLAYER_HEX[i], bold: true });
+      txt(s, x + LEFT.w - 8, y + 8, labels[i], { size: FS.xs, color: HEX.dim, origin: [1, 0] });
+      const cult = txt(s, x + TEXT_X, y + 27, '', { size: FS.sm });
+      addImg(s, x + LEFT.w - 74, y + 27, 'ic_stone').setOrigin(0, 0);
+      const stones = txt(s, x + LEFT.w - 55, y + 27, '', { size: FS.sm });
+      s.add.rectangle(x + TEXT_X, y + 47, BAR_W, 5, COLORS.outline).setOrigin(0, 0);
+      const cultBar = s.add.rectangle(x + TEXT_X, y + 47, 0, 5, COLORS.gold).setOrigin(0, 0);
+      const open = (): void => this.tip.toggle(`chip:${i}`, rect, this.detailTip(i));
+      s.add.zone(x, y, LEFT.w, LEFT.chipH).setOrigin(0, 0).setInteractive({ useHandCursor: true }).on('pointerdown', open);
+      this.tip.attach(x + TEXT_X, y + 24, BAR_W - 80, 30, () => this.cultTip(i))
+        .setInteractive({ useHandCursor: true }).on('pointerdown', open);
+      this.views.push({ rect, frame, marker, cult, cultBar, stones });
     });
   }
 
@@ -82,22 +68,43 @@ export class PlayerCards {
       const v = this.views[i];
       const c = cultivation(state, g.data, i);
       const active = state.current === i && !state.over;
-      v.frame.setStrokeStyle(active ? 3 : 2, active ? PLAYER_COLORS[i] : COLORS.outline).setFillStyle(active ? COLORS.panelLight : COLORS.panel);
-      v.badge.setVisible(active);
-      v.cultBar.width = Math.max(0, Math.min(1, c / g.data.config.winCultivation)) * (BAR_W - 2);
+      v.frame.setStrokeStyle(active ? 3 : 2, active ? PLAYER_COLORS[i] : COLORS.outline).setFillStyle(active ? COLORS.panelLight : COLORS.panel, FLOAT_ALPHA);
+      v.marker.setVisible(active);
+      v.cultBar.width = Math.max(0, Math.min(1, c / g.data.config.winCultivation)) * BAR_W;
       const bt = breakthroughsAvailable(p);
-      v.cultText.setText(`修为 ${c}/${g.data.config.winCultivation} · ${realmName(g.data, c)}${bt > 0 ? ` · 可突破 ${bt}` : ''}`);
+      v.cult.setText(`修为 ${c}/${g.data.config.winCultivation}${bt > 0 ? ' · 可突破' : ''}`).setColor(bt > 0 ? HEX.gold : HEX.parchment);
       v.stones.setText(`${p.stones}`);
-      v.pills.setText(`${p.pills}`);
-      v.cards.setText(`符 ${p.hand.length}/${g.data.config.handLimit}`);
-      v.divines.forEach((img, k) => {
-        const d = p.divines[k];
-        img.setVisible(!!d);
-        if (d) setFrame(img, `div_${d}`);
-      });
       this.tags[i] = this.statusTags(state, i);
-      v.status.setText(this.tags[i].map((t) => t.label).join(' · '));
     });
+    const pinned = this.tip.pinned;
+    if (pinned?.startsWith('chip:')) {
+      const i = Number(pinned.slice(5));
+      this.tip.unpin();
+      this.tip.toggle(pinned, this.views[i].rect, this.detailTip(i));
+    }
+  }
+
+  /** Everything the chip leaves out: resources, 神通, statuses, task, 大招. */
+  private detailTip(i: number): TipContent {
+    const g = this.game;
+    const cfg = g.data.config;
+    const st = this.state;
+    const p = st.players[i];
+    const c = cultivation(st, g.data, i);
+    const divines = p.divines.map((id, k) => ({ frame: `div_${id}`, label: g.data.blessings.divine.find((x) => x.id === id)!.name, tip: this.divineTip(i, k) }));
+    const lines = [
+      `${this.labels[i]} · 修为 ${c}/${cfg.winCultivation}`,
+      `灵石 ${p.stones} · 灵丹 ${p.pills} · 符箓 ${p.hand.length}/${cfg.handLimit} · 神通 ${p.divines.length}/${cfg.maxDivine}`,
+      this.cultTip(i).body.split('\n')[1],
+      ...divines.map((d) => `${d.tip.title}${d.tip.body.split('\n')[0]}`),
+      '',
+      this.statusTip(i).body,
+    ];
+    return {
+      title: `${p.name} · ${realmName(g.data, c)}`,
+      icons: divines.length ? divines.map(({ frame, label }) => ({ frame, label })) : undefined,
+      body: lines.join('\n'),
+    };
   }
 
   private statusTags(state: GameState, i: number): StatusTag[] {

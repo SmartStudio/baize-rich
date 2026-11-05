@@ -1,15 +1,20 @@
-// Board rendering: tiles, objects, buildings, owner bars/flags, tokens, demon, Baize.
+// Board rendering: tiles, objects, buildings, owner bars/flags, tokens, demon, and the 白泽现世 light
+// on the altar. Everything here lives in board (world) coordinates; sprite scales come from SPRITE.
 import Phaser from 'phaser';
 import { ALTAR, type Board } from '../core/board';
 import type { GameState, HeroId, NodeId } from '../core/types';
 import { addImg, setFrame } from './assets';
-import { ALTAR_RECT, BOARD, cellXY } from './layout';
-import { COLORS, HEX, PLAYER_COLORS, PLAYER_HEX, txt } from './theme';
+import { ALTAR_RECT, BOARD, cellXY, SPRITE, type Rect } from './layout';
+import { COLORS, FS, HEX, PLAYER_COLORS, PLAYER_HEX, txt } from './theme';
 
 const S = BOARD.scale;
 const C = BOARD.cell;
 /** Board-local offsets are authored on the 64 px art grid; `u` maps them to screen pixels. */
 const u = (v: number): number => v * S;
+/** Altar sprite: its statue's centre sits this far above the sprite centre (native px). */
+const STATUE_DY = -6;
+/** Token feet around the altar statue, relative to the footprint centre. */
+const ALTAR_SEATS = [[-62, -8], [62, -8], [-62, 58], [62, 58]];
 
 interface LandView {
   decor: Phaser.GameObjects.Image;
@@ -25,9 +30,8 @@ export class BoardView {
   private tokens: Phaser.GameObjects.Container[] = [];
   private tokenNode: NodeId[] = [];
   private demon: Phaser.GameObjects.Image;
-  private baize: Phaser.GameObjects.Image;
+  private manifest: Manifest;
   private highlights: Phaser.GameObjects.Rectangle[] = [];
-  private zones = new Map<NodeId, Phaser.GameObjects.Zone>();
   private hoverFn: ((n: NodeId | null) => void) | null = null;
   private clickFn: ((n: NodeId) => void) | null = null;
   private clickable = new Set<NodeId>();
@@ -37,40 +41,42 @@ export class BoardView {
 
   constructor(private scene: Phaser.Scene, private board: Board, heroes: HeroId[]) {
     const s = scene;
-    s.add.rectangle(BOARD.x - 8, BOARD.y - 8, BOARD.size + 16, BOARD.size + 16, COLORS.panel)
-      .setOrigin(0, 0).setStrokeStyle(3, COLORS.gold).setDepth(-1);
-    addImg(s, BOARD.x + C, BOARD.y + C, 'centre_bg').setOrigin(0, 0).setDepth(0).setScale(S);
+    s.add.rectangle(BOARD.x, BOARD.y, BOARD.size, BOARD.size, COLORS.panel).setOrigin(0, 0).setDepth(-1);
+    addImg(s, BOARD.x + C, BOARD.y + C, 'centre_bg').setOrigin(0, 0).setDepth(0).setScale(SPRITE.ground);
     for (const id of board.allNodeIds()) {
       const n = board.node(id);
       if (id === ALTAR) continue;
       const { x, y } = cellXY(n.pos[0], n.pos[1]);
       const tileFrame = n.type === 'land' ? `tile_land_${n.region}` : `tile_${n.type}`;
-      addImg(s, x, y, tileFrame).setOrigin(0, 0).setDepth(1).setScale(S);
+      addImg(s, x, y, tileFrame).setOrigin(0, 0).setDepth(1).setScale(SPRITE.ground);
+      const foot = y + u(48);
       if (n.type === 'land') {
-        const decor = addImg(s, x + u(32), y + u(48), `decor_${n.region}`).setOrigin(0.5, 1).setDepth(y + u(48)).setScale(S);
-        const bld = addImg(s, x + u(32), y + u(48), 'bld_1').setOrigin(0.5, 1).setDepth(y + u(48)).setVisible(false).setScale(S);
-        const owner = addImg(s, x, y + u(54), 'owner_p1').setOrigin(0, 0).setDepth(2).setVisible(false).setScale(S);
-        const flag = addImg(s, x + u(9), y + u(24), 'flag_p1').setOrigin(0.5, 1).setDepth(y + u(49)).setVisible(false).setScale(S);
-        const trap = txt(s, x + C - u(4), y + u(4), '禁', { size: 13, bold: true, stroke: HEX.ink, origin: [1, 0] })
+        const decor = addImg(s, x + C / 2, foot, `decor_${n.region}`).setOrigin(0.5, 1).setDepth(foot).setScale(SPRITE.prop);
+        const bld = addImg(s, x + C / 2, foot, 'bld_1').setOrigin(0.5, 1).setDepth(foot).setVisible(false).setScale(SPRITE.prop);
+        const owner = addImg(s, x, y + u(54), 'owner_p1').setOrigin(0, 0).setDepth(2).setVisible(false).setScale(SPRITE.ground);
+        const flag = addImg(s, x + u(9), y + u(24), 'flag_p1').setOrigin(0.5, 1).setDepth(foot + 1).setVisible(false).setScale(SPRITE.prop);
+        const trap = txt(s, x + C - u(4), y + u(4), '禁', { size: FS.sm, bold: true, stroke: HEX.ink, origin: [1, 0] })
           .setDepth(2500).setVisible(false);
         this.lands.set(id, { decor, bld, owner, flag, trap });
       } else {
-        addImg(s, x + u(32), y + u(48), `obj_${n.type}`).setOrigin(0.5, 1).setDepth(y + u(48)).setScale(S);
+        addImg(s, x + C / 2, foot, `obj_${n.type}`).setOrigin(0.5, 1).setDepth(foot).setScale(SPRITE.prop);
       }
       this.addZone(id, x, y, C, C);
     }
-    addImg(s, ALTAR_RECT.x, BOARD.y + u(132), 'altar').setOrigin(0, 0).setDepth(ALTAR_RECT.y + u(150)).setScale(S);
+    const ax = ALTAR_RECT.x + ALTAR_RECT.w / 2;
+    const ay = ALTAR_RECT.y + ALTAR_RECT.h / 2;
+    addImg(s, ax, ay, 'altar').setOrigin(0.5, 0.5).setDepth(ALTAR_RECT.y + ALTAR_RECT.h).setScale(SPRITE.altar);
     this.addZone(ALTAR, ALTAR_RECT.x, ALTAR_RECT.y, ALTAR_RECT.w, ALTAR_RECT.h);
-    this.baize = addImg(s, ALTAR_RECT.x + u(96), ALTAR_RECT.y + u(40), 'baize').setOrigin(0.5, 1).setDepth(900).setVisible(false).setScale(S);
-    this.demon = addImg(s, 0, 0, 'demon').setOrigin(0.5, 1).setVisible(false).setScale(S);
-    this.rock = txt(s, 0, 0, '山', { size: 22, bold: true, color: HEX.gold, stroke: HEX.ink, origin: [0.5, 0.5] }).setDepth(2600).setVisible(false);
+    this.manifest = new Manifest(s, ax, ay + STATUE_DY * SPRITE.altar, ALTAR_RECT.y + ALTAR_RECT.h + 1);
+    this.demon = addImg(s, 0, 0, 'demon').setOrigin(0.5, 1).setVisible(false).setScale(SPRITE.demon);
+    this.rock = txt(s, 0, 0, '山', { size: FS.lg, bold: true, color: HEX.gold, stroke: HEX.ink, origin: [0.5, 0.5] }).setDepth(2600).setVisible(false);
     this.currentMark = s.add.rectangle(0, 0, C, C, COLORS.gold, 0.16).setOrigin(0, 0).setStrokeStyle(4, COLORS.gold).setDepth(3).setVisible(false);
     s.tweens.add({ targets: this.currentMark, alpha: 0.45, duration: 520, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
 
     heroes.forEach((h, seat) => {
       const base = s.add.ellipse(0, -2, 22, 8, PLAYER_COLORS[seat]).setStrokeStyle(1, COLORS.outline);
       const tok = addImg(s, 0, 0, `tok_${h}`).setOrigin(0.5, 1);
-      const c = s.add.container(0, 0, [base, tok]).setScale(S);
+      const c = s.add.container(0, 0, [base, tok]).setScale(SPRITE.token);
       this.tokens.push(c);
       this.tokenNode.push(board.startId);
     });
@@ -80,25 +86,34 @@ export class BoardView {
     const z = this.scene.add.zone(x, y, w, h).setOrigin(0, 0).setInteractive({ useHandCursor: false });
     z.on('pointerover', () => this.hoverFn?.(id));
     z.on('pointerout', () => this.hoverFn?.(null));
-    z.on('pointerdown', () => { if (this.clickable.has(id)) this.clickFn?.(id); });
-    this.zones.set(id, z);
+    z.on('pointerdown', () => this.clickFn?.(id));
   }
 
   onHover(fn: (n: NodeId | null) => void): void { this.hoverFn = fn; }
+  /** Fires for every node; `isClickable` says whether it is a current choice target. */
   onClick(fn: (n: NodeId) => void): void { this.clickFn = fn; }
+  isClickable(id: NodeId): boolean { return this.clickable.has(id); }
 
-  nodeRect(id: NodeId): { x: number; y: number; w: number; h: number } {
+  nodeRect(id: NodeId): Rect {
     if (id === ALTAR) return { ...ALTAR_RECT };
     const n = this.board.node(id);
     const { x, y } = cellXY(n.pos[0], n.pos[1]);
     return { x, y, w: C, h: C };
   }
 
+  /** World-space box around a seat's token, for keeping modals off it. */
+  tokenRect(seat: number): Rect {
+    const t = this.tokens[seat];
+    const w = 32 * t.scaleX;
+    const h = 48 * t.scaleY;
+    return { x: t.x - w / 2, y: t.y - h, w, h };
+  }
+
   /** Token anchor (bottom-centre) for a seat on a node; seats fan out so they don't overlap fully. */
   tokenXY(id: NodeId, seat: number): { x: number; y: number } {
     if (id === ALTAR) {
-      const offs = [[-40, 0], [40, 0], [-40, 56], [40, 56]];
-      return { x: ALTAR_RECT.x + u(96 + offs[seat][0]), y: ALTAR_RECT.y + u(96 + offs[seat][1]) };
+      const [dx, dy] = ALTAR_SEATS[seat];
+      return { x: ALTAR_RECT.x + ALTAR_RECT.w / 2 + dx, y: ALTAR_RECT.y + ALTAR_RECT.h / 2 + dy };
     }
     const r = this.nodeRect(id);
     return { x: r.x + u(32 + (seat - 1.5) * 10), y: r.y + u(48 + (seat % 2) * 4) };
@@ -110,19 +125,20 @@ export class BoardView {
     this.tokenNode[seat] = id;
   }
 
+  /** One cell of travel. `hop` lifts the figure in an arc; slides and teleports glide flat. */
   moveToken(seat: number, id: NodeId, ms: number, hop = true): Promise<void> {
     const { x, y } = this.tokenXY(id, seat);
     this.tokenNode[seat] = id;
     const tok = this.tokens[seat];
     return new Promise((resolve) => {
       this.scene.tweens.add({
-        targets: tok, x, y, duration: ms, ease: hop ? 'Quad.easeOut' : 'Linear',
+        targets: tok, x, y, duration: ms, ease: hop ? 'Sine.easeInOut' : 'Linear',
         onUpdate: () => tok.setDepth(tok.y + 100 + seat),
         onComplete: () => resolve(),
       });
       if (hop) {
         const inner = tok.list[1] as Phaser.GameObjects.Image;
-        this.scene.tweens.add({ targets: inner, y: -10, duration: ms / 2, yoyo: true, ease: 'Sine.easeOut' });
+        this.scene.tweens.add({ targets: inner, y: -SPRITE.hop, duration: ms / 2, yoyo: true, ease: 'Quad.easeOut' });
       }
     });
   }
@@ -137,13 +153,13 @@ export class BoardView {
     const r = this.nodeRect(state.players[state.current].pos);
     this.currentMark.setPosition(r.x, r.y).setSize(r.w, r.h).setVisible(!state.over);
     this.currentMark.setStrokeStyle(4, PLAYER_COLORS[state.current]).setFillStyle(PLAYER_COLORS[state.current], 0.16);
-    this.tokens.forEach((t, seat) => t.setScale(seat === state.current && !state.over ? S * 1.25 : S));
+    this.tokens.forEach((t, seat) => t.setScale(seat === state.current && !state.over ? SPRITE.tokenActive : SPRITE.token));
   }
 
   /** A short gain / loss label that rises from a seat's token. */
   floatText(seat: number, text: string, color: string, delay = 0): void {
     const tok = this.tokens[seat];
-    const t = txt(this.scene, tok.x, tok.y - u(52), text, { size: 15, bold: true, color, stroke: HEX.ink, origin: [0.5, 1] })
+    const t = txt(this.scene, tok.x, tok.y - 48 * tok.scaleY, text, { size: FS.md, bold: true, color, stroke: HEX.ink, origin: [0.5, 1] })
       .setDepth(8000).setAlpha(0);
     this.scene.tweens.add({ targets: t, alpha: 1, duration: 120, delay });
     this.scene.tweens.add({ targets: t, y: t.y - 30, duration: 1100, delay, ease: 'Sine.easeOut' });
@@ -172,29 +188,32 @@ export class BoardView {
       this.rock.setVisible(true).setPosition(r.x + r.w / 2, r.y + u(20)).setColor(PLAYER_HEX[state.roadblock.seat]);
     } else this.rock.setVisible(false);
     if (state.demon) {
-      const r = this.nodeRect(state.demon.node);
-      this.demon.setVisible(true).setPosition(r.x + u(32), r.y + u(46)).setDepth(r.y + u(46) + 50);
+      const { x, y } = this.demonXY(state.demon.node);
+      this.demon.setVisible(true).setPosition(x, y).setDepth(y + 50);
     } else this.demon.setVisible(false);
     this.markCurrent(state);
   }
 
+  private demonXY(id: NodeId): { x: number; y: number } {
+    const r = this.nodeRect(id);
+    return { x: r.x + r.w / 2, y: r.y + u(46) };
+  }
+
   moveDemon(from: NodeId | undefined, to: NodeId, ms: number): Promise<void> {
-    const r = this.nodeRect(to);
+    const { x, y } = this.demonXY(to);
     if (!from || !this.demon.visible) {
-      this.demon.setVisible(true).setPosition(r.x + u(32), r.y + u(46)).setAlpha(0);
+      this.demon.setVisible(true).setPosition(x, y).setAlpha(0);
       return new Promise((res) => this.scene.tweens.add({ targets: this.demon, alpha: 1, duration: ms, onComplete: () => res() }));
     }
     return new Promise((res) => this.scene.tweens.add({
-      targets: this.demon, x: r.x + u(32), y: r.y + u(46), duration: ms, ease: 'Sine.easeInOut',
-      onComplete: () => { this.demon.setDepth(r.y + u(46) + 50); res(); },
+      targets: this.demon, x, y, duration: ms, ease: 'Sine.easeInOut',
+      onComplete: () => { this.demon.setDepth(y + 50); res(); },
     }));
   }
 
+  /** 白泽现世: the altar's own statue lights up. Idempotent. */
   showBaize(on: boolean): void {
-    if (on && !this.baize.visible) {
-      this.baize.setVisible(true).setAlpha(0);
-      this.scene.tweens.add({ targets: this.baize, alpha: 1, y: this.baize.y - 6, duration: 600, yoyo: false });
-    } else if (!on) this.baize.setVisible(false);
+    this.manifest.set(on);
   }
 
   setClickable(nodes: NodeId[]): void {
@@ -209,4 +228,96 @@ export class BoardView {
       this.highlights.push(h);
     }
   }
+}
+
+const GOLD_LIGHT = 0xffe7a0;
+
+/**
+ * The manifest effect on the altar statue: a pillar of light rising from it, a glow on the statue,
+ * halo rings pulsing out from its feet, and sparks drifting up. The beast itself is the altar art.
+ */
+class Manifest {
+  private layer: Phaser.GameObjects.Container;
+  private sparks: Phaser.GameObjects.Particles.ParticleEmitter;
+  private loops: Phaser.Tweens.Tween[] = [];
+  private on = false;
+
+  constructor(private scene: Phaser.Scene, x: number, y: number, depth: number) {
+    const s = scene;
+    ensureFxTextures(s);
+    const feet = 46;
+    const beam = s.add.image(0, feet, 'fx_beam').setOrigin(0.5, 1).setScale(1.6, 1.5).setTint(GOLD_LIGHT).setBlendMode(Phaser.BlendModes.ADD);
+    const glow = s.add.image(0, 0, 'fx_glow').setScale(1.4).setTint(GOLD_LIGHT).setBlendMode(Phaser.BlendModes.ADD);
+    const halos = [0, 1].map(() => s.add.ellipse(0, feet, 128, 44).setStrokeStyle(3, COLORS.gold).setFillStyle());
+    this.layer = s.add.container(x, y, [beam, ...halos, glow]).setDepth(depth).setVisible(false);
+    this.sparks = s.add.particles(x, y + feet, 'fx_spark', {
+      speedY: { min: -70, max: -30 }, speedX: { min: -12, max: 12 }, lifespan: 1800,
+      scale: { start: 1, end: 0.2 }, alpha: { start: 1, end: 0 }, frequency: 90,
+      tint: [GOLD_LIGHT, 0xffffff], blendMode: 'ADD',
+      emitZone: { type: 'random', source: new Phaser.Geom.Ellipse(0, 0, 120, 40), quantity: 1 },
+      emitting: false,
+    }).setDepth(depth + 1);
+    this.layer.setData('parts', { beam, glow, halos });
+  }
+
+  set(on: boolean): void {
+    if (on === this.on) return;
+    this.on = on;
+    const s = this.scene;
+    for (const t of this.loops) t.remove();
+    this.loops = [];
+    if (!on) {
+      this.layer.setVisible(false);
+      this.sparks.stop();
+      return;
+    }
+    const { beam, glow, halos } = this.layer.getData('parts') as { beam: Phaser.GameObjects.Image; glow: Phaser.GameObjects.Image; halos: Phaser.GameObjects.Ellipse[] };
+    this.layer.setVisible(true).setAlpha(0);
+    this.sparks.start();
+    this.loops.push(
+      s.tweens.add({ targets: this.layer, alpha: 1, duration: 700 }),
+      s.tweens.add({ targets: beam, alpha: { from: 0.55, to: 0.9 }, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' }),
+      s.tweens.add({ targets: glow, alpha: { from: 0.35, to: 0.8 }, scale: { from: 1.3, to: 1.55 }, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' }),
+      ...halos.map((h, i) => s.tweens.add({
+        targets: h, scale: { from: 0.5, to: 1.5 }, alpha: { from: 1, to: 0 }, duration: 1600, delay: i * 800, repeat: -1, ease: 'Sine.easeOut',
+      })),
+    );
+  }
+}
+
+/** Soft additive light textures for the manifest effect, drawn once per game. */
+function ensureFxTextures(s: Phaser.Scene): void {
+  const make = (key: string, w: number, h: number, draw: (ctx: CanvasRenderingContext2D) => void): void => {
+    if (s.textures.exists(key)) return;
+    const tex = s.textures.createCanvas(key, w, h)!;
+    draw(tex.getContext());
+    tex.refresh();
+  };
+  make('fx_beam', 48, 256, (ctx) => {
+    const across = ctx.createLinearGradient(0, 0, 48, 0);
+    across.addColorStop(0, 'rgba(255,255,255,0)');
+    across.addColorStop(0.5, 'rgba(255,255,255,0.9)');
+    across.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = across;
+    ctx.fillRect(0, 0, 48, 256);
+    ctx.globalCompositeOperation = 'destination-in';
+    const up = ctx.createLinearGradient(0, 0, 0, 256);
+    up.addColorStop(0, 'rgba(0,0,0,0)');
+    up.addColorStop(0.6, 'rgba(0,0,0,1)');
+    up.addColorStop(1, 'rgba(0,0,0,0.6)');
+    ctx.fillStyle = up;
+    ctx.fillRect(0, 0, 48, 256);
+  });
+  make('fx_glow', 96, 96, (ctx) => {
+    const g = ctx.createRadialGradient(48, 48, 0, 48, 48, 48);
+    g.addColorStop(0, 'rgba(255,255,255,0.9)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 96, 96);
+  });
+  make('fx_spark', 6, 6, (ctx) => {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(1, 0, 4, 6);
+    ctx.fillRect(0, 1, 6, 4);
+  });
 }
