@@ -8,7 +8,7 @@ export function tileTip(g: Game, state: GameState, node: NodeId): TipContent {
   const n = g.board.node(node);
   const tt = g.data.board.tileTypes[n.type];
   if (n.type !== 'land') {
-    const where = n.ringIndex >= 0 ? `外环 ${node}` : n.type === 'altar' ? '秘境中心' : `问道之路 ${node}`;
+    const where = n.outer ? `外环 ${node}` : n.type === 'altar' ? '秘境中心' : `问道之路 ${node}`;
     return { title: `${n.name} · ${where}`, body: tt.desc };
   }
   const t = state.tiles[node];

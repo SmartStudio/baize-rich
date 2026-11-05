@@ -81,7 +81,7 @@ describe('§17 斗法', () => {
     g.state.players[2].pos = 'R5'; // landing tile (land, price 130)
     const seen: PendingChoice[] = [];
     g.state.rng = rngFor([1, 6]);
-    g.runFlow(g.testMove(3, 4), script({ duel: 'p2', fork: 'ring', buy: 'no' }, seen));
+    g.runFlow(g.testMove(3, 4), script({ duel: 'p2', buy: 'no' }, seen));
     const offer = seen.find((c) => c.kind === 'duel')!;
     expect(offer.options.map((o) => o.id)).toEqual(['p1', 'p2', 'none']);
     expect(g.log.filter((x) => x.type === 'duel')).toHaveLength(1);
@@ -97,7 +97,7 @@ describe('§17 斗法', () => {
     g.state.players[1].pos = 'R3';
     g.state.players[1].jailed = true;
     const seen: PendingChoice[] = [];
-    g.runFlow(g.testMove(3, 4), script({ fork: 'ring', buy: 'no' }, seen));
+    g.runFlow(g.testMove(3, 4), script({ buy: 'no' }, seen));
     expect(seen.some((c) => c.kind === 'duel')).toBe(false);
   });
 });
@@ -166,7 +166,7 @@ describe('§17 禁制', () => {
     g.state.tiles.R5.trap = true;
     const v = g.state.players[3];
     v.pos = 'R1';
-    g.runFlow(g.testMove(3, 4), script({ fork: 'ring' }));
+    g.runFlow(g.testMove(3, 4), script({}));
     expect(v.pos).toBe('R5');
     const rent = v.stats.rentPaid;
     expect(rent).toBeGreaterThan(0);
@@ -182,7 +182,7 @@ describe('§17 禁制', () => {
     ownR5(g);
     g.state.tiles.R5.trap = true;
     g.state.players[0].pos = 'R1';
-    g.runFlow(g.testMove(0, 4), script({ fork: 'ring' }));
+    g.runFlow(g.testMove(0, 4), script({}));
     expect(g.state.tiles.R5.trap).toBe(true);
     // a bound opponent standing on it settles in place without triggering it
     const v = g.state.players[3];
@@ -262,7 +262,7 @@ describe('§12 主动技能', () => {
 
     a.skillReadyTurn = 0;
     g.runFlow(g.testUseSkill(0), script({ target: 'node:R2' }));
-    g.runFlow(g.testPlayTurn(0), script({ fork: 'ring', buy: 'no', action: 'end', preRoll: 'roll' }));
+    g.runFlow(g.testPlayTurn(0), script({ buy: 'no', action: 'end', preRoll: 'roll' }));
     expect(g.state.roadblock).toBeNull();
     expect(g.log.some((e) => e.type === 'roadblockGone')).toBe(true);
   });
@@ -274,11 +274,11 @@ describe('§12 主动技能', () => {
     const b = g.state.players[1];
     expect(b.dazed).toBe(true);
     b.pos = 'R0';
-    g.runFlow(g.testMove(1, 7), script({ fork: 'ring', buy: 'no' }));
+    g.runFlow(g.testMove(1, 7), script({ buy: 'no' }));
     expect(b.pos).toBe('R3');
     expect(b.dazed).toBe(false);
     b.dazed = true;
-    g.runFlow(g.testMove(1, 1), script({ fork: 'ring', buy: 'no' }));
+    g.runFlow(g.testMove(1, 1), script({ buy: 'no' }));
     expect(b.pos).toBe('R4');
   });
 
@@ -302,12 +302,12 @@ describe('§12 主动技能', () => {
     const g = newGame();
     spread(g);
     const seen: PendingChoice[] = [];
-    g.runFlow(g.testPlayTurn(3), script({ fork: 'ring', buy: 'no', action: 'end', duel: 'none' }, seen));
+    g.runFlow(g.testPlayTurn(3), script({ buy: 'no', action: 'end', duel: 'none' }, seen));
     const acts = seen.filter((c) => c.kind === 'action').flatMap((c) => c.options.map((o) => o.id));
     expect(acts).toContain('skill');
     g.state.players[3].skillReadyTurn = 99;
     const seen2: PendingChoice[] = [];
-    g.runFlow(g.testPlayTurn(3), script({ fork: 'ring', buy: 'no', action: 'end', duel: 'none' }, seen2));
+    g.runFlow(g.testPlayTurn(3), script({ buy: 'no', action: 'end', duel: 'none' }, seen2));
     expect(seen2.filter((c) => c.kind === 'action').flatMap((c) => c.options.map((o) => o.id))).not.toContain('skill');
   });
 });

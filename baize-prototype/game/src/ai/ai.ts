@@ -9,8 +9,11 @@ import {
   breakthroughCost, breakthroughsAvailable, buyoutPrice, buyPrice, canBreakthrough, countOwned, cultivation,
   isWardActive, nominalRent, rentFor, uniqueLeader, upgradeCost,
 } from '../core/rules';
-import type { NodeId, RegionId, RoadId } from '../core/types';
+import type { NodeId, RegionId } from '../core/types';
 import { DICE_DIST, predictWalk, type WalkPolicy } from './predict';
+
+const mainLine: WalkPolicy['fork'] = (_node, _remaining, options) => options[0];
+const passive: WalkPolicy = { fork: mainLine, altar: () => 'stop', canPayToll: false };
 
 export type Difficulty = 'easy' | 'normal' | 'hard';
 export type Personality = 'steady' | 'aggressive' | 'miser';
@@ -96,9 +99,8 @@ export class AIController implements Controller {
   private policy(): WalkPolicy {
     const want = this.wantsAltar();
     return {
-      fork: (gate, remaining) => this.forkRule(gate, remaining, 1) === 'road',
+      fork: (node, _remaining, options) => this.forkRule(node, options, 1),
       altar: () => 'stop',
-      exitRoad: 'S',
       canPayToll: this.me.pills >= this.data.config.altarToll && !want,
     };
   }
@@ -271,7 +273,7 @@ export class AIController implements Controller {
       if (o.jailed || o.bound) continue;
       let pPass = 0;
       for (const { total, p } of DICE_DIST) {
-        const pr = predictWalk(this.board, st, seat, total, 1, { fork: () => false, altar: () => 'stop', exitRoad: 'S', canPayToll: false });
+        const pr = predictWalk(this.board, st, seat, total, 1, passive);
         if (pr.path.slice(1).includes(node)) pPass += p;
       }
       const t = st.tiles[node];
@@ -292,7 +294,7 @@ export class AIController implements Controller {
     for (const o of st.players) {
       if (o.seat === this.seat || o.jailed) continue;
       for (const { total, p } of DICE_DIST) {
-        const pr = predictWalk(this.board, st, o.seat, total, 1, { fork: () => false, altar: () => 'stop', exitRoad: 'S', canPayToll: false });
+        const pr = predictWalk(this.board, st, o.seat, total, 1, passive);
         if (pr.node === node) e += p;
       }
     }
@@ -321,20 +323,21 @@ export class AIController implements Controller {
     return e;
   }
 
-  // GDD §13 fork rule (normal): breakthrough ready → road; heavy rent in next 6 cells → road; else ring.
-  private forkRule(gate: NodeId, remaining: number, dir: 1 | -1): 'ring' | 'road' {
-    if (this.wantsAltar()) return 'road';
-    let cur = gate;
+  // GDD §13 fork rule (normal): breakthrough ready → toward the altar; heavy rent in the next 6
+  // main-line cells → toward the altar; else stay on the main line.
+  private forkRule(node: NodeId, options: NodeId[], dir: 1 | -1): NodeId {
+    const detour = this.board.altarward(options);
+    if (this.wantsAltar()) return detour;
+    let cur = node;
     for (let k = 0; k < 6; k++) {
-      cur = this.board.ringStep(cur, dir);
+      cur = this.board.mainStep(cur, dir);
       const t = this.st.tiles[cur];
       if (t && t.owner !== null && t.owner !== this.seat) {
         const r = rentFor(this.st, this.board, this.data, cur, this.seat).amount;
-        if (r >= this.me.stones * 0.2) return 'road';
+        if (r >= this.me.stones * 0.2) return detour;
       }
     }
-    void remaining;
-    return 'ring';
+    return options[0];
   }
 
   private leaderOpponent(): number | null {
@@ -363,7 +366,7 @@ export class AIController implements Controller {
       case 'rollValue': return this.bestBy(c.options, (o) => this.scoreMove(o.value, 1));
       case 'adjust': {
         const dir: 1 | -1 = this.st.turn.reverse ? -1 : 1;
-        const maze = this.me.mazeAvailable && this.board.isRing(this.me.pos) && !this.st.turn.reverse;
+        const maze = this.me.mazeAvailable && this.board.node(this.me.pos).outer && !this.st.turn.reverse;
         return this.bestBy(c.options, (o) => Math.max(this.scoreMove(o.value, dir), maze ? this.scoreMove(o.value, -1) : -Infinity));
       }
       case 'direction': {
@@ -372,21 +375,28 @@ export class AIController implements Controller {
       }
       case 'fork': {
         const remaining = c.ctx.remaining ?? 1;
-        const gate = c.ctx.node!;
+        const node = c.ctx.node!;
+        const options = c.options.map((o) => o.value);
         if (this.difficulty === 'hard') {
-          // one-step look-ahead: compare landing value of ring vs road
-          const ring = this.landingScore(predictWalk(this.board, this.st, this.seat, remaining, 1, { ...this.policy(), fork: () => false }, gate).node);
-          const roadP = predictWalk(this.board, this.st, this.seat, remaining, 1, { ...this.policy(), fork: (g) => g === gate }, gate);
-          const road = this.landingScore(roadP.node, roadP.passStart) + (this.wantsAltar() ? 200 : 0);
-          return road > ring ? 'road' : 'ring';
+          // one-step look-ahead: compare the landing value of the main line against each detour
+          const stay = this.landingScore(predictWalk(this.board, this.st, this.seat, remaining, 1, { ...this.policy(), fork: mainLine }, node).node);
+          const altarward = this.board.altarward(options);
+          let best = options[0];
+          let bestScore = stay;
+          for (const alt of options.slice(1)) {
+            const pr = predictWalk(this.board, this.st, this.seat, remaining, 1, { ...this.policy(), fork: (n, _r, o) => (n === node ? alt : o[0]) }, node);
+            const score = this.landingScore(pr.node, pr.passStart) + (this.wantsAltar() && alt === altarward ? 200 : 0);
+            if (score > bestScore) { best = alt; bestScore = score; }
+          }
+          return best;
         }
-        return this.forkRule(gate, remaining, this.st.turn.reverse ? -1 : 1);
+        return this.forkRule(node, options, this.st.turn.reverse ? -1 : 1);
       }
       case 'altarPass': {
         if (this.wantsAltar()) return 'stop';
         const remaining = c.ctx.remaining ?? 0;
         if (remaining >= 3 && this.me.pills >= 3) {
-          return this.bestBy(c.options.filter((o) => o.value !== 'stop'), (o) => this.exitScore(o.value as RoadId, remaining));
+          return this.bestBy(c.options.filter((o) => o.value !== 'stop'), (o) => this.exitScore(o.value as NodeId, remaining));
         }
         return 'stop';
       }
@@ -444,8 +454,8 @@ export class AIController implements Controller {
     return best?.id;
   }
 
-  private exitScore(road: RoadId, remaining: number): number {
-    const pr = predictWalk(this.board, this.st, this.seat, remaining, 1, { ...this.policy(), exitRoad: road, fork: () => false }, ALTAR);
+  private exitScore(exit: NodeId, remaining: number): number {
+    const pr = predictWalk(this.board, this.st, this.seat, remaining, 1, { ...this.policy(), exit, fork: mainLine }, ALTAR);
     return this.landingScore(pr.node, pr.passStart);
   }
 
@@ -474,8 +484,8 @@ export class AIController implements Controller {
     }
     const shrink = has((v) => v.t === 'shrink');
     if (shrink) {
-      const region = this.board.sideRegion(p.pos)!;
-      const best = Math.max(...this.board.sideNodes(region).filter((n) => n !== p.pos).map((n) => this.landingScore(n)));
+      const region = this.board.node(p.pos).region!;
+      const best = Math.max(...this.board.regionNodes(region).filter((n) => n !== p.pos).map((n) => this.landingScore(n)));
       if (best > base + 150) return shrink.id;
     }
     const ult = has((v) => v.t === 'ult');

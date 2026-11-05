@@ -4,7 +4,7 @@
 // ---------------------------------------------------------------------------
 
 export type RegionId = 'wood' | 'fire' | 'water' | 'earth';
-export type RoadId = 'S' | 'W' | 'N' | 'E';
+export type RoadId = string; // key of BoardData.roads, e.g. 'S'
 export type NodeId = string; // 'R0'..'R31', 'S1', 'S2', ..., 'ALTAR'
 export type HeroId = 'body' | 'magic' | 'sword' | 'alch';
 export type TileType =
@@ -154,26 +154,29 @@ export interface RulesConfig {
 }
 
 // ---- board.json -----------------------------------------------------------
-export interface RingTileData {
+export interface BoardNodeData {
   id: NodeId;
-  pos: [number, number];
   type: TileType;
+  pos: [number, number];
+  /** 所属灵域。灵田的租金、灵脉之主等按它计算；非灵田格只用于缩地成寸的「当前灵域」 */
   region?: RegionId;
   name?: string;
   price?: number;
+  /** 所属神道（BoardData.roads 的键），拐入时显示「拐入某神道」并计入进入神道次数 */
   road?: RoadId;
-}
-export interface RoadData {
-  gate: NodeId;
-  nodes: { id: NodeId; pos: [number, number]; type: TileType }[];
+  /** 外环格：迷踪、逆行符、遁地符、缩地成寸、镇山、乾坤挪移只在外环上生效 */
+  outer?: boolean;
+  /** 灵台占据的格子矩形 [c0, r0, c1, r1]，仅用于绘制 */
+  rect?: [number, number, number, number];
+  /** 前进方向的后继格，多于一个即为岔路；next[0] 是主线（默认选项） */
+  next: NodeId[];
 }
 export interface RegionData { name: string; element: string; rule: string; ruleName: string; color: string }
 export interface BoardData {
   grid: { cols: number; rows: number; tile: number };
   regions: Record<RegionId, RegionData>;
-  ring: RingTileData[];
-  roads: Record<RoadId, RoadData>;
-  altar: { id: NodeId; rect: [number, number, number, number]; type: 'altar' };
+  roads: Record<RoadId, { name: string }>;
+  nodes: BoardNodeData[];
   tileTypes: Record<TileType, { name: string; desc: string }>;
   buildings: { level: number; name: string }[];
 }
@@ -289,8 +292,8 @@ export interface PlayerState {
   name: string;
   hero: HeroId;
   pos: NodeId;
-  /** Direction of travel when standing on a road node ('in' toward altar / 'out' toward gate). */
-  roadDir: 'in' | 'out';
+  /** Node the last walk entered `pos` from. On a two-way node it fixes the heading (null = default `next[0]`). */
+  cameFrom: NodeId | null;
   stones: number;
   pills: number;
   /** Cultivation from permanent sources. Vein-lord bonus is added dynamically (see rules.cultivation). */
