@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { defaultData } from '../src/core/data';
 import type { BoardData } from '../src/core/types';
 import { CELL, H, SAFE, W } from '../src/ui/layout';
 import { keepInside, toScreen, WorldMap } from '../src/ui/world';
+import { ringData } from './helpers';
 
-const board = defaultData.board;
+/** The 9×9 ring fixture: small enough to fit the screen, altar at cells (3,3)–(5,5). */
+const board = ringData().board;
 
 /** A board twice as wide and tall as the screen: a 24×18 ring of one-way edges plus one two-way spur. */
 function bigBoard(): BoardData {

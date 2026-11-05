@@ -756,7 +756,7 @@ export class Game {
     const label = (x: NodeId): string => {
       const n = b.node(x);
       if (n.road && n.road !== here.road) return `拐入${b.roadName(n.road)}`;
-      return n.outer ? '继续外环' : `前往【${n.name}】`;
+      return `前往【${n.name}】`;
     };
     const options = exits.map((x) => ({ id: x, label: label(x), value: x, node: x }));
     const ch = yield* this.ask({
@@ -1688,7 +1688,9 @@ export class Game {
     switch (this.heroOf(seat).skill.id) {
       case 'sworddash':
         if (st.turn.duelDone) return [];
-        return others.filter((o) => this.duelEligible(o.seat) && o.pos !== p.pos).map((o) => o.seat);
+        return others
+          .filter((o) => this.duelEligible(o.seat) && o.pos !== p.pos && this.board.distance(p.pos, o.pos) <= this.cfg.rules.swordDashRange)
+          .map((o) => o.seat);
       case 'swap':
         if (!this.board.node(p.pos).outer) return [];
         return others

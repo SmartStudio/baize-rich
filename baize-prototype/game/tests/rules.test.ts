@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { breakthroughCost, cultivation, rentFor } from '../src/core/rules';
 import { AIController } from '../src/ai/ai';
-import { newGame, script } from './helpers';
+import { newGame, ringGame, script } from './helpers';
 
 describe('rent', () => {
   it('applies level multipliers', () => {
-    const g = newGame();
+    const g = ringGame();
     const st = g.state;
     st.round = 1;
     st.tiles.R1 = { owner: 1, level: 0, trap: false };
@@ -17,7 +17,7 @@ describe('rent', () => {
   });
 
   it('doubles for 一域独占 and ×1.5 in the endgame, floored after multiplying', () => {
-    const g = newGame();
+    const g = ringGame();
     const st = g.state;
     st.round = 3;
     for (const id of g.board.landsInRegion('wood')) st.tiles[id] = { owner: 1, level: 0, trap: false };
@@ -33,7 +33,7 @@ describe('rent', () => {
   });
 
   it('is halved during the Baize manifest round and 0 on the demon tile', () => {
-    const g = newGame();
+    const g = ringGame();
     const st = g.state;
     st.tiles.R9 = { owner: 1, level: 1, trap: false }; // P=260 R=26 ×3 = 78
     st.round = g.data.config.baizeManifestRound;
@@ -44,7 +44,7 @@ describe('rent', () => {
   });
 
   it('payRent offers 避劫符 and transfers stones', () => {
-    const g = newGame();
+    const g = ringGame();
     const st = g.state;
     st.round = 2;
     st.tiles.R9 = { owner: 1, level: 1, trap: false };
@@ -67,7 +67,7 @@ describe('rent', () => {
 
 describe('breakthrough', () => {
   it('costs = n-th breakthrough, −1 with 祠印, +1 with the demon, min 0', () => {
-    const g = newGame();
+    const g = ringGame();
     const st = g.state;
     const p = st.players[0];
     expect(breakthroughCost(st, g.data, 0)).toBe(1);
@@ -84,7 +84,7 @@ describe('breakthrough', () => {
   });
 
   it('altar breakthrough pays pills, consumes the seal, lowest player sees 4 divines', () => {
-    const g = newGame();
+    const g = ringGame();
     const st = g.state;
     const p = st.players[0];
     p.btEarned = 1;
@@ -104,7 +104,7 @@ describe('breakthrough', () => {
   });
 
   it('crossing thresholds grants opportunities based on peak cultivation', () => {
-    const g = newGame();
+    const g = ringGame();
     const st = g.state;
     g.runFlow((function* () { g.addCult(0, 3, 'test'); })(), script({}));
     expect(st.players[0].btEarned).toBe(1);
@@ -117,7 +117,8 @@ describe('breakthrough', () => {
 
 describe('vein lord & buildings', () => {
   it('灵脉之主 gives +2 dynamically and is lost when overtaken', () => {
-    const g = newGame();
+    const g = ringGame();
+    g.data.config.veinLordMinLands = 3; // the ring fixture has 5 lands per region
     const st = g.state;
     for (const id of ['R1', 'R2', 'R3']) st.tiles[id] = { owner: 0, level: 0, trap: false };
     g.testUpdateVeinLords();
@@ -131,7 +132,7 @@ describe('vein lord & buildings', () => {
   });
 
   it('Lv3 / Lv4 grant 修为 only the first time', () => {
-    const g = newGame();
+    const g = ringGame();
     const st = g.state;
     const p = st.players[0];
     p.stones = 5000;
@@ -150,7 +151,7 @@ describe('vein lord & buildings', () => {
 
 describe('bankruptcy', () => {
   it('破产重整: pays everything, loses lands, resets stones, loses 修为', () => {
-    const g = newGame();
+    const g = ringGame();
     const st = g.state;
     const a = st.players[0];
     const b = st.players[1];
@@ -220,7 +221,7 @@ describe('win detection', () => {
 
 describe('balance rules (2026-11 phase 1)', () => {
   it('later seats start with config.seatBonusStones on top of startStones', () => {
-    const g = newGame();
+    const g = ringGame();
     const cfg = g.data.config;
     expect(g.state.players.map((p) => p.stones)).toEqual(cfg.seatBonusStones.map((b) => cfg.startStones + b));
     expect(cfg.seatBonusStones[0]).toBe(0);
@@ -229,7 +230,7 @@ describe('balance rules (2026-11 phase 1)', () => {
 
   it('only the 五雷符 card earns the bounty; the 五雷正法 ult does not', () => {
     for (const [kind, gain] of [['thunder', 1], ['fivethunder', 0]] as const) {
-      const g = newGame();
+      const g = ringGame();
       const st = g.state;
       st.players[2].cultBase = 5;
       st.tiles.R1 = { owner: 2, level: 2, trap: false };
@@ -241,7 +242,7 @@ describe('balance rules (2026-11 phase 1)', () => {
   });
 
   it('灵息 gives the magic hero a pill on a spring but not on a furnace', () => {
-    const g = newGame();
+    const g = ringGame();
     const magic = g.state.players[1];
     const pills = (to: string) => {
       const before = magic.pills;

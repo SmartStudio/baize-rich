@@ -12,7 +12,7 @@
     { "id": "gather",    "name": "聚灵",     "desc": "每回合首次收到租金时 +1 灵丹", "aiWeight": 6 },
     { "id": "goldbody",  "name": "金身",     "desc": "每 3 回合自动抵挡 1 次五雷符、天魔或地火", "aiWeight": 5 },
     { "id": "midas",     "name": "点石成金", "desc": "收租 +20%", "aiWeight": 8 },
-    { "id": "shrink",    "name": "缩地成寸", "desc": "每 3 回合 1 次：掷骰前直接移动到当前灵域任意外环格", "aiWeight": 6 },
+    { "id": "shrink",    "name": "缩地成寸", "desc": "每 3 回合 1 次：掷骰前直接移动到当前灵域任意路网格", "aiWeight": 6 },
     { "id": "pillheart", "name": "丹心",     "desc": "回合开始时若灵丹 < 2，+1 灵丹", "aiWeight": 6 },
     { "id": "subdue",    "name": "镇妖",     "desc": "对天魔伤害 ×2；天魔经过你的洞府不降级", "aiWeight": 3 }
   ],

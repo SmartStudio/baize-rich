@@ -1,9 +1,9 @@
 {
-  "version": "0.4",
+  "version": "0.6",
   "rounds": 12,
   "winCultivation": 8,
   "startStones": 1500,
-  "seatBonusStones": [0, 200, 400, 600],
+  "seatBonusStones": [0, 300, 600, 900],
   "startPills": 2,
   "startHand": 2,
   "handLimit": 5,
@@ -51,7 +51,7 @@
     "3": 1,
     "4": 1
   },
-  "veinLordMinLands": 3,
+  "veinLordMinLands": 4,
   "veinLordCultivation": 2,
   "monopolyRentMult": 2,
   "endgameRounds": [
@@ -88,10 +88,10 @@
   "maxActiveTasks": 2,
   "pillValueInStones": 50,
   "rules": {
-    "alchBuyDiscount": 0.8,
+    "alchBuyDiscount": 0.7,
     "discountCardMult": 0.7,
     "buyoutMult": 1.5,
-    "swordQiSteal": 20,
+    "swordQiSteal": 10,
     "goldtouchStones": 200,
     "swiftstepMax": 3,
     "swiftDivineDelta": 1,
@@ -130,8 +130,9 @@
     "trapPillCost": 1,
     "trapMaxPerPlayer": 2,
     "trapStones": 100,
-    "skillCooldownTurns": 3,
+    "skillCooldownTurns": 2,
     "roadblockRange": 6,
-    "swapRange": 8
+    "swapRange": 8,
+    "swordDashRange": 8
   }
 }
