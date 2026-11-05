@@ -1,7 +1,18 @@
 import type { PendingChoice } from '../src/core/choices';
 import { Game } from '../src/core/engine';
 import type { GameData } from '../src/core/types';
-import { defaultData } from '../src/core/data';
+import { cloneData, defaultData } from '../src/core/data';
+import ringBoard from './fixtures/ring-board.json';
+
+/**
+ * The v0.4 32-cell ring map (R0–R31, 神道 S/W/N/E, ALTAR) frozen as a fixture.
+ * Rule tests that need fixed coordinates run on it, so they keep passing when data/board.json changes.
+ */
+export function ringData(): GameData {
+  const d = cloneData();
+  d.board = JSON.parse(JSON.stringify(ringBoard)) as GameData['board'];
+  return d;
+}
 
 export function newGame(seed = 1, data: GameData = defaultData): Game {
   return new Game({
@@ -13,6 +24,11 @@ export function newGame(seed = 1, data: GameData = defaultData): Game {
       { name: 'D', hero: 'alch' },
     ],
   }, data);
+}
+
+/** newGame on the ring fixture. */
+export function ringGame(seed = 1, data: GameData = ringData()): Game {
+  return newGame(seed, data);
 }
 
 /** Scripted answerer: map choice kind -> option id (or function). Unlisted kinds take the default/first option. */

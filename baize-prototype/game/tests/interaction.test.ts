@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { PendingChoice } from '../src/core/choices';
 import type { Game } from '../src/core/engine';
 import { nextFloat } from '../src/core/rng';
-import { newGame, script } from './helpers';
+import { ringGame, script } from './helpers';
 
 // Seats in newGame: 0 A 体修(body), 1 B 法修(magic), 2 C 剑修(sword), 3 D 丹师(alch).
 
@@ -25,11 +25,11 @@ function spread(g: Game): void {
   });
 }
 
-const rules = newGame().data.config.rules;
+const rules = ringGame().data.config.rules;
 
 describe('§17 斗法', () => {
   it('higher total wins and takes duelStealPct of the loser stones; bets are spent either way', () => {
-    const g = newGame();
+    const g = ringGame();
     spread(g);
     const [a, b] = [g.state.players[3], g.state.players[1]]; // 丹师 attacks 法修: no hero bonus
     a.pills = 2;
@@ -46,7 +46,7 @@ describe('§17 斗法', () => {
   });
 
   it('a tie goes to the defender', () => {
-    const g = newGame();
+    const g = ringGame();
     spread(g);
     g.state.rng = rngFor([4, 4]);
     g.runFlow(g.testDuel(3, 1), script({}));
@@ -54,7 +54,7 @@ describe('§17 斗法', () => {
   });
 
   it('剑修 attacks with +1 and 体修 defends with +1', () => {
-    const g = newGame();
+    const g = ringGame();
     spread(g);
     g.state.rng = rngFor([3, 3]);
     g.runFlow(g.testDuel(2, 0), script({}));
@@ -64,7 +64,7 @@ describe('§17 斗法', () => {
   });
 
   it('the stake is capped at duelStealMax', () => {
-    const g = newGame();
+    const g = ringGame();
     spread(g);
     g.state.players[1].stones = 5000;
     g.state.rng = rngFor([6, 1]);
@@ -74,7 +74,7 @@ describe('§17 斗法', () => {
   });
 
   it('after a walk, offers a duel to players passed on the way or on the landing tile, at most once per turn', () => {
-    const g = newGame();
+    const g = ringGame();
     spread(g);
     g.state.players[3].pos = 'R1';
     g.state.players[1].pos = 'R3'; // passed
@@ -91,7 +91,7 @@ describe('§17 斗法', () => {
   });
 
   it('players in 面壁 cannot be challenged', () => {
-    const g = newGame();
+    const g = ringGame();
     spread(g);
     g.state.players[3].pos = 'R1';
     g.state.players[1].pos = 'R3';
@@ -104,7 +104,7 @@ describe('§17 斗法', () => {
 
 describe('§17 悬赏令', () => {
   it('goes to the unique 修为 leader at or above bountyMinCult, and is withdrawn on a tie', () => {
-    const g = newGame();
+    const g = ringGame();
     g.state.players[1].cultBase = rules.bountyMinCult - 1;
     g.testUpdateBounty();
     expect(g.state.bountySeat).toBeNull();
@@ -118,7 +118,7 @@ describe('§17 悬赏令', () => {
   });
 
   it('beating the holder in a duel pays bountyDuelCultivation 修为 and clears the bounty', () => {
-    const g = newGame();
+    const g = ringGame();
     spread(g);
     g.state.players[1].cultBase = 3;
     g.testUpdateBounty();
@@ -131,7 +131,7 @@ describe('§17 悬赏令', () => {
   });
 
   it('the holder winning keeps the bounty', () => {
-    const g = newGame();
+    const g = ringGame();
     spread(g);
     g.state.players[1].cultBase = 3;
     g.testUpdateBounty();
@@ -149,7 +149,7 @@ describe('§17 禁制', () => {
   }
 
   it('is placed from the action phase for trapPillCost 灵丹, at most trapMaxPerPlayer at a time', () => {
-    const g = newGame();
+    const g = ringGame();
     spread(g);
     for (const n of ['R1', 'R2', 'R3']) g.state.tiles[n].owner = 0;
     g.state.players[0].pills = 5;
@@ -160,7 +160,7 @@ describe('§17 禁制', () => {
   });
 
   it('an opponent stopping there pays rent, then trapStones, is bound next turn, and the trap is used up', () => {
-    const g = newGame();
+    const g = ringGame();
     spread(g);
     ownR5(g);
     g.state.tiles.R5.trap = true;
@@ -177,7 +177,7 @@ describe('§17 禁制', () => {
   });
 
   it('does not fire on the owner or on the bound stay-settle', () => {
-    const g = newGame();
+    const g = ringGame();
     spread(g);
     ownR5(g);
     g.state.tiles.R5.trap = true;
@@ -193,7 +193,7 @@ describe('§17 禁制', () => {
   });
 
   it('is cleared when the land changes hands', () => {
-    const g = newGame();
+    const g = ringGame();
     spread(g);
     ownR5(g);
     g.state.tiles.R5.trap = true;
@@ -206,7 +206,7 @@ describe('§17 禁制', () => {
 
 describe('§12 主动技能', () => {
   it('剑遁 teleports onto the target, duels at once, settles the tile and replaces the roll', () => {
-    const g = newGame();
+    const g = ringGame();
     spread(g);
     const c = g.state.players[2];
     g.state.players[1].pos = 'R5';
@@ -222,7 +222,7 @@ describe('§12 主动技能', () => {
   });
 
   it('乾坤挪移 swaps with a nearby ring player without settling', () => {
-    const g = newGame();
+    const g = ringGame();
     spread(g);
     const b = g.state.players[1];
     const d = g.state.players[3];
@@ -237,7 +237,7 @@ describe('§12 主动技能', () => {
   });
 
   it(`乾坤挪移 only reaches players within swapRange`, () => {
-    const g = newGame();
+    const g = ringGame();
     spread(g);
     g.state.players[1].pos = 'R0';
     g.state.players[3].pos = `R${rules.swapRange + 1}`;
@@ -246,8 +246,20 @@ describe('§12 主动技能', () => {
     expect(g.skillTargets(1)).toEqual([0]);
   });
 
+  it('剑遁 only reaches players within swordDashRange steps along the roads', () => {
+    const g = ringGame();
+    spread(g);
+    g.data.config.rules.swordDashRange = 8;
+    g.state.players[2].pos = 'R0';
+    g.state.players[0].pos = 'R8'; // 8 steps clockwise
+    g.state.players[1].pos = 'R23'; // 9 steps counter-clockwise
+    g.state.players[3].pos = 'S2'; // R0 → R4 → S1 → S2: 6 steps
+    expect(g.board.distance('R0', 'R23')).toBe(9);
+    expect(g.skillTargets(2)).toEqual([0, 3]);
+  });
+
   it('镇山 stops the next other player entering the mountain, and fades at the owner next turn', () => {
-    const g = newGame();
+    const g = ringGame();
     spread(g);
     const a = g.state.players[0];
     a.pos = 'R1';
@@ -268,7 +280,7 @@ describe('§12 主动技能', () => {
   });
 
   it('迷魂丹 halves the target next move (rounded down, at least 1)', () => {
-    const g = newGame();
+    const g = ringGame();
     spread(g);
     g.runFlow(g.testUseSkill(3), script({ target: 'p1' }));
     const b = g.state.players[1];
@@ -283,7 +295,7 @@ describe('§12 主动技能', () => {
   });
 
   it(`goes on cooldown for skillCooldownTurns of the user's own turns and is ready from turn 1`, () => {
-    const g = newGame();
+    const g = ringGame();
     spread(g);
     const d = g.state.players[3];
     d.turnsTaken = 1;
@@ -299,7 +311,7 @@ describe('§12 主动技能', () => {
   });
 
   it('the action menu offers the skill only when ready', () => {
-    const g = newGame();
+    const g = ringGame();
     spread(g);
     const seen: PendingChoice[] = [];
     g.runFlow(g.testPlayTurn(3), script({ buy: 'no', action: 'end', duel: 'none' }, seen));

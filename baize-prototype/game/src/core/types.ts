@@ -4,8 +4,8 @@
 // ---------------------------------------------------------------------------
 
 export type RegionId = 'wood' | 'fire' | 'water' | 'earth';
-export type RoadId = string; // key of BoardData.roads, e.g. 'S'
-export type NodeId = string; // 'R0'..'R31', 'S1', 'S2', ..., 'ALTAR'
+export type RoadId = string; // key of BoardData.roads, e.g. 'south'
+export type NodeId = string; // e.g. 'W0'..'W18' (one district), 'ALTAR'
 export type HeroId = 'body' | 'magic' | 'sword' | 'alch';
 export type TileType =
   | 'start' | 'land' | 'gate' | 'trial' | 'spring' | 'market'
@@ -151,6 +151,8 @@ export interface RulesConfig {
   roadblockRange: number;
   /** §12 乾坤挪移：只能与外环上相距不超过此格数（顺逆时针取近）的他人互换 */
   swapRange: number;
+  /** §12 剑遁：只能瞬移到相距不超过此格数（沿路网任意方向）的他人 */
+  swordDashRange: number;
 }
 
 // ---- board.json -----------------------------------------------------------
@@ -162,9 +164,11 @@ export interface BoardNodeData {
   region?: RegionId;
   name?: string;
   price?: number;
+  /** 灵田所属街道（BoardData.streets 的键），供绘制与后续「整街」规则使用 */
+  street?: string;
   /** 所属神道（BoardData.roads 的键），拐入时显示「拐入某神道」并计入进入神道次数 */
   road?: RoadId;
-  /** 外环格：迷踪、逆行符、遁地符、缩地成寸、镇山、乾坤挪移只在外环上生效 */
+  /** 路网格（除神道与灵台外的所有格）：迷踪、逆行符、遁地符、缩地成寸、镇山、乾坤挪移只在路网格上生效 */
   outer?: boolean;
   /** 灵台占据的格子矩形 [c0, r0, c1, r1]，仅用于绘制 */
   rect?: [number, number, number, number];
@@ -176,6 +180,8 @@ export interface BoardData {
   grid: { cols: number; rows: number; tile: number };
   regions: Record<RegionId, RegionData>;
   roads: Record<RoadId, { name: string }>;
+  /** 街道：每个灵域 3 条，每条 3–5 块灵田 */
+  streets?: Record<string, { name: string; region: RegionId }>;
   nodes: BoardNodeData[];
   tileTypes: Record<TileType, { name: string; desc: string }>;
   buildings: { level: number; name: string }[];

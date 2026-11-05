@@ -121,6 +121,19 @@ export class Board {
     return -1;
   }
 
+  /** Fewest steps between two nodes along edges in either direction (Infinity if unconnected). */
+  distance(a: NodeId, b: NodeId): number {
+    const dist = new Map([[a, 0]]);
+    const queue = [a];
+    for (let i = 0; i < queue.length; i++) {
+      const cur = queue[i];
+      if (cur === b) return dist.get(cur)!;
+      const n = this.node(cur);
+      for (const x of [...n.next, ...n.prev]) if (!dist.has(x)) { dist.set(x, dist.get(cur)! + 1); queue.push(x); }
+    }
+    return Infinity;
+  }
+
   /** Steps forward to the altar along the shortest route (Infinity if it cannot be reached). */
   altarDistance(id: NodeId): number {
     return this.toAltar.get(id) ?? Infinity;

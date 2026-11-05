@@ -9,17 +9,17 @@
     "id": "magic", "name": "法修", "role": "干扰", "color": "white",
     "passive": { "id": "spiritbreath", "name": "灵息", "desc": "经过灵泉时额外 +1 灵丹" },
     "ult": { "id": "fivethunder", "name": "五雷正法", "desc": "指定他人一块洞府降 1 级，或对天魔造成 3 伤害" },
-    "skill": { "id": "swap", "name": "乾坤挪移", "timing": "preroll", "desc": "掷骰前与外环上相距 8 格以内的一名他人互换位置（不结算），然后照常掷骰" }
+    "skill": { "id": "swap", "name": "乾坤挪移", "timing": "preroll", "desc": "掷骰前与路网上相距 8 格以内的一名他人互换位置（不结算），然后照常掷骰" }
   },
   {
     "id": "sword", "name": "剑修", "role": "机动", "color": "red",
-    "passive": { "id": "swordqi", "name": "剑气", "desc": "移动中超过其他玩家时，从其处夺 20 灵石" },
+    "passive": { "id": "swordqi", "name": "剑气", "desc": "移动中超过其他玩家时，从其处夺 10 灵石" },
     "ult": { "id": "flyingsword", "name": "御剑飞行", "desc": "本回合点数 ±3，自选" },
-    "skill": { "id": "sworddash", "name": "剑遁", "timing": "preroll", "desc": "代替掷骰：瞬移到一名他人所在格，立即向其斗法（剑修攻方 +1），再结算该格" }
+    "skill": { "id": "sworddash", "name": "剑遁", "timing": "preroll", "desc": "代替掷骰：瞬移到 8 格以内一名他人所在格，立即向其斗法（剑修攻方 +1），再结算该格" }
   },
   {
     "id": "alch", "name": "丹师", "role": "经济", "color": "blue",
-    "passive": { "id": "pilltrade", "name": "丹道营商", "desc": "购地 8 折" },
+    "passive": { "id": "pilltrade", "name": "丹道营商", "desc": "购地 7 折" },
     "ult": { "id": "pillbuyout", "name": "灵丹换地", "desc": "以 1.5 倍价强购他人一块 Lv≤1 的灵田" },
     "skill": { "id": "daze", "name": "迷魂丹", "timing": "action", "desc": "指定一名他人：其下一次掷骰移动的步数减半（向下取整，至少 1）" }
   }
