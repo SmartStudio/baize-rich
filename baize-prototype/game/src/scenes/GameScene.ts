@@ -6,25 +6,76 @@ import { AIController, DIFFICULTY_LABEL, PERSONALITY_LABEL } from '../ai/ai';
 import type { PendingChoice } from '../core/choices';
 import { defaultData } from '../core/data';
 import { Game } from '../core/engine';
-import type { GameEvent } from '../core/events';
+import type { GameEvent, GameEventType } from '../core/events';
 import { toRecord, type GameRecord } from '../core/record';
 import { countOwned, cultivation, nominalRent, realmName, totalAssets } from '../core/rules';
 import type { GameState, NodeId, RoadId } from '../core/types';
 import { BoardView } from '../ui/BoardView';
 import { ChoiceModal, type ModalOption, type ModalSpec } from '../ui/ChoiceModal';
-import { BOARD } from '../ui/layout';
+import { Cutscene, type BannerSpec } from '../ui/Cutscene';
+import { BOARD, BOARD_CENTER } from '../ui/layout';
+import { LogPanel } from '../ui/LogPanel';
 import { PlayerCards } from '../ui/PlayerCards';
 import { downloadRecord, saveAutosave } from '../ui/saves';
 import type { SessionConfig } from '../ui/session';
 import { SidePanel } from '../ui/SidePanel';
-import { COLORS, HEX, txt } from '../ui/theme';
+import { COLORS, HEX, PLAYER_COLORS, txt } from '../ui/theme';
 import { TopBar } from '../ui/TopBar';
 import type { ResultData } from './ResultScene';
 
 const SLOW_EVENTS = new Set<GameEvent['type']>([
-  'buy', 'rent', 'upgrade', 'downgrade', 'ownerChange', 'breakthrough', 'divine', 'heaven', 'cult', 'bankrupt',
-  'eruption', 'demonHit', 'demonGone', 'taskDone', 'event', 'cast', 'ult', 'block', 'jail', 'win', 'veinLord',
+  'buy', 'rent', 'upgrade', 'downgrade', 'ownerChange', 'divine', 'heaven', 'cult',
+  'eruption', 'demonHit', 'demonGone', 'taskDone', 'event', 'cast', 'block', 'jail', 'veinLord',
 ]);
+
+/**
+ * Animation budget per beat, in ms at 1×. AI turns run on the brisk profile; a human seat's own
+ * turn runs slower so its results can be read. `think` is the pause before an AI answers.
+ */
+interface Pace {
+  step: number;
+  slide: number;
+  teleport: number;
+  roll: number;
+  demon: number;
+  slow: number;
+  turnStart: number;
+  think: number;
+  thinkModal: number;
+}
+
+const PACE: Record<'ai' | 'human', Pace> = {
+  ai: { step: 70, slide: 200, teleport: 260, roll: 260, demon: 360, slow: 120, turnStart: 160, think: 60, thinkModal: 120 },
+  human: { step: 130, slide: 300, teleport: 380, roll: 480, demon: 450, slow: 260, turnStart: 950, think: 0, thinkModal: 0 },
+};
+const ROUND_WAIT = 380;
+const CUTSCENE_MS = 1150;
+const WIN_MS = 1600;
+
+/** Big events get a full-width cutscene banner. */
+const CUTSCENES: Partial<Record<GameEventType, (g: Game, e: GameEvent) => BannerSpec>> = {
+  breakthrough: (g, e) => ({ title: '破境！', sub: e.text, icon: portrait(g, e), color: COLORS.gold }),
+  demonSpawn: (_g, e) => ({ title: '天魔降世', sub: e.text, icon: 'demon', color: 0xc04ad0 }),
+  manifest: (_g, e) => ({ title: '白泽现世', sub: e.text, icon: 'baize', color: 0xe6e4f0 }),
+  ult: (g, e) => {
+    const p = g.state.players[e.player!];
+    const ult = g.data.heroes.find((h) => h.id === p.hero)!.ult;
+    return { title: `大招·${ult.name}`, sub: `${p.name}：${ult.desc}`, icon: portrait(g, e), color: PLAYER_COLORS[e.player!] };
+  },
+  bankrupt: (g, e) => ({ title: '破产重整', sub: e.text, icon: portrait(g, e), color: COLORS.bad }),
+  win: (g, e) => ({ title: g.state.endReason === 'cultivation' ? '渡劫飞升' : '夺得魁首', sub: e.text, icon: portrait(g, e), color: COLORS.gold }),
+};
+
+function portrait(g: Game, e: GameEvent): string {
+  return `por_${g.state.players[e.player ?? 0].hero}`;
+}
+
+/** Resource deltas between two snapshots that float up from the token as "+200 灵石". */
+const DELTAS: { label: string; color: [string, string]; of: (g: Game, st: GameState, seat: number) => number }[] = [
+  { label: '灵石', color: [HEX.good, HEX.bad], of: (_g, st, i) => st.players[i].stones },
+  { label: '灵丹', color: ['#F0A060', HEX.bad], of: (_g, st, i) => st.players[i].pills },
+  { label: '修为', color: [HEX.gold, HEX.bad], of: (g, st, i) => cultivation(st, g.data, i) },
+];
 
 export class GameScene extends Phaser.Scene {
   private session!: SessionConfig;
@@ -35,6 +86,10 @@ export class GameScene extends Phaser.Scene {
   private top!: TopBar;
   private side!: SidePanel;
   private modal!: ChoiceModal;
+  private logPanel!: LogPanel;
+  private fx!: Cutscene;
+  /** Last snapshot played back; resource popups are diffs against it. */
+  private lastSnap: GameState | null = null;
   private queue: GameEvent[] = [];
   private speed = 1;
   private alive = false;
@@ -74,9 +129,14 @@ export class GameScene extends Phaser.Scene {
     this.cards = new PlayerCards(this, this.engine, labels);
     this.side = new SidePanel(this, this.engine);
     this.modal = new ChoiceModal(this);
-    this.toastText = txt(this, BOARD.x + 288, BOARD.y + 590, '', { size: 13, color: HEX.gold, origin: [0.5, 0.5] }).setDepth(9000);
-    txt(this, BOARD.x + 288, 700, '空格 掷骰/确认 · B 升级 · C 出符 · Enter 结束回合 · Esc 取消 · F 切换倍速 · S 下载对局记录', { size: 11, color: HEX.dim, origin: [0.5, 0.5] });
+    this.logPanel = new LogPanel(this);
+    this.fx = new Cutscene(this);
+    this.lastSnap = null;
+    this.toastText = txt(this, BOARD_CENTER.x, BOARD.y + BOARD.size - BOARD.cell - 18, '', { size: 16, bold: true, color: HEX.gold, stroke: HEX.ink, origin: [0.5, 0.5] }).setDepth(9000);
 
+    this.side.btnSpeed.onClick(() => this.cycleSpeed());
+    this.side.btnLog.onClick(() => this.logPanel.toggle());
+    this.side.btnSave.onClick(() => this.saveRecord());
     this.side.btnRoll.onClick(() => this.mainAnswer('roll'));
     this.side.btnEnd.onClick(() => this.mainAnswer('end'));
     this.side.btnUpgrade.onClick(() => void this.openSubMenu('upgrade'));
@@ -112,7 +172,7 @@ export class GameScene extends Phaser.Scene {
       if (!this.alive) return;
       this.renderAll(this.engine.state);
       if (this.engine.over) {
-        await this.wait(1500);
+        await this.wait(500);
         if (this.alive) this.scene.start('Result', this.resultData());
         return;
       }
@@ -120,7 +180,7 @@ export class GameScene extends Phaser.Scene {
       const ai = this.ais[c.player];
       let id: string;
       if (ai) {
-        await this.wait(this.ms(c.kind === 'preRoll' || c.kind === 'action' ? 220 : 340));
+        await this.wait(this.ms(c.kind === 'preRoll' || c.kind === 'action' ? PACE.ai.think : PACE.ai.thinkModal));
         if (!this.alive) return;
         id = ai.decide(c);
       } else {
@@ -143,8 +203,8 @@ export class GameScene extends Phaser.Scene {
   /** State that normally arrives through events (battle log, 白泽 on the board) for a replayed game. */
   private showResumed(): void {
     const st = this.engine.state;
-    for (const e of this.engine.log.slice(-3)) if (e.text) this.side.log(e.text);
-    this.side.log(`—— 已恢复上局：第 ${st.round} 轮 ——`);
+    for (const e of this.engine.log.slice(-3)) if (e.text) this.logPanel.log(e.text);
+    this.logPanel.log(`—— 已恢复上局：第 ${st.round} 轮 ——`);
     if (st.manifested && st.round === this.engine.data.config.baizeManifestRound) this.boardView.showBaize(true);
   }
 
@@ -152,46 +212,101 @@ export class GameScene extends Phaser.Scene {
     while (this.queue.length && this.alive) await this.playEvent(this.queue.shift()!);
   }
 
+  private isHuman(seat: number): boolean {
+    return this.ais[seat] === null;
+  }
+
   private async playEvent(e: GameEvent): Promise<void> {
-    if (e.text) this.side.log(e.text);
+    if (e.text) this.logPanel.log(e.text);
     const seat = e.player ?? 0;
+    const pace = PACE[this.isHuman(e.snap?.current ?? this.engine.state.current) ? 'human' : 'ai'];
     if (e.snap && (e.type === 'step' || e.type === 'slide' || e.type === 'teleport')) this.boardView.markCurrent(e.snap);
     switch (e.type) {
       case 'step':
-        await this.boardView.moveToken(seat, e.node!, this.ms(140));
+        await this.boardView.moveToken(seat, e.node!, this.ms(pace.step));
         break;
       case 'slide':
-        await this.boardView.moveToken(seat, e.node!, this.ms(300), false);
+        await this.boardView.moveToken(seat, e.node!, this.ms(pace.slide), false);
         break;
       case 'teleport':
-        await this.boardView.moveToken(seat, e.node!, this.ms(380), false);
+        await this.boardView.moveToken(seat, e.node!, this.ms(pace.teleport), false);
         break;
       case 'roll':
         if (e.dice) {
-          await this.side.shakeDice(this.ms(320));
+          await Promise.all([this.fx.rollDice(e.dice, this.ms(pace.roll)), this.side.shakeDice(this.ms(pace.roll))]);
           this.side.setDice(e.dice);
         }
         break;
-      case 'demonSpawn':
       case 'demonMove':
-        await this.boardView.moveDemon(e.type === 'demonMove' ? e.from : undefined, e.node!, this.ms(450));
+        await this.boardView.moveDemon(e.from, e.node!, this.ms(pace.demon));
+        break;
+      case 'demonSpawn':
+        await Promise.all([this.cutscene(e), this.boardView.moveDemon(undefined, e.node!, this.ms(pace.demon))]);
         break;
       case 'manifest':
         this.boardView.showBaize(true);
-        this.toast('白泽现世！');
-        await this.wait(this.ms(900));
+        await this.cutscene(e);
         break;
       case 'roundStart':
         if (e.snap && e.snap.round !== this.engine.data.config.baizeManifestRound) this.boardView.showBaize(false);
-        await this.wait(this.ms(250));
+        if (e.snap) this.roundRibbon(e.snap);
+        await this.wait(this.ms(ROUND_WAIT));
         break;
-      case 'win':
-        this.toast(e.text);
+      case 'turnStart':
+        if (e.snap) await this.turnIntro(e.snap, seat);
         break;
       default:
-        if (SLOW_EVENTS.has(e.type)) await this.wait(this.ms(220));
+        if (CUTSCENES[e.type]) await this.cutscene(e);
+        else if (SLOW_EVENTS.has(e.type)) await this.wait(this.ms(pace.slow));
     }
-    if (e.snap) this.renderAll(e.snap, false);
+    if (e.snap) {
+      this.popDeltas(e.snap);
+      this.renderAll(e.snap, false);
+    }
+  }
+
+  private cutscene(e: GameEvent): Promise<void> {
+    return this.fx.banner(CUTSCENES[e.type]!(this.engine, e), this.ms(e.type === 'win' ? WIN_MS : CUTSCENE_MS));
+  }
+
+  private roundRibbon(st: GameState): void {
+    const cfg = this.engine.data.config;
+    const left = cfg.baizeManifestRound - st.round;
+    const sub = st.round === cfg.rounds ? '最终轮！修为最高者将夺得魁首'
+      : left > 0 ? `白泽现世还有 ${left} 轮` : `修为先到 ${cfg.winCultivation} 即胜`;
+    this.fx.ribbon(`第 ${st.round} / ${cfg.rounds} 轮`, sub, COLORS.gold, BOARD_CENTER.y, this.ms(1100));
+  }
+
+  /** AI turns get a quick ribbon; a human seat's turn gets a full "轮到你了" moment. */
+  private async turnIntro(st: GameState, seat: number): Promise<void> {
+    this.renderAll(st, false);
+    const p = st.players[seat];
+    if (!this.isHuman(seat)) {
+      this.fx.ribbon(`${p.name} 的回合`, '', PLAYER_COLORS[seat], BOARD.y + BOARD.cell * 1.6, this.ms(800));
+      await this.wait(this.ms(PACE.ai.turnStart));
+      return;
+    }
+    const multiHuman = this.ais.filter((a) => a === null).length > 1;
+    await this.fx.banner({
+      title: multiHuman ? `轮到 ${p.name}` : '轮到你了！',
+      sub: `${p.name} · 第 ${st.round} 轮 · 按空格掷骰，或先升级、出符`,
+      icon: `por_${p.hero}`, color: PLAYER_COLORS[seat],
+    }, this.ms(PACE.human.turnStart));
+  }
+
+  /** Float each seat's 灵石 / 灵丹 / 修为 change since the last snapshot over its token. */
+  private popDeltas(snap: GameState): void {
+    const prev = this.lastSnap;
+    this.lastSnap = snap;
+    if (!prev) return;
+    snap.players.forEach((_, i) => {
+      let k = 0;
+      for (const d of DELTAS) {
+        const diff = d.of(this.engine, snap, i) - d.of(this.engine, prev, i);
+        if (diff === 0) continue;
+        this.boardView.floatText(i, `${diff > 0 ? '+' : '−'}${Math.abs(diff)} ${d.label}`, d.color[diff > 0 ? 0 : 1], k++ * this.ms(200));
+      }
+    });
   }
 
   private renderAll(state: GameState, syncTokens = true): void {
@@ -199,7 +314,9 @@ export class GameScene extends Phaser.Scene {
     this.boardView.render(state);
     if (syncTokens) this.boardView.syncTokens(state);
     this.cards.render(state, this.handViewer(state));
-    this.top.render(state, this.speed);
+    this.top.render(state);
+    this.side.setTurn(state, this.isHuman(state.current));
+    this.side.btnSpeed.setLabel(`倍速 ×${this.speed} · F`);
     this.side.showTile(this.hovered, state);
     this.side.renderHand(state, this.handViewer(state));
   }
@@ -244,6 +361,7 @@ export class GameScene extends Phaser.Scene {
   private setMainButtons(c: PendingChoice | null): void {
     const ids = c ? c.options.map((o) => o.id) : [];
     this.side.btnRoll.setEnabled(ids.includes('roll'));
+    this.side.setRollWaiting(ids.includes('roll'));
     this.side.btnEnd.setEnabled(ids.includes('end'));
     this.side.btnUpgrade.setEnabled(ids.some((i) => i.startsWith('upgrade:')));
     this.side.btnCast.setEnabled(ids.some((i) => i.startsWith('cast:') || i === 'ult' || i === 'shrink'));
@@ -344,21 +462,29 @@ export class GameScene extends Phaser.Scene {
     this.tweens.add({ targets: this.toastText, alpha: 0, delay: 1600, duration: 600 });
   }
 
+  private cycleSpeed(): void {
+    const speeds = [1, 2, 4, 8];
+    this.speed = speeds[(speeds.indexOf(this.speed) + 1) % speeds.length];
+    this.side.btnSpeed.setLabel(`倍速 ×${this.speed} · F`);
+    this.toast(`速度 ${this.speed}×`);
+  }
+
+  private saveRecord(): void {
+    downloadRecord(this.record());
+    this.toast('已下载对局记录');
+  }
+
   private onKey(ev: KeyboardEvent): void {
     const k = ev.key;
-    if (k === 'f' || k === 'F') {
-      const speeds = [1, 2, 4, 8];
-      this.speed = speeds[(speeds.indexOf(this.speed) + 1) % speeds.length];
-      this.top.render(this.shownState, this.speed);
-      this.toast(`速度 ${this.speed}×`);
-      return;
-    }
+    if (k === 'f' || k === 'F') { this.cycleSpeed(); return; }
+    if (k === 'l' || k === 'L') { this.logPanel.toggle(); return; }
+    if (k === 'Escape' && this.logPanel.isOpen) { this.logPanel.toggle(false); return; }
     if (this.modal.isOpen) {
       const key = k === ' ' ? 'SPACE' : k === 'Escape' ? 'ESC' : k === 'Enter' ? 'SPACE' : k;
       if (this.modal.handleKey(key)) ev.preventDefault();
       return;
     }
-    if (k === 's' || k === 'S') { downloadRecord(this.record()); this.toast('已下载对局记录'); return; }
+    if (k === 's' || k === 'S') { this.saveRecord(); return; }
     if (!this.mainChoice) return;
     if (k === ' ') { ev.preventDefault(); this.mainAnswer('roll'); }
     else if (k === 'Enter') this.mainAnswer('end');
