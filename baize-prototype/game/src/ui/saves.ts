@@ -1,8 +1,42 @@
 // Browser side of 对局记录: the localStorage autosave and the JSON download.
 // Storage can throw (private mode, quota, blocked site data); the game must keep working.
-import { parseRecord, type GameRecord } from '../core/record';
+import { defaultData } from '../core/data';
+import { parseRecord, replayRecord, type GameRecord } from '../core/record';
 
 const AUTOSAVE_KEY = 'baize.autosave';
+const TUTORIAL_KEY = 'baize.tutorialSeen';
+
+/** An unfinished autosave that still replays, with a one-line summary for the 继续上局 button. */
+export function findResumable(): { record: GameRecord; summary: string } | null {
+  const record = loadAutosave();
+  if (!record || record.finished) return null;
+  let st;
+  try {
+    st = replayRecord(record).state;
+  } catch (e) {
+    console.info('[baize] 自动存档无法继续', e);
+    return null;
+  }
+  const humans = record.seats.filter((s) => s.human).length;
+  return { record, summary: `第 ${st.round}/${defaultData.config.rounds} 轮 · ${st.players[st.current].name} · 玩家 ${humans} 人` };
+}
+
+/** Whether the first-game 玩法说明 has been shown. Unreadable storage counts as unseen: one Esc beats a lost newcomer. */
+export function tutorialSeen(): boolean {
+  try {
+    return localStorage.getItem(TUTORIAL_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function markTutorialSeen(): void {
+  try {
+    localStorage.setItem(TUTORIAL_KEY, '1');
+  } catch {
+    /* storage blocked: the tutorial stays reachable from the title screen */
+  }
+}
 
 export function saveAutosave(r: GameRecord): void {
   try {

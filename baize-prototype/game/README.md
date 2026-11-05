@@ -22,16 +22,18 @@ URL 参数：
 
 | 参数 | 作用 |
 |---|---|
-| `?auto=1` | 跳过设置，直接开始 4 个 AI 的对局（默认 2 倍速） |
-| `?seed=123` | 固定随机种子（设置界面与 auto 模式都生效） |
-| `?speed=1` | auto 模式的动画倍速 |
+| `?auto=1` | 跳过标题和选人，直接开始 4 个 AI 的对局（默认 2 倍速） |
+| `?seed=123` | 固定随机种子（选人、高级设置与 auto 模式都生效） |
+| `?speed=1` | 动画倍速（auto 模式默认 2，其余默认 1） |
+
+开局流程：标题（开场文案，任意键跳过）→ 选修士（点一位作为「你」，坐 1 号位，其余三位由 AI 扮演，统一选一个难度）→ 对阵过场 → 对局。选人界面的「高级设置」进入逐席位设置（多人同屏、AI 性格、种子）。「玩法说明」是 5 页图文浮层，标题界面随时可开；第一次点「开始游戏」会自动弹出一次（`localStorage` 键 `baize.tutorialSeen`，读不到就当没看过）。
 
 快捷键（GDD §14）：空格 掷骰 / 确认，B 升级，C 出符，Enter 结束回合，Esc 取消，F 切换倍速（1/2/4/8），L 展开 / 收起战报，S 下载对局记录；弹窗内数字键 1–9 直接选择。
 
 ### 存档与对局记录
 
 - 对局记录（`src/core/record.ts` 的 `GameRecord`）= 开局设置 + 各席位控制方（玩家 / AI 难度与性格）+ 回答历史，外加记录格式版本和 `config.json` 的数据版本。`parseRecord()` 在读入时校验，数据版本不一致直接拒绝。
-- 自动存档：每回答一次决定，`GameScene` 就把记录写入 `localStorage`（键 `baize.autosave`）；`?auto=1` 的对局不存档。刷新后设置界面会出现「继续上局」，重放历史回到刷新前的同一个待决选择，不播放动画。
+- 自动存档：每回答一次决定，`GameScene` 就把记录写入 `localStorage`（键 `baize.autosave`）；`?auto=1` 的对局不存档。刷新后标题界面会出现「继续上局」，重放历史回到刷新前的同一个待决选择，不播放动画。
 - 下载：对局中按 S，或在结算界面点「下载对局记录」，得到 `baize-record-日期-seed种子.json`；用 `npm run replay -- 文件` 复盘。
 - 恢复后 AI 的内部随机数从头开始（只影响简单难度之后的决定），引擎状态与回答历史不受影响。
 
@@ -58,9 +60,9 @@ src/
     record.ts    对局记录 GameRecord：生成、校验、重放
   ai/          AI 控制器（GDD §13）：难度 easy/normal/hard，性格 稳健/激进/守财；predict.ts 为移动预测
   sim/         无头驱动 headless.ts、批量模拟库 simulate.ts、命令行 run.ts、参数扫描 sweep.ts、对局记录复盘 replay.ts
-  scenes/      Phaser 场景：Boot（载图集/生成占位）→ Setup → Game → Result
-  ui/          画面组件：BoardView、TopBar（左栏顶部轮次）、PlayerCards（左栏）、LogPanel（战报）、SidePanel（右栏与回合坞）、Cutscene（过场横幅）、ChoiceModal、assets、theme、layout
-tests/         vitest：移动/岔路/灵台/地形、租金、突破、灵脉、破产、胜负、确定性回放、对局记录
+  scenes/      Phaser 场景：Boot（载图集/生成占位）→ Title → HeroSelect →（Setup 高级设置）→ Versus → Game → Result
+  ui/          画面组件：BoardView、TopBar（左栏顶部轮次）、PlayerCards（左栏）、LogPanel（战报）、SidePanel（右栏与回合坞）、Cutscene（过场横幅）、ChoiceModal、HowToPlay（玩法说明浮层）、session（开局配置）、saves（自动存档 / 教程标记）、assets、theme、layout
+tests/         vitest：移动/岔路/灵台/地形、租金、突破、灵脉、破产、胜负、确定性回放、对局记录、选人开局
 scripts/       screenshots.cjs（Playwright 冒烟测试 + 截图）
 ```
 
