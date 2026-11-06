@@ -4,7 +4,7 @@ import type { Flow, Game } from '../src/core/engine';
 import { chance2d6 } from '../src/core/rules';
 import type { NodeId } from '../src/core/types';
 import { breakthroughView } from '../src/ui/breakthroughView';
-import { presentChoice } from '../src/ui/choices/registry';
+import { onlyAnswer, presentChoice } from '../src/ui/choices/registry';
 import { optionKey, type ModalSpec } from '../src/ui/choices/spec';
 import { newGame, ringGame, rngFor, script } from './helpers';
 
@@ -59,14 +59,17 @@ describe('押丹 screen', () => {
 });
 
 describe('炼丹 screen', () => {
-  it('lists brew counts ascending, keyed by the count, with herbs before → after; Esc brews nothing', () => {
+  it('offers 炼满 as the one-tap default, fewer on the stepper, herbs before → after; Esc brews nothing', () => {
     const g = newGame();
     const p = g.state.players[3];
-    p.herbs = 5;
+    p.herbs = 9;
     const { spec } = screenFor(g, g.testSettle(3, nodeOfType(g, 'alchemy')), 'brew');
-    expect(keys(spec)).toEqual(['0', '1', '2']);
-    expect(spec.options.map((o) => o.hint)).toEqual(['灵草 5 → 5', '灵草 5 → 3', '灵草 5 → 1']);
-    expect(spec.options[2].big).toBe('+2 丹药');
+    expect(spec.layout).toBe('stepper');
+    expect(spec.options.map((o) => o.label)).toEqual(['不炼', '炼 1 炉', '炼 2 炉', '炼 3 炉', '炼满 4 炉']);
+    expect(spec.defaultId).toBe('b4');
+    expect(keys(spec)).toEqual(['0', '1', '2', '3', '4']);
+    expect(spec.options.map((o) => o.hint)).toEqual(['灵草 9 → 9', '灵草 9 → 7', '灵草 9 → 5', '灵草 9 → 3', '灵草 9 → 1']);
+    expect(spec.options[4].big).toBe('+4 丹药');
     expect(spec.cancelId).toBe('b0');
   });
 });
@@ -102,6 +105,15 @@ describe('机缘 and 白泽现世 screens', () => {
     const { spec } = screenFor(g, g.testRoundStart(), 'manifestPick');
     expect(spec.layout).toBe('cards');
     expect(spec.options.map((o) => o.id)).toEqual(['chart', 'stones', 'pills', 'guide']);
+  });
+
+  it('answers the last 白泽 gift without a screen, and still asks while there is a pick', () => {
+    const g = newGame();
+    g.state.round = g.data.config.manifest.round;
+    const seen: PendingChoice[] = [];
+    g.runFlow(g.testRoundStart(), script({}, seen));
+    const picks = seen.filter((c) => c.kind === 'manifestPick');
+    expect(picks.map((c) => onlyAnswer(c))).toEqual([null, null, null, picks[3].options[0].id]);
   });
 });
 
@@ -157,16 +169,5 @@ describe('breakthrough cutscene', () => {
     expect(v.success).toBe(false);
     expect(v.outcome).toEqual(['丹药 −1', `修为 −${g.data.config.realms[0].bar / 2}`, '心境 +1']);
     expect(v.lines).toEqual(['气血逆冲……这一次，没成。']);
-  });
-});
-
-describe('御骰符 screen', () => {
-  it('keys every value by its own digit, 10 by 0, and leaves 11 and 12 to the arrow keys', () => {
-    const g = ringGame();
-    const options = Array.from({ length: 11 }, (_, i) => ({ id: `v${i + 2}`, label: `${i + 2} 点`, value: i + 2 }));
-    const choice = { player: 0, kind: 'rollValue', title: '御骰符', options } as unknown as PendingChoice;
-    const spec = presentChoice(choice, { game: g });
-    expect(spec.layout).toBe('tiles');
-    expect(keys(spec)).toEqual(['2', '3', '4', '5', '6', '7', '8', '9', '0', null, null]);
   });
 });

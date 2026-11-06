@@ -114,7 +114,8 @@ async function choiceShots(page) {
   await page.keyboard.press(sc.stake.lose);
   await sleep(3200);
   await shot(page, '09d-breakthrough-fail.png');
-  for (const [name, file] of [['brew', '10-brew.png'], ['market', '11-market.png'], ['fortune', '12-fortune.png'], ['manifest', '13-manifest.png']]) {
+  const picks = [['fork', '14-fork-board.png'], ['adjust', '15-adjust-board.png']];
+  for (const [name, file] of [['brew', '10-brew.png'], ['market', '11-market.png'], ['fortune', '12-fortune.png'], ['manifest', '13-manifest.png'], ...picks]) {
     await resume(page, sc[name].record);
     await shot(page, file);
   }

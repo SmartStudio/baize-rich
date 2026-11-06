@@ -33,16 +33,3 @@ export const rentReact: Presenter<'rentReact'> = (c, { game }) =>
 
 export const guardReact: Presenter<'guardReact'> = (c, { game }) =>
   listSpec(c, { desc: `${c.desc ?? ''}（可用金光符 ${cardsHeld(game, c, 'goldlight')} 张）` });
-
-/** 御骰符: one tile per value, keyed by the value itself (0 for 10); 11 and 12 are reached with ← →. */
-export const rollValue: Presenter<'rollValue'> = (c) =>
-  listSpec(c, {
-    layout: 'tiles',
-    options: c.options.map((o) => ({
-      id: o.id,
-      label: o.label,
-      key: o.value <= 9 ? String(o.value) : o.value === 10 ? '0' : '',
-      big: String(o.value),
-      tone: 'gold',
-    })),
-  });
