@@ -1,9 +1,8 @@
 // 玩法说明: a paged overlay any scene can open. Numbers come from data/, never literals, so the copy follows balance changes.
 import Phaser from 'phaser';
 import { defaultData } from '../core/data';
-import { HERO_IDS } from '../core/heroes';
-import { closurePlaces } from '../core/rules';
 import { addImg } from './assets';
+import { tutorialCopy, type TutorialCopy } from './narration';
 import { COLORS, HEX, panel, txt } from './theme';
 import { Button } from './widgets';
 
@@ -17,7 +16,6 @@ interface Page {
 }
 
 const cfg = defaultData.config;
-const building = (lv: number) => defaultData.board.buildings[lv].name;
 
 function chip(scene: Phaser.Scene, cx: number, y: number, label: string, w = 220): Obj[] {
   return [
@@ -33,109 +31,64 @@ function captioned(scene: Phaser.Scene, x: number, y: number, frame: string, sca
   ];
 }
 
-const PAGES: Page[] = [
-  {
-    title: '目标：率先渡劫化神',
-    lines: [
-      '你是闯进白泽秘境的凡人少年，与另外三名修士争先。',
-      `境界依次是${cfg.realms.map((r) => r.name).join(' → ')}。最先突破到化神，立即获胜。`,
-      `第 ${cfg.rounds} 轮结束仍无人化神，比境界，再比修为条，再比总资产。`,
-      '灵石买地升级；灵草炼成丹药；丹药押进突破、服下涨修为。',
-      '破产不出局：灵田收回，修为条清空。',
-    ],
-    art: (s, cx, cy) => {
-      const out: Obj[] = [addImg(s, cx, cy - 80, 'ic_cult').setScale(5)];
-      const n = cfg.realms.length;
-      const cell = Math.floor(320 / n);
-      const x0 = cx - (cell * n) / 2;
-      cfg.realms.forEach((r, i) => {
-        out.push(s.add.rectangle(x0 + i * cell + cell / 2, cy + 40, cell - 6, 30, i === n - 1 ? COLORS.gold : COLORS.panelLight).setStrokeStyle(2, COLORS.outline));
-        out.push(txt(s, x0 + i * cell + cell / 2, cy + 40, r.name, { size: 14, bold: true, origin: [0.5, 0.5] }));
-      });
-      return out;
-    },
-  },
-  {
-    title: '一个回合怎么走',
-    lines: [
-      '① 掷骰前：可以先用身法符、技能，条满时可在原地闭关。',
-      `② 掷骰：两颗骰子的点数之和就是步数。`,
-      `③ 移动：经过宗门山门 +${cfg.salaryPass} 灵石。走到山门时可以拐进神道，直通中央的白泽灵台。`,
-      '④ 斗法与结算：可向途中遇到的一名修士斗法；无主灵田可以买下，别人的灵田要交租。',
-      '⑤ 行动：升级一块灵田、服丹、用符、闭关，然后结束回合。',
-    ],
-    art: (s, cx, cy) => [
-      addImg(s, cx - 34, cy - 120, 'die_3').setScale(2),
-      addImg(s, cx + 34, cy - 120, 'die_4').setScale(2),
-      txt(s, cx, cy - 76, '3 + 4 = 走 7 步', { size: 14, color: HEX.gold, origin: [0.5, 0.5] }),
-      ...chip(s, cx, cy - 30, '掷骰'),
-      ...chip(s, cx, cy + 20, '移动'),
-      ...chip(s, cx, cy + 70, '落点结算 · 买地 / 交租'),
-      ...chip(s, cx, cy + 120, '行动 · 升级 / 出符'),
-    ],
-  },
-  {
-    title: '修为从哪里来',
-    lines: [
-      `吐纳：每回合结束 +${cfg.cultivation.breath}。`,
-      `打坐：回合结束停在自家灵田，按等级 +${cfg.landLevels.map((l) => l.sit).join(' / ')}。`,
-      `灵泉 +${cfg.cultivation.spring}，阵眼 +${cfg.cultivation.eye}，服丹每颗 +${cfg.cultivation.pill}（每回合 1 颗）。`,
-      '修为条满了就要闭关突破，多余的修为会溢出浪费。',
-      `灵田升到${building(2)}及以上，每轮开始产灵草；在丹房每 ${cfg.alchemy.herbsPerPill} 灵草炼 1 颗丹药。`,
-    ],
-    art: (s, cx, cy) => [
-      ...captioned(s, cx - 80, cy - 80, 'bld_3', 1.6, building(3)),
-    ],
-  },
-  {
-    title: '斗法与宝光',
-    lines: [
-      '移动后，可向落点或途中经过的一名修士斗法（每回合 1 次）。',
-      '双方各掷 1 颗骰，加上境界差与修士加成；平局守方胜。',
-      `赢家夺 ${cfg.duel.steal} 颗丹药；对方身怀 ${cfg.duel.glowAt} 颗以上（冒宝光）时夺 ${cfg.duel.glowSteal} 颗，且你 +${cfg.duel.glowBonus}。`,
-      `对方没有丹药时，夺 ${cfg.duel.lossStones} 灵石。`,
-    ],
-    art: (s, cx, cy) => [
-      addImg(s, cx - 60, cy - 60, 'por_sword'),
-      addImg(s, cx + 60, cy - 60, 'por_body'),
-      txt(s, cx, cy - 60, 'VS', { size: 22, bold: true, color: HEX.gold, origin: [0.5, 0.5] }),
-      ...chip(s, cx, cy + 50, '1D6 + 境界差 + 加成'),
-    ],
-  },
-  {
-    title: '闭关突破',
-    lines: [
-      `修为条满后，在${closurePlaces(defaultData)}闭关（掷骰前或行动阶段，每回合 1 次）：2D6 + 加成 ≥ 目标值即突破。`,
-      `每押 1 颗丹药 +${cfg.breakthrough.pillBonus}（最多 ${cfg.breakthrough.maxPills} 颗，成败都消耗）；白泽灵台 +${cfg.breakthrough.altarBonus}。`,
-      `失败走火入魔：修为条减半，心境 +1（之后每次突破 +${cfg.breakthrough.mindBonus}）。`,
-      `步数没走完时，可付 ${cfg.altarToll} 颗丹药借道穿过灵台。`,
-    ],
-    art: (s, cx, cy) => [addImg(s, cx, cy - 20, 'altar').setScale(1.25)],
-  },
-  {
-    title: '修士与操作',
-    lines: [
-      '每位修士有一个被动和一个技能，开局在选人页挑选。',
-      '技能用后要冷却几个自己的回合，各人长短不同，写在选人页上，按 K 发动。',
-      `符箓用掉即弃，手牌上限 ${cfg.handLimit} 张；坊市可以买符和丹药。`,
-      '鼠标悬停棋盘上的格子，可以查看它的详情。',
-    ],
-    art: (s, cx, cy) => {
-      const out: Obj[] = HERO_IDS.map((h, i) => addImg(s, cx - 120 + i * 80, cy - 110, `por_${h}`));
-      const keys: [string, string][] = [
-        ['空格', '掷骰 / 确认'], ['B', '升级洞府'], ['C', '出符'], ['K', '发动技能'], ['Enter', '结束回合'],
-        ['Esc', '取消'], ['F', '切换倍速'], ['S', '下载对局记录'],
-      ];
-      keys.forEach(([k, what], i) => {
-        const y = cy - 40 + i * 30;
-        out.push(s.add.rectangle(cx - 90, y, 66, 24, COLORS.parchment).setStrokeStyle(2, COLORS.outline));
-        out.push(txt(s, cx - 90, y, k, { size: 13, bold: true, color: HEX.ink, origin: [0.5, 0.5] }));
-        out.push(txt(s, cx - 46, y, what, { size: 14, origin: [0, 0.5] }));
-      });
-      return out;
-    },
-  },
-];
+const goalArt: Page['art'] = (scene, cx, cy) => {
+  const out: Obj[] = [addImg(scene, cx, cy - 80, 'ic_cult').setScale(5)];
+  const cell = Math.floor(320 / cfg.realms.length);
+  const x0 = cx - (cell * cfg.realms.length) / 2;
+  cfg.realms.forEach((realm, index) => {
+    const color = index === cfg.realms.length - 1 ? COLORS.gold : COLORS.panelLight;
+    out.push(scene.add.rectangle(x0 + index * cell + cell / 2, cy + 40, cell - 6, 30, color).setStrokeStyle(2, COLORS.outline));
+    out.push(txt(scene, x0 + index * cell + cell / 2, cy + 40, realm.name, { size: 14, bold: true, origin: [0.5, 0.5] }));
+  });
+  return out;
+};
+
+const ART_BY_PAGE: Record<TutorialCopy['id'], Page['art']> = {
+  goal: goalArt,
+  turn: (s, cx, cy) => [
+    addImg(s, cx - 34, cy - 120, 'die_3').setScale(2),
+    addImg(s, cx + 34, cy - 120, 'die_4').setScale(2),
+    ...chip(s, cx, cy - 50, '掷骰前 · 整备'),
+    ...chip(s, cx, cy, '掷骰 · 移动'),
+    ...chip(s, cx, cy + 50, '斗法 · 落点结算'),
+    ...chip(s, cx, cy + 100, '行动 · 吐纳打坐'),
+  ],
+  land: (s, cx, cy) => [
+    ...captioned(s, cx - 100, cy - 70, 'bld_1', 1.5, defaultData.board.buildings[1].name),
+    ...captioned(s, cx, cy - 70, 'bld_2', 1.5, defaultData.board.buildings[2].name),
+    ...captioned(s, cx + 100, cy - 70, 'bld_3', 1.5, defaultData.board.buildings[3].name),
+  ],
+  alchemy: (s, cx, cy) => [
+    addImg(s, cx - 70, cy - 70, 'ic_cult').setScale(4),
+    txt(s, cx, cy - 70, '灵草入炉', { size: 17, color: HEX.gold, origin: [0.5, 0.5] }),
+    addImg(s, cx + 85, cy - 70, 'ic_pill').setScale(4),
+    ...chip(s, cx, cy + 30, '看准金火 · 收炉成丹'),
+  ],
+  breakthrough: (s, cx, cy) => [
+    addImg(s, cx, cy - 70, 'altar').setScale(0.75),
+    ...chip(s, cx, cy + 90, '押丹 · 掷骰 · 听天命'),
+  ],
+  duel: (s, cx, cy) => [
+    addImg(s, cx - 60, cy - 60, 'por_sword'),
+    addImg(s, cx + 60, cy - 60, 'por_body'),
+    txt(s, cx, cy - 60, '斗法', { size: 22, bold: true, color: HEX.gold, origin: [0.5, 0.5] }),
+    ...chip(s, cx, cy + 50, '境界 · 天赋 · 宝光'),
+  ],
+  heroes: (s, cx, cy) => defaultData.heroes.flatMap((hero, index) => [
+    addImg(s, cx - 120 + index * 80, cy - 80, `por_${hero.id}`),
+    txt(s, cx - 120 + index * 80, cy - 30, hero.name, { size: 13, color: HEX.gold, origin: [0.5, 0.5] }),
+  ]),
+  baize: (s, cx, cy) => [
+    addImg(s, cx, cy - 60, 'baize').setScale(1.5),
+    ...chip(s, cx, cy + 80, '秘境过半 · 落后者先挑'),
+  ],
+};
+
+const PAGES: Page[] = tutorialCopy(defaultData).map((copy) => ({
+  title: copy.title,
+  lines: copy.lines,
+  art: ART_BY_PAGE[copy.id],
+}));
 
 const PX = 160;
 const PY = 80;
