@@ -182,6 +182,8 @@ export class GameScene extends Phaser.Scene {
     this.side.btnEnd.onClick(() => this.mainAnswer('end'));
     this.side.btnUpgrade.onClick(() => void this.openSubMenu('upgrade'));
     this.side.btnCast.onClick(() => void this.openSubMenu('cast'));
+    this.side.btnEat.onClick(() => this.mainAnswer('eat'));
+    this.side.btnClose.onClick(() => this.mainAnswer('closure'));
     this.side.onCardClick((card) => this.mainAnswer(`cast:${card}`));
     this.boardView.onHover((n) => { this.hovered = n; this.showTile(); });
     this.boardView.onPress((n) => { this.pressed = this.tip.justClosed(`tile:${n}`) ? null : n; });
@@ -451,11 +453,13 @@ export class GameScene extends Phaser.Scene {
   private setMainButtons(c: PendingChoice | null): void {
     const ids = c ? c.options.map((o) => o.id) : [];
     this.side.btnRoll.setEnabled(ids.includes('roll'));
-    this.side.setRollWaiting(ids.includes('roll'));
     this.side.btnEnd.setEnabled(ids.includes('end'));
     this.side.btnUpgrade.setEnabled(ids.some((i) => i.startsWith('upgrade:')));
     this.side.btnCast.setEnabled(ids.some(isCastId));
+    this.side.btnEat.setEnabled(ids.includes('eat'));
+    this.side.btnClose.setEnabled(ids.includes('closure'));
     this.side.setCastable(ids.filter((i) => i.startsWith('cast:')).map((i) => i.slice(5)));
+    this.side.setRollWaiting(ids.includes('roll'));
     this.side.renderHand(this.shownState ?? this.engine.state, this.handViewer(this.engine.state));
   }
 
@@ -623,6 +627,8 @@ export class GameScene extends Phaser.Scene {
     else if (k === 'Enter') this.mainAnswer('end');
     else if (k === 'b' || k === 'B') void this.openSubMenu('upgrade');
     else if (k === 'c' || k === 'C') void this.openSubMenu('cast');
+    else if (k === 'p' || k === 'P') this.mainAnswer('eat');
+    else if (k === 'g' || k === 'G') this.mainAnswer('closure');
     else if (k === 'k' || k === 'K') this.mainAnswer('skill');
   }
 }
