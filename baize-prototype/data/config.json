@@ -1,8 +1,8 @@
 {
-  "version": "0.9",
+  "version": "0.10",
   "rounds": 12,
   "startStones": 1200,
-  "seatBonusStones": [0, 200, 300, 450],
+  "seatBonusStones": [0, 150, 300, 450],
   "startPills": 0,
   "startHerbs": 0,
   "startHand": 1,
@@ -21,8 +21,8 @@
   "landLevels": [
     { "upgradeCostP": 0, "rentMult": 1, "herbs": 0, "sit": 1, "closureBonus": null },
     { "upgradeCostP": 0.5, "rentMult": 3, "herbs": 1, "sit": 1, "closureBonus": 0 },
-    { "upgradeCostP": 0.5, "rentMult": 6, "herbs": 1, "sit": 2, "closureBonus": 0 },
-    { "upgradeCostP": 1, "rentMult": 10, "herbs": 1, "sit": 2, "closureBonus": 1 }
+    { "upgradeCostP": 1, "rentMult": 6, "herbs": 1, "sit": 2, "closureBonus": 0 },
+    { "upgradeCostP": 2, "rentMult": 10, "herbs": 2, "sit": 2, "closureBonus": 2 }
   ],
   "cultivation": {
     "breath": 1,
