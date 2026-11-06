@@ -245,16 +245,16 @@ describe('沈青砚 · 过目不忘', () => {
     const g = ringGame();
     const b = g.data.config.breakthrough;
     const bar = g.data.config.realms[0].bar;
+    const cap = b.insightPer * b.insightMax;
     const [body, magic] = g.state.players;
     body.cult = bar;
     magic.cult = bar;
-    g.addCult(0, 3, 'event', '顿悟');
-    g.addCult(1, 3, 'event', '顿悟');
-    expect([body.cult, body.insight, body.stats.cultWasted]).toEqual([bar, 0, 3]);
-    expect([magic.cult, magic.insight, magic.stats.cultWasted]).toEqual([bar, 3, 0]);
-    const cap = b.insightPer * b.insightMax;
-    g.addCult(1, 3, 'event', '顿悟');
-    expect([magic.insight, magic.stats.cultWasted]).toEqual([cap, 6 - cap]);
+    g.addCult(0, cap, 'event', '顿悟');
+    g.addCult(1, cap, 'event', '顿悟');
+    expect([body.cult, body.insight, body.stats.cultWasted]).toEqual([bar, 0, cap]);
+    expect([magic.cult, magic.insight, magic.stats.cultWasted]).toEqual([bar, cap, 0]);
+    g.addCult(1, 2, 'event', '顿悟');
+    expect([magic.insight, magic.stats.cultWasted]).toEqual([cap, 2]);
   });
 
   it('every insightPer 感悟 is +1 at the breakthrough, at most +insightMax, and the attempt spends them all', () => {
@@ -290,8 +290,8 @@ describe('丹房', () => {
     expect(brew(0, 4, 'fail')).toEqual([1, 0]);
   });
 
-  it('丹道: the 丹师 makes one more pill per visit', () => {
-    expect(brew(3, 4, 'ok')).toEqual([3, 0]);
+  it('丹道: the 丹师 makes alchBonus more pills per visit', () => {
+    expect(brew(3, 4, 'ok')).toEqual([2 + ringGame().data.config.alchemy.alchBonus, 0]);
   });
 
   it('随身药炉: the 丹师 brews on his own land of furnaceLevel+, no 火候 and no 丹道, once per turn', () => {
