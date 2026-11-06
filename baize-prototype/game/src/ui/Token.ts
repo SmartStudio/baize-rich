@@ -1,8 +1,10 @@
 // One seat's figure on the board: a walker sprite whose feet sit on the container origin, a soft shadow and a
 // ring in the seat's colour under them, and the current-turn pointer over its head. It faces the way it steps,
 // cycles its walk frames while moving and bobs one pixel while it stands. Its feet stay on whole pixels.
+// While art in front covers it, an outline of its figure in the seat's colour draws above the whole board.
 import Phaser from 'phaser';
-import { addImg, ensureCanvas, setFrame, TOKEN_FRAME, WALK_FRAMES, walkFrame, type WalkDir } from './assets';
+import { addImg, ensureCanvas, frameRef, setFrame, TOKEN_FRAME, WALK_FRAMES, walkFrame, type WalkDir } from './assets';
+import type { Rect } from './layout';
 import { DEPTH, facingFor, type Facing, type Point } from './world';
 
 const POSE: Record<Facing, { dir: WalkDir; flip: boolean }> = {
@@ -17,6 +19,29 @@ const BOB_MS = 560;
 const POINTER_Y = -60;
 /** Head and body box around the feet, for camera focus, modals and floating labels. */
 export const TOKEN_BOX = { w: 32, h: 52 };
+/** Above every landmark, building and token, under the board's labels. */
+const XRAY_DEPTH = DEPTH.top - 1;
+
+/** A frame's x-ray: the 1-px ring of pixels around its figure, white so it tints to the seat colour. */
+function xrayKey(scene: Phaser.Scene, name: string): string {
+  const key = `xray_${name}`;
+  const [texKey, frameName] = frameRef(scene, name);
+  const f = scene.textures.getFrame(texKey, frameName);
+  const { cutX, cutY, cutWidth: w, cutHeight: h } = f;
+  ensureCanvas(scene, key, w, h, (ctx) => {
+    ctx.drawImage(f.source.image as CanvasImageSource, cutX, cutY, w, h, 0, 0, w, h);
+    const alpha = ctx.getImageData(0, 0, w, h).data;
+    const solid = (x: number, y: number): boolean => x >= 0 && y >= 0 && x < w && y < h && alpha[(y * w + x) * 4 + 3] > 0;
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = '#ffffff';
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        if (!solid(x, y) && (solid(x - 1, y) || solid(x + 1, y) || solid(x, y - 1) || solid(x, y + 1))) ctx.fillRect(x, y, 1, 1);
+      }
+    }
+  });
+  return key;
+}
 
 function ensureTokenTextures(scene: Phaser.Scene): void {
   const ellipse = (key: string, w: number, h: number, paint: (inside: (x: number, y: number, k: number) => boolean, ctx: CanvasRenderingContext2D) => void): void =>
@@ -46,6 +71,7 @@ export class Token {
   readonly root: Phaser.GameObjects.Container;
   private figure: Phaser.GameObjects.Image;
   private pointer: Phaser.GameObjects.Image;
+  private xray: Phaser.GameObjects.Image;
   private facing: Facing = 'down';
   private phase = 0;
   private bob = 0;
@@ -61,11 +87,25 @@ export class Token {
     this.figure = addImg(scene, 0, 0, walkFrame(hero, 'd', 0)).setDisplayOrigin(TOKEN_FRAME.footX, TOKEN_FRAME.footY);
     this.pointer = scene.add.image(0, POINTER_Y, 'tok_pointer').setDisplayOrigin(4, 5).setTint(colour).setVisible(false);
     this.root = scene.add.container(0, 0, [shadow, ring, this.figure, this.pointer]);
+    this.xray = scene.add.image(0, 0, '__DEFAULT').setTint(colour).setDepth(XRAY_DEPTH).setVisible(false);
     scene.time.addEvent({ delay: BOB_MS, startAt: seat * 130, loop: true, callback: () => this.tickBob() });
   }
 
   get x(): number { return this.root.x; }
   get y(): number { return this.root.y; }
+  get depth(): number { return this.root.depth; }
+
+  /** Head and body box around the feet, in world px. */
+  get box(): Rect {
+    return { x: this.x - TOKEN_BOX.w / 2, y: this.y - TOKEN_BOX.h, w: TOKEN_BOX.w, h: TOKEN_BOX.h };
+  }
+
+  /** Show or hide the x-ray outline, for while art drawn in front covers the figure. */
+  setCovered(on: boolean): void {
+    if (this.xray.visible === on) return;
+    this.xray.setVisible(on);
+    this.syncXray();
+  }
 
   place(p: Point): void {
     this.setFeet(p.x, p.y);
@@ -109,6 +149,7 @@ export class Token {
     const fx = Math.round(x);
     const fy = Math.round(y);
     this.root.setPosition(fx, fy).setDepth(DEPTH.token(fy, this.seat));
+    this.syncXray();
   }
 
   private startCycle(frameMs: number): void {
@@ -138,11 +179,20 @@ export class Token {
     this.bob ^= 1;
     if (!this.cycle) this.figure.y = -this.bob;
     this.pointer.y = POINTER_Y - 2 * this.bob;
+    this.syncXray();
   }
 
   private pose(): void {
     const { dir, flip } = POSE[this.facing];
     setFrame(this.figure, walkFrame(this.hero, dir, this.phase));
     this.figure.setFlipX(flip).setDisplayOrigin(TOKEN_FRAME.footX, TOKEN_FRAME.footY);
+    this.syncXray();
+  }
+
+  private syncXray(): void {
+    if (!this.xray.visible) return;
+    const { dir, flip } = POSE[this.facing];
+    this.xray.setTexture(xrayKey(this.scene, walkFrame(this.hero, dir, this.phase))).setFlipX(flip)
+      .setDisplayOrigin(TOKEN_FRAME.footX, TOKEN_FRAME.footY).setPosition(this.x, this.y + this.figure.y);
   }
 }

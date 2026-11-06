@@ -9,6 +9,8 @@ export const COLORS = {
   parchment: 0xf4e9d0,
   ink: 0x2a2238,
   gold: 0xf2b93b,
+  /** Board cells the player can act on. Kept apart from every seat colour, so it never reads as ownership. */
+  focus: 0x5ef0ff,
   dim: 0x8a86a8,
   good: 0x6fcf7f,
   bad: 0xe05a5a,
