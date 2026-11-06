@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { DIFFICULTY_LABEL, type Difficulty } from '../ai/ai';
 import { defaultData } from '../core/data';
 import { HERO_IDS } from '../core/heroes';
-import type { HeroId } from '../core/types';
+import type { HeroData, HeroId } from '../core/types';
 import { addImg } from '../ui/assets';
 import { newSession, quickSeats, urlSeed, urlSpeed } from '../ui/session';
 import { COLORS, HEX, txt } from '../ui/theme';
@@ -18,10 +18,45 @@ const QUOTE: Record<HeroId, string> = {
 const DIFFS: Difficulty[] = ['easy', 'normal', 'hard'];
 
 const CARD_W = 276;
-const CARD_H = 430;
+const CARD_H = 454;
 const GAP = 24;
-const CARD_Y = 340;
+const CARD_Y = 362;
+const QUOTE_Y = 608;
+const PORTRAIT_SCALE = 2;
+const BACKING_H = 144;
+const COPY_W = CARD_W - 28;
+const COPY_SIZE = 14;
 const cardX = (i: number) => 640 + (i - (HERO_IDS.length - 1) / 2) * (CARD_W + GAP);
+
+interface AbilityCopy {
+  title: string;
+  body: string;
+}
+
+function heroAbilities(hero: HeroData, cooldownTurns: number): AbilityCopy[] {
+  return [
+    { title: `技能【${hero.skill.name}】（冷却 ${cooldownTurns} 回合）`, body: hero.skill.desc },
+    { title: `被动【${hero.passive.name}】`, body: hero.passive.desc },
+    { title: `大招【${hero.ult.name}】`, body: hero.ult.desc },
+  ];
+}
+
+function stackAbilities(scene: Phaser.Scene, x: number, y: number, lines: AbilityCopy[]): Phaser.GameObjects.Text[] {
+  const placed: Phaser.GameObjects.Text[] = [];
+  let cursor = y;
+  for (const line of lines) {
+    const title = txt(scene, x, cursor, line.title, {
+      size: COPY_SIZE, bold: true, color: HEX.gold, wrap: COPY_W, lineSpacing: 2,
+    });
+    cursor += title.height + 2;
+    const body = txt(scene, x, cursor, line.body, {
+      size: COPY_SIZE, color: HEX.parchment, wrap: COPY_W, lineSpacing: 2,
+    });
+    cursor += body.height + 6;
+    placed.push(title, body);
+  }
+  return placed;
+}
 
 interface Card {
   root: Phaser.GameObjects.Container;
@@ -51,7 +86,7 @@ export class HeroSelectScene extends Phaser.Scene {
     txt(this, 640, 44, '选择你的修士', { size: 34, bold: true, color: HEX.gold, origin: [0.5, 0.5], stroke: HEX.ink });
     txt(this, 640, 84, '点选一名修士作为「你」，其余三位由 AI 扮演 · 你坐 1 号位，第一个行动', { size: 15, color: HEX.dim, origin: [0.5, 0.5] });
     HERO_IDS.forEach((h, i) => this.buildCard(h, i));
-    this.quote = txt(this, 640, 586, '', { size: 18, color: HEX.parchment, origin: [0.5, 0.5] });
+    this.quote = txt(this, 640, QUOTE_Y, '', { size: 18, color: HEX.parchment, origin: [0.5, 0.5] });
 
     new Button(this, 40, 632, { w: 120, h: 52, label: '◀ 返回', size: 16 }).onClick(() => fadeToScene(this, 'Title'));
     txt(this, 214, 658, 'AI 难度', { size: 16, bold: true, origin: [0, 0.5] });
@@ -71,17 +106,18 @@ export class HeroSelectScene extends Phaser.Scene {
     const top = -CARD_H / 2;
     const root = this.add.container(cardX(i), CARD_Y);
     const frame = this.add.rectangle(0, 0, w, CARD_H, COLORS.panel).setStrokeStyle(3, COLORS.outline);
-    const backing = this.add.rectangle(0, top + 118, w - 28, 204, COLORS.panelLight).setStrokeStyle(2, COLORS.outline);
-    const por = addImg(this, 0, top + 118, `por_${hero}`).setScale(3);
-    const name = txt(this, 0, top + 244, h.name, { size: 26, bold: true, origin: [0.5, 0.5] });
-    const role = this.add.rectangle(0, top + 278, 108, 24, COLORS.ink).setStrokeStyle(2, COLORS.gold);
-    const roleText = txt(this, 0, top + 278, `定位 · ${h.role}`, { size: 13, bold: true, color: HEX.gold, origin: [0.5, 0.5] });
-    const body = txt(this, -w / 2 + 16, top + 300, `被动【${h.passive.name}】\n${h.passive.desc}\n\n大招【${h.ult.name}】\n${h.ult.desc}`, {
-      size: 14, wrap: w - 32, lineSpacing: 4,
-    });
+    const backY = top + 10 + BACKING_H / 2;
+    const backing = this.add.rectangle(0, backY, w - 28, BACKING_H, COLORS.panelLight).setStrokeStyle(2, COLORS.outline);
+    const por = addImg(this, 0, backY, `por_${hero}`).setScale(PORTRAIT_SCALE);
+    const nameY = backY + BACKING_H / 2 + 18;
+    const name = txt(this, 0, nameY, h.name, { size: 26, bold: true, origin: [0.5, 0.5] });
+    const roleY = nameY + 30;
+    const role = this.add.rectangle(0, roleY, 108, 24, COLORS.ink).setStrokeStyle(2, COLORS.gold);
+    const roleText = txt(this, 0, roleY, `定位 · ${h.role}`, { size: 13, bold: true, color: HEX.gold, origin: [0.5, 0.5] });
+    const sections = stackAbilities(this, -w / 2 + 14, roleY + 20, heroAbilities(h, defaultData.config.rules.skillCooldownTurns));
     const badgeBg = this.add.rectangle(0, 0, 64, 30, COLORS.gold).setStrokeStyle(2, COLORS.outline);
     const badge = this.add.container(-w / 2 + 40, top + 4, [badgeBg, txt(this, 0, 0, '你', { size: 18, bold: true, color: HEX.ink, origin: [0.5, 0.5] })]);
-    root.add([frame, backing, por, name, role, roleText, body, badge]);
+    root.add([frame, backing, por, name, role, roleText, ...sections, badge]);
     root.setSize(w, CARD_H);
     frame.setInteractive({ useHandCursor: true })
       .on('pointerover', () => { this.hovered = hero; this.render(); })
