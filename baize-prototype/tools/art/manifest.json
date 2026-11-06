@@ -67,10 +67,11 @@
   },
   "lm_alchemy": {
     "fit": "h",
-    "size": 60,
+    "size": 68,
     "colors": 32,
     "aspect": "3:4",
-    "prompt": "HD-2D pixel art game sprite (Octopath Traveler style), crisp square pixels, clean 1px dark outline, limited palette, light from the upper left. Strict front elevation: camera directly in front and a little above, the subject faces the viewer squarely and is symmetric left-right, no isometric, no diagonal, no 3/4 angle. Subject: an alchemy furnace shrine: a big bronze three-legged ding cauldron with two upright ear handles and a domed lid, warm orange flames under its belly, a wisp of white smoke and golden pill sparks rising from the lid, framed by a small open wooden gateway shelter with a short dark tiled roof. Single object centred, occupying about 85% of the image. Background: flat bright pure magenta #FF00FF (255,0,255) everywhere else, not maroon, not dark red. No ground plane, no cast shadow, no scenery, no text."
+    "prompt": "HD-2D pixel art game sprite (Octopath Traveler style), crisp square pixels, clean 1px dark outline, limited palette, light from the upper left, same style as the reference sprites. Strict front elevation: camera directly in front and a little above, the subject faces the viewer squarely and is symmetric left-right, no isometric, no diagonal, no 3/4 angle. Subject: an open-air alchemy hearth with NO roof, NO pillars, NO shelter, NO gateway: a big round-bellied bronze three-legged ding cauldron with two upright ear handles, sitting on a low square hearth of dark grey stone bricks with a glowing fire mouth at the front, bright orange and yellow flames licking up around the cauldron's belly, a tall column of white-and-orange smoke and fire sparks rising from the open cauldron mouth with three small glowing golden pills floating in the plume. Squat wide silhouette at the bottom with a tall narrow flame plume on top. Single object centred, occupying about 85% of the image. Background: flat bright pure magenta #FF00FF (255,0,255) everywhere else, not maroon, not dark red. No ground plane, no cast shadow, no scenery, no text.",
+    "ref": "lm_market, lm_spring"
   },
   "lm_market": {
     "fit": "w",
