@@ -66,7 +66,7 @@ if (process.argv[1]?.endsWith('lever.ts')) {
     [{ kind: 'cap', cap: 0 }, `只买不升（${names[0]}）`],
     [{ kind: 'cap', cap: 1 }, `最多升到${names[1]}`],
     [{ kind: 'cap', cap: 2 }, `最多升到${names[2]}`],
-    [{ kind: 'noIncome' }, '灵田不进账（目标 ≤ 21%）'],
+    [{ kind: 'noIncome' }, '灵田不进账（目标 ≤ 24%）'],
   ];
   for (const [handicap, label] of rows) console.log(`  ${label.padEnd(10, '　')} 胜率 ${(100 * landLever(handicap, games, seed)).toFixed(1)}%`);
 }
