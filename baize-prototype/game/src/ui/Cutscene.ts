@@ -3,7 +3,7 @@
 // are already scaled by the play speed.
 import Phaser from 'phaser';
 import { addImg, setFrame } from './assets';
-import { H, STAGE, W } from './layout';
+import { BOARD_COL, H, STAGE, W } from './layout';
 import { COLORS, FS, HEX, txt } from './theme';
 
 export interface BannerSpec {
@@ -24,14 +24,15 @@ const PLATE_R = 6;
 export class Cutscene {
   constructor(private scene: Phaser.Scene) {}
 
-  /** Full-width strip in the upper screen. Resolves when it has gone. */
+  /** A strip across the board column in the upper screen. Resolves when it has gone. */
   banner(spec: BannerSpec, ms: number): Promise<void> {
     const s = this.scene;
     const cy = STAGE.bannerY;
     const dim = spec.dim ? s.add.rectangle(0, 0, W, H, 0x000000, 0.35).setOrigin(0, 0).setAlpha(0) : null;
-    const strip = s.add.rectangle(0, cy, W, BANNER_H, COLORS.ink, 0.94).setOrigin(0, 0.5);
-    const edgeT = s.add.rectangle(0, cy - BANNER_H / 2, W, 4, spec.color).setOrigin(0, 0.5);
-    const edgeB = s.add.rectangle(0, cy + BANNER_H / 2, W, 4, spec.color).setOrigin(0, 0.5);
+    const { x, w } = BOARD_COL;
+    const strip = s.add.rectangle(x, cy, w, BANNER_H, COLORS.ink, 0.94).setOrigin(0, 0.5);
+    const edgeT = s.add.rectangle(x, cy - BANNER_H / 2, w, 4, spec.color).setOrigin(0, 0.5);
+    const edgeB = s.add.rectangle(x, cy + BANNER_H / 2, w, 4, spec.color).setOrigin(0, 0.5);
     const content = bannerContent(s, spec, cy);
     const parts: Phaser.GameObjects.GameObject[] = [strip, edgeT, edgeB, content.root];
     if (dim) parts.unshift(dim);
@@ -103,7 +104,7 @@ function bannerContent(s: Phaser.Scene, spec: BannerSpec, cy: number): { root: P
   const title = txt(s, titleX, -18, spec.title, {
     size: FS.hero, bold: true, color: Phaser.Display.Color.IntegerToColor(spec.color).rgba, stroke: HEX.ink, origin: [0, 0.5],
   });
-  const sub = txt(s, titleX + 2, 20, spec.sub, { size: FS.md, color: HEX.parchment, origin: [0, 0.5], wrap: 640 });
+  const sub = txt(s, titleX + 2, 20, spec.sub, { size: FS.md, color: HEX.parchment, origin: [0, 0.5], wrap: BOARD_COL.w - 120 });
   const left = -icon.displayWidth / 2;
   const right = titleX + Math.max(title.width, sub.width);
   const root = s.add.container(W / 2 - (left + right) / 2, cy, [icon, title, sub]);

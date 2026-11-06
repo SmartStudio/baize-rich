@@ -35,6 +35,8 @@ export class ActionDock {
   readonly btnSave: Button;
   readonly btnUpgrade: Button;
   readonly btnCast: Button;
+  readonly btnEat: Button;
+  readonly btnClose: Button;
   readonly btnEnd: Button;
   readonly btnRoll: Button;
   private cardClick: ((card: string) => void) | null = null;
@@ -50,7 +52,9 @@ export class ActionDock {
     this.btnSave = new Button(s, x + 2 * (uw + 4), RIGHT.utilY, { w: uw, h: RIGHT.utilH, label: '记录 · S', size: FS.sm });
 
     const p = DOCK.pad;
-    const bodyH = actions ? DOCK.gap + DOCK.rollH + DOCK.gap + DOCK.btnH + DOCK.gap + DOCK.handH : 0;
+    const bodyH = actions
+      ? DOCK.gap + DOCK.rollH + DOCK.gap + DOCK.btnH + DOCK.gap + DOCK.btnH + DOCK.gap + DOCK.handH
+      : 0;
     const h = p + DOCK.headH + bodyH + p;
     const y = H - 8 - h;
     this.frame = s.add.rectangle(x, y, w, h, COLORS.panel, FLOAT_ALPHA).setOrigin(0, 0).setStrokeStyle(2, COLORS.gold);
@@ -62,18 +66,25 @@ export class ActionDock {
     const ry = y + p + DOCK.headH + DOCK.gap;
     this.btnRoll = new Button(s, x + p, ry, { w: w - 2 * p, h: DOCK.rollH, label: '掷骰子 · 空格', size: FS.xl, fill: COLORS.gold, textColor: HEX.ink });
     const by = ry + DOCK.rollH + DOCK.gap;
-    const bw = (w - 2 * p - 2 * DOCK.gap) / 3;
+    const rowW = w - 2 * p;
+    const bw = Math.floor((rowW - 2 * DOCK.gap) / 3);
     this.btnUpgrade = new Button(s, x + p, by, { w: bw, h: DOCK.btnH, label: '升级 · B', size: FS.sm });
     this.btnCast = new Button(s, x + p + bw + DOCK.gap, by, { w: bw, h: DOCK.btnH, label: '出符 · C', size: FS.sm });
     this.btnEnd = new Button(s, x + p + 2 * (bw + DOCK.gap), by, { w: bw, h: DOCK.btnH, label: '结束 · ↵', size: FS.sm, fill: 0xc03a40 });
-    this.handTop = by + DOCK.btnH + DOCK.gap;
+    const by2 = by + DOCK.btnH + DOCK.gap;
+    const bw2 = Math.floor((rowW - DOCK.gap) / 2);
+    this.btnEat = new Button(s, x + p, by2, { w: bw2, h: DOCK.btnH, label: '服丹 · P', size: FS.sm });
+    this.btnClose = new Button(s, x + p + bw2 + DOCK.gap, by2, {
+      w: bw2, h: DOCK.btnH, label: '闭关 · G', size: FS.sm, fill: COLORS.gold, textColor: HEX.ink,
+    });
+    this.handTop = by2 + DOCK.btnH + DOCK.gap;
     this.handLayer = s.add.container(0, 0);
     if (actions) {
       this.handLabel = txt(s, x + p, this.handTop, '', { size: FS.xs, color: HEX.dim });
       this.rollGlow = s.add.rectangle(x + p - 4, ry - 4, w - 2 * p + 8, DOCK.rollH + 8).setOrigin(0, 0).setStrokeStyle(3, COLORS.parchment).setAlpha(0);
       this.rollPulse = s.tweens.add({ targets: this.rollGlow, alpha: { from: 0.15, to: 1 }, duration: 450, yoyo: true, repeat: -1, paused: true });
     } else {
-      for (const b of [this.btnRoll, this.btnUpgrade, this.btnCast, this.btnEnd]) b.setVisible(false);
+      for (const b of [this.btnRoll, this.btnUpgrade, this.btnCast, this.btnEat, this.btnClose, this.btnEnd]) b.setVisible(false);
     }
   }
 
@@ -91,9 +102,24 @@ export class ActionDock {
     const p = state.players[state.current];
     setFrame(this.turnPortrait, `por_${p.hero}_s`);
     this.turnName.setText(state.over ? '对局结束' : `${p.name} 的回合`).setColor(PLAYER_HEX[p.seat]);
-    this.turnHint.setText(state.over ? '' : human ? (this.rollWaiting ? '掷骰，或先升级、出符' : '可升级、出符，或结束回合') : 'AI 正在行动…').setColor(human ? HEX.gold : HEX.dim);
+    this.turnHint.setText(this.hintLine(state, human)).setColor(human && !state.over ? HEX.gold : HEX.dim);
     const lit = human && !state.over;
     this.frame.setStrokeStyle(lit ? 3 : 2, lit ? PLAYER_COLORS[p.seat] : COLORS.gold);
+  }
+
+  /** Names the buttons the engine has switched on. Disabled actions stay off this line. */
+  private hintLine(state: GameState, human: boolean): string {
+    if (state.over) return '';
+    if (!human) return 'AI 正在行动…';
+    if (this.rollWaiting) return this.btnClose.isEnabled() ? '可先闭关，再掷骰' : '掷骰子';
+    const ready = [
+      this.btnUpgrade.isEnabled() ? '升级' : '',
+      this.btnCast.isEnabled() ? '出符' : '',
+      this.btnEat.isEnabled() ? '服丹' : '',
+      this.btnClose.isEnabled() ? '闭关' : '',
+      this.btnEnd.isEnabled() ? '结束' : '',
+    ].filter((s) => s !== '');
+    return ready.join(' · ');
   }
 
   /** The roll button breathes while it waits for a human to press it. */
