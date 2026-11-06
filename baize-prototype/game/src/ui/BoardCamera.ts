@@ -134,12 +134,16 @@ export class BoardCamera {
     return moved;
   }
 
-  /** A view within a hair of the goal lands on it exactly, so the camera never rests at a fractional zoom. */
+  /**
+   * A view within a hair of the goal lands on it: exactly its zoom, and a centre on the screen pixel grid,
+   * so a resting camera maps every art pixel to whole screen pixels.
+   */
   private settle(v: View): View {
     const g = this.goal;
     const near = Math.abs(v.zoom - g.zoom) < SNAP_ZOOM
       && Math.abs(v.cx - g.cx) * g.zoom < SNAP_PX && Math.abs(v.cy - g.cy) * g.zoom < SNAP_PX;
-    return near ? { ...g } : v;
+    const onGrid = (x: number): number => Math.round(x * g.zoom) / g.zoom;
+    return near ? { cx: onGrid(g.cx), cy: onGrid(g.cy), zoom: g.zoom } : v;
   }
 
   private setFrame(rect: Rect, seat: number, zoom: Zoom): void {
