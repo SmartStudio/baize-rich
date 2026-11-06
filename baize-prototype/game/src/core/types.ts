@@ -61,16 +61,12 @@ export interface ConfigData {
   cultivation: {
     /** 吐纳：每个自己的回合结束 */
     breath: number;
-    /** 体修铜皮铁骨：在自家地上打坐额外所得 */
-    bodySit: number;
     spring: number;
     eye: number;
     /** 服丹：每颗 */
     pill: number;
     /** 白泽问心：停在灵台但不突破 */
     altarCalm: number;
-    /** 引雷淬体：法修在灵泉、灵眼额外所得 */
-    magicBonus: number;
   };
   breakthrough: {
     /** 每颗押上的丹药 */
@@ -83,6 +79,14 @@ export interface ConfigData {
     guidanceBonus: number;
     /** 清心符 */
     calmBonus: number;
+    /** 过目不忘：每这么多点感悟突破 +1 */
+    insightPer: number;
+    /** 过目不忘：感悟加成的上限 */
+    insightMax: number;
+    /** 引雷破境：在任意格闭关时的地点加成 */
+    thunderSite: number;
+    /** 战意：燕回主动斗法得胜后的下一次突破加成 */
+    momentumBonus: number;
   };
   alchemy: {
     herbsPerPill: number;
@@ -90,6 +94,8 @@ export interface ConfigData {
     perfectBonus: number;
     /** 丹道：丹师每次停在丹房多出的丹药 */
     alchBonus: number;
+    /** 随身药炉：自家灵田至少这个等级才能炼丹 */
+    furnaceLevel: number;
   };
   market: { pillPrice: number; pillMax: number; cardPrice: number; cardMax: number };
   spring: { herbs: number };
@@ -122,12 +128,8 @@ export interface RulesConfig {
   diceCardMin: number;
   /** 御骰符：可选点数上限 */
   diceCardMax: number;
-  /** 主动技能：冷却（自己的回合数） */
-  skillCooldownTurns: number;
   /** 镇山：山岳可放在前方 1 至此值格 */
   roadblockRange: number;
-  /** 乾坤挪移：只能与路网上相距不超过此格数的他人互换 */
-  swapRange: number;
   /** 剑遁：只能瞬移到相距不超过此格数（沿路网任意方向）的他人 */
   swordDashRange: number;
 }
@@ -145,7 +147,7 @@ export interface BoardNodeData {
   street?: string;
   /** 所属神道（BoardData.roads 的键），拐入时显示「拐入某神道」并计入进入神道次数 */
   road?: RoadId;
-  /** 路网格（除神道与灵台外的所有格）：回首符、镇山、乾坤挪移只在路网格上生效 */
+  /** 路网格（除神道与灵台外的所有格）：回首符、镇山只在路网格上生效 */
   outer?: boolean;
   /** 灵台占据的格子矩形 [c0, r0, c1, r1]，仅用于绘制 */
   rect?: [number, number, number, number];
@@ -177,11 +179,38 @@ export interface HeroData {
   /** 选中台词。 */
   quote: string;
   color: string;
-  passive: { id: string; name: string; desc: string };
-  /** 主动技能：免费，冷却 rules.skillCooldownTurns 个自己的回合。 */
-  skill: { id: HeroSkillId; name: string; desc: string; timing: 'preroll' | 'action' };
+  passive: { id: string; name: string; desc: string; traits: HeroTrait[] };
+  skill: HeroSkillData;
 }
-export type HeroSkillId = 'sworddash' | 'swap' | 'roadblock' | 'daze';
+/** One rule a passive adds. Rules and AI ask `hasTrait`, never the hero id. */
+export type HeroTrait =
+  /** 斗法守方 +duel.bodyDefense */
+  | 'guard'
+  /** 自家任意等级的灵田都能闭关；不能闭关的等级按地点加成 0 算 */
+  | 'homeClosure'
+  /** 走火入魔不掉修为（丹药照扣、心境照加） */
+  | 'steadyBar'
+  /** 斗法攻方 +duel.swordAttack */
+  | 'swordQi'
+  /** 每次停在丹房炼丹 +alchemy.alchBonus */
+  | 'pillway'
+  /** 修为条满后溢出的修为存为感悟，突破时折成加成 */
+  | 'insight'
+  /** 作为攻方斗法得胜后，下次突破 +breakthrough.momentumBonus（最多 1 层） */
+  | 'momentum'
+  /** 随身药炉：行动阶段在自家 Lv ≥ alchemy.furnaceLevel 的灵田上炼丹，不看火候、没有丹道加成 */
+  | 'furnace';
+export interface HeroSkillData {
+  id: HeroSkillId;
+  name: string;
+  desc: string;
+  timing: 'preroll' | 'action';
+  /** 用后隔多少个自己的回合再次可用：本回合用掉，第 turnsTaken + cooldown 个回合起就绪。 */
+  cooldown: number;
+  /** 每次施展消耗的丹药。 */
+  pillCost: number;
+}
+export type HeroSkillId = 'sworddash' | 'thunder' | 'roadblock' | 'daze';
 
 // ---- spells.json ----------------------------------------------------------
 export type SpellCat = 'attack' | 'guard' | 'move' | 'mind';
@@ -276,6 +305,10 @@ export interface PlayerState {
   mind: number;
   /** 前辈指点：下一次突破的加成次数。 */
   guidance: number;
+  /** 过目不忘：存下的感悟，下一次闭关时用尽。 */
+  insight: number;
+  /** 战意：主动斗法得胜后持有，下一次闭关时用掉。 */
+  momentum: boolean;
   /** 宝光外泄所在的轮次（本轮算作身怀宝光）。 */
   glowRound: number;
   /** 元婴遁最近一次生效的轮次（每轮 1 次）。 */
@@ -301,6 +334,8 @@ export interface TurnState {
   upgraded: boolean;
   /** 本回合已服丹。 */
   ate: boolean;
+  /** 本回合已用随身药炉炼过丹。 */
+  brewed: boolean;
   /** 本回合已闭关突破。 */
   closed: boolean;
   /** 本回合在白泽灵台停下结算过（白泽问心）。 */

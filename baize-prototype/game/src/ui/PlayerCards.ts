@@ -2,7 +2,8 @@
 // Hovering the 修为 line explains it; clicking a chip pins a popover with everything else.
 import Phaser from 'phaser';
 import type { Game } from '../core/engine';
-import { barFull, barSize, isGlowing, realmName, winRealm } from '../core/rules';
+import { skillTerms } from '../core/heroes';
+import { barFull, barSize, closurePlaces, insightBonus, isGlowing, realmName, winRealm } from '../core/rules';
 import type { GameState } from '../core/types';
 import { addImg } from './assets';
 import { LEFT, type Rect } from './layout';
@@ -105,12 +106,14 @@ export class PlayerCards {
     if (p.bound) tags.push({ label: '定身', desc: '中了定身符：下回合不能移动，原地结算。' });
     if (isGlowing(state, g.data, i)) tags.push({ label: '宝光', desc: `身怀 ${cfg.duel.glowAt} 颗以上丹药：斗法输了会被夺 ${cfg.duel.glowSteal} 颗。` });
     if (p.guidance > 0) tags.push({ label: '指点', desc: `下次闭关突破 +${cfg.breakthrough.guidanceBonus}。` });
+    if (p.momentum) tags.push({ label: '战意', desc: `斗法得胜的余势：下次闭关突破 +${cfg.breakthrough.momentumBonus}，闭关时用掉。` });
+    if (p.insight > 0) tags.push({ label: `感悟 ${p.insight}`, desc: `过目不忘：下次闭关突破 +${insightBonus(g.data, p)}，闭关时用尽。` });
     if (p.dazed) tags.push({ label: '迷魂', desc: '中了迷魂丹：下一次掷骰移动的步数减半（向下取整，至少 1）。' });
     const hero = g.data.heroes.find((h) => h.id === p.hero)!;
     const wait = p.skillReadyTurn - p.turnsTaken;
     tags.push({
       label: wait > 0 ? `技能 冷却 ${wait}` : '技能 就绪',
-      desc: `【${hero.skill.name}】${hero.skill.desc}。不花资源，用后冷却 ${cfg.rules.skillCooldownTurns} 个自己的回合（按 K 或在「出符」菜单发动）。\n被动【${hero.passive.name}】${hero.passive.desc}。`,
+      desc: `【${hero.skill.name}】${hero.skill.desc}。${skillTerms(hero.skill)}（按 K 或在「出符」菜单发动）。\n被动【${hero.passive.name}】${hero.passive.desc}。`,
     });
     return tags;
   }
@@ -127,9 +130,9 @@ export class PlayerCards {
     const top = p.realm >= winRealm(g.data);
     const lines = [
       '先突破到化神者获胜；否则秘境关闭时比境界。',
-      top ? '已化神。' : `修为条满 ${realm.bar} 后，在白泽灵台或自家洞府闭关：2D6 + 加成 ≥ ${realm.target} 即突破。`,
+      top ? '已化神。' : `修为条满 ${realm.bar} 后，在${closurePlaces(g.data)}闭关：2D6 + 加成 ≥ ${realm.target} 即突破。`,
       '',
-      '修为来源：每回合吐纳 +1、洞府打坐、灵泉、阵眼、服丹。条满后多余的修为会溢出。',
+      '修为来源：每回合吐纳 +1、洞府打坐、灵泉、灵眼、服丹。条满后多余的修为会溢出。',
       '突破失败：修为条减半，心境 +1（下次突破更稳）。',
     ];
     return { title: `${realmName(g.data, p.realm)} · 修为 ${p.cult}/${realm.bar}`, body: lines.join('\n') };

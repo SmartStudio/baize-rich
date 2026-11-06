@@ -19,10 +19,12 @@ import type {
   MarketBuy, PendingChoice, PendingChoiceOf, PreRollAct, Target, ThreatKind,
 } from './choices';
 import { defaultData } from './data';
-import type { BreakthroughResult, CultSource, DuelResult, GameEvent, GameEventType } from './events';
+import type { BreakthroughBonuses, BreakthroughResult, CultChange, CultSource, DuelResult, GameEvent, GameEventType } from './events';
+import { skillTerms } from './heroes';
 import { hashSeed, nextFloat } from './rng';
 import {
-  barFull, barSize, canClose, closureBonus, closureSite, compareStanding, duelBonus, hasAbility, herbYield, isGlowing, maxLevel,
+  barFull, barSize, canClose, closureBonus, closureSite, compareStanding, duelBonus, fixedBonuses, hasAbility, hasTrait, herbYield,
+  insightRoom, isGlowing, maxLevel,
   realmName, realmOf, rentFor, sitGain, upgradeCost, winRealm,
 } from './rules';
 import type {
@@ -215,7 +217,7 @@ export class Game {
     return {
       seat, name, hero, pos: this.board.startId, cameFrom: null,
       stones: cfg.startStones + cfg.seatBonusStones[seat], herbs: cfg.startHerbs, pills: cfg.startPills,
-      realm: 0, cult: 0, mind: 0, guidance: 0, glowRound: 0, escapeRound: 0,
+      realm: 0, cult: 0, mind: 0, guidance: 0, insight: 0, momentum: false, glowRound: 0, escapeRound: 0,
       hand: [], bound: false, turnsTaken: 0, skillReadyTurn: 0, dazed: false,
       stats: {
         rentCollected: 0, rentPaid: 0, breakthroughs: 0, breakthroughFails: 0, roadEntries: 0, altarVisits: 0,
@@ -227,7 +229,7 @@ export class Game {
 
   private freshTurn(seat: number): TurnState {
     return {
-      seat, upgraded: false, ate: false, closed: false, landedAltar: false, reverse: false,
+      seat, upgraded: false, ate: false, brewed: false, closed: false, landedAltar: false, reverse: false,
       lastPath: [], lastDir: 1, duelDone: false, passed: [], diceCard: false,
     };
   }
@@ -561,20 +563,15 @@ export class Game {
       case 'market': yield* this.market(seat); break;
       case 'secret': yield* this.drawFortune(seat, depth); break;
       case 'spring':
-        this.addCult(seat, c.spring + this.magicBonus(seat), 'spring', '灵泉');
+        this.addCult(seat, c.spring, 'spring', '灵泉');
         this.gainHerbs(seat, this.cfg.spring.herbs, '灵泉');
         break;
       case 'beast': this.beast(seat); break;
       case 'ruins': yield* this.ruins(seat, depth); break;
-      case 'eye': this.addCult(seat, c.eye + this.magicBonus(seat), 'eye', '灵眼'); break;
+      case 'eye': this.addCult(seat, c.eye, 'eye', '灵眼'); break;
       case 'altar': this.landAltar(seat); break;
       case 'gate': break;
     }
-  }
-
-  /** 引雷淬体: 法修 gains extra 修为 at 灵泉 and 灵眼. */
-  private magicBonus(seat: number): number {
-    return this.state.players[seat].hero === 'magic' ? this.cfg.cultivation.magicBonus : 0;
   }
 
   private landAltar(seat: number): void {
@@ -702,12 +699,12 @@ export class Game {
       this.emit('info', `${this.pn(seat)} 灵草不足，无法炼丹`, { player: seat, node });
       return;
     }
-    const n = yield* this.askBrew(seat, max);
+    const n = yield* this.askBrew(seat, max, '丹房', '第一炉看火候');
     if (n === 0) return;
     p.herbs -= n * a.herbsPerPill;
     const tier = (yield* this.askHeat(seat)).tier;
     const extra = tier === 'perfect' ? a.perfectBonus : tier === 'fail' ? -1 : 0;
-    const pills = n + extra + (p.hero === 'alch' ? a.alchBonus : 0);
+    const pills = n + extra + (hasTrait(this.data, p, 'pillway') ? a.alchBonus : 0);
     p.pills += pills;
     p.stats.pillsMade += pills;
     p.stats.miniGames++;
@@ -716,14 +713,35 @@ export class Game {
     });
   }
 
-  private *askBrew(seat: number, max: number): Flow<number> {
+  /** 随身药炉: brew where the 丹师 stands, as at a 丹房 but without 火候 or 丹道. */
+  private *furnace(seat: number): Flow {
+    const p = this.state.players[seat];
+    const per = this.cfg.alchemy.herbsPerPill;
+    const n = yield* this.askBrew(seat, Math.floor(p.herbs / per), '随身药炉', '不看火候');
+    if (n === 0) return;
+    this.state.turn.brewed = true;
+    p.herbs -= n * per;
+    p.pills += n;
+    p.stats.pillsMade += n;
+    this.emit('pills', `${this.pn(seat)} 随身药炉炼丹 ${n} 炉，得 ${n} 颗丹药`, { player: seat, node: p.pos, amount: n });
+  }
+
+  private canFurnace(seat: number): boolean {
+    const st = this.state;
+    const p = st.players[seat];
+    const t = st.tiles[p.pos];
+    return hasTrait(this.data, p, 'furnace') && !st.turn.brewed && p.herbs >= this.cfg.alchemy.herbsPerPill
+      && t?.owner === seat && t.level >= this.cfg.alchemy.furnaceLevel;
+  }
+
+  private *askBrew(seat: number, max: number, title: string, heat: string): Flow<number> {
     const per = this.cfg.alchemy.herbsPerPill;
     const opts: ChoiceOption<number>[] = [];
     for (let k = max; k >= 0; k--) {
       opts.push({ id: `b${k}`, label: k === 0 ? '不炼' : `炼 ${k} 炉（${k * per} 灵草）`, value: k });
     }
     return yield* this.ask({
-      player: seat, kind: 'brew', title: '丹房', desc: `每 ${per} 灵草炼 1 颗丹药；第一炉看火候`,
+      player: seat, kind: 'brew', title, desc: `每 ${per} 灵草炼 1 颗丹药；${heat}`,
       options: opts, defaultId: `b${max}`, cancelId: 'b0',
     });
   }
@@ -769,15 +787,14 @@ export class Game {
     else for (let k = 0; k < buy.n; k++) this.drawSpell(seat);
   }
 
-  /** 妖兽谷: 2D6 + realm ≥ target wins herbs, else lose stones. 体修 always wins. */
+  /** 妖兽谷: 2D6 + realm ≥ target wins herbs, else lose stones. */
   private beast(seat: number): void {
     const p = this.state.players[seat];
     const b = this.cfg.beast;
     const dice = this.roll2d6();
     const total = dice[0] + dice[1] + p.realm;
-    const win = p.hero === 'body' || total >= b.target;
-    const how = p.hero === 'body' ? '铜皮铁骨' : `${dice[0]} + ${dice[1]} + 境界 ${p.realm} = ${total}`;
-    this.emit('beast', `${this.pn(seat)} 斗妖兽（${how}），${win ? '得胜' : '败退'}`, { player: seat, dice, amount: total });
+    const win = total >= b.target;
+    this.emit('beast', `${this.pn(seat)} 斗妖兽（${dice[0]} + ${dice[1]} + 境界 ${p.realm} = ${total}），${win ? '得胜' : '败退'}`, { player: seat, dice, amount: total });
     if (win) this.gainHerbs(seat, b.herbs, '斩获妖兽');
     else this.loseStones(seat, b.loss, '被妖兽所伤');
   }
@@ -895,6 +912,7 @@ export class Game {
     if (!st.turn.ate && p.pills > 0) {
       opts.push({ id: 'eat', label: `服丹（+${this.cfg.cultivation.pill} 修为）`, value: { t: 'eat' } });
     }
+    if (this.canFurnace(seat)) opts.push({ id: 'brew', label: '随身药炉 · 炼丹', value: { t: 'brew' }, hint: '不看火候' });
     if (this.hasCard(p, 'drain') && this.drainTargets(seat).length > 0) opts.push(this.cardOption('drain', { t: 'cast', card: 'drain' }));
     if (this.hasCard(p, 'bind') && this.bindTargets(seat).length > 0) opts.push(this.cardOption('bind', { t: 'cast', card: 'bind' }));
     if (this.skillAvailable(seat, 'action')) opts.push(this.skillOption(seat));
@@ -913,6 +931,7 @@ export class Game {
         case 'end': return;
         case 'upgrade': this.upgrade(seat, act.node); break;
         case 'eat': this.eatPill(seat); break;
+        case 'brew': yield* this.furnace(seat); break;
         case 'cast': yield* this.castAction(seat, act.card); break;
         case 'skill': yield* this.useSkill(seat); break;
         case 'closure': yield* this.closure(seat); break;
@@ -1009,33 +1028,35 @@ export class Game {
   // --------------------------------------------------------- 闭关突破 ---
 
   /** 闭关突破 (GDD §5.3): stake 0–3 pills, roll 2D6 + bonuses against the realm's target. */
-  private *closure(seat: number): Flow {
+  private *closure(seat: number, site = closureSite(this.state, this.data, seat, this.state.players[seat].pos)!): Flow {
     const st = this.state;
     const p = st.players[seat];
     st.turn.closed = true;
     const target = realmOf(this.data, p.realm).target;
-    const fixed = closureBonus(st, this.data, seat);
-    const stake = yield* this.askStake(seat, fixed, target);
+    const stake = yield* this.askStake(seat, site, target);
     const calm = yield* this.askCalm(seat);
-    const r = this.rollBreakthrough(seat, stake, calm, target);
+    const r = this.rollBreakthrough(seat, site, stake, calm, target);
     p.pills -= stake;
+    p.insight = 0;
+    p.momentum = false;
     if (p.guidance > 0) p.guidance--;
     p.stats.breakthroughs++;
     if (r.success) this.ascendRealm(seat, r);
     else this.failBreakthrough(seat, r);
   }
 
-  private *askStake(seat: number, fixed: number, target: number): Flow<number> {
+  private *askStake(seat: number, site: number, target: number): Flow<number> {
     const p = this.state.players[seat];
     const b = this.cfg.breakthrough;
+    const fixed = closureBonus(this.state, this.data, seat, site);
     const opts: ChoiceOption<number>[] = [];
     for (let k = 0; k <= Math.min(b.maxPills, p.pills); k++) {
       opts.push({ id: `s${k}`, label: k === 0 ? '不押丹' : `押 ${k} 颗（+${k * b.pillBonus}）`, value: k, hint: `需掷出 ${target - fixed - k * b.pillBonus} 以上` });
     }
     return yield* this.ask({
       player: seat, kind: 'stake', title: `闭关 · ${this.realmLabel(seat)}冲${realmName(this.data, p.realm + 1)}`,
-      desc: `2D6 + 加成 ≥ ${target}。地点与心境等加成 +${fixed}，每颗丹药 +${b.pillBonus}，押上的丹药无论成败都会消耗。`,
-      options: opts, defaultId: 's0', ctx: { bonus: fixed, target },
+      desc: `2D6 + 加成 ≥ ${target}。地点与心境等加成 ${fixed >= 0 ? '+' : ''}${fixed}，每颗丹药 +${b.pillBonus}，押上的丹药无论成败都会消耗。`,
+      options: opts, defaultId: 's0', ctx: { bonus: fixed, target, site },
     });
   }
 
@@ -1053,15 +1074,12 @@ export class Game {
     return use;
   }
 
-  private rollBreakthrough(seat: number, stake: number, calm: boolean, target: number): BreakthroughResult {
-    const st = this.state;
-    const p = st.players[seat];
+  private rollBreakthrough(seat: number, site: number, stake: number, calm: boolean, target: number): BreakthroughResult {
+    const p = this.state.players[seat];
     const b = this.cfg.breakthrough;
-    const bonuses = {
+    const bonuses: BreakthroughBonuses = {
       pills: stake * b.pillBonus,
-      site: closureSite(st, this.data, seat, p.pos) ?? 0,
-      mind: p.mind * b.mindBonus,
-      guidance: p.guidance > 0 ? b.guidanceBonus : 0,
+      ...fixedBonuses(this.state, this.data, seat, site),
       calm: calm ? b.calmBonus : 0,
     };
     const dice = this.roll2d6();
@@ -1071,10 +1089,10 @@ export class Game {
 
   private breakdown(r: BreakthroughResult): string {
     const names: [keyof BreakthroughResult['bonuses'], string][] = [
-      ['pills', '押丹'], ['site', '地点'], ['mind', '心境'], ['guidance', '指点'], ['calm', '清心'],
+      ['pills', '押丹'], ['site', '地点'], ['mind', '心境'], ['guidance', '指点'], ['insight', '感悟'], ['momentum', '战意'], ['calm', '清心'],
     ];
-    const parts = names.filter(([k]) => r.bonuses[k] > 0).map(([k, n]) => `${n} ${r.bonuses[k]}`);
-    return `${r.dice[0]} + ${r.dice[1]}${parts.length ? ` + ${parts.join(' + ')}` : ''} = ${r.total}（目标 ${r.target}）`;
+    const parts = names.filter(([k]) => r.bonuses[k] !== 0).map(([k, n]) => `${r.bonuses[k] > 0 ? '+' : '−'} ${n} ${Math.abs(r.bonuses[k])}`);
+    return `${r.dice[0]} + ${r.dice[1]}${parts.map((s) => ` ${s}`).join('')} = ${r.total}（目标 ${r.target}）`;
   }
 
   private ascendRealm(seat: number, r: BreakthroughResult): void {
@@ -1092,12 +1110,13 @@ export class Game {
 
   private failBreakthrough(seat: number, r: BreakthroughResult): void {
     const p = this.state.players[seat];
-    const keep = Math.floor(p.cult / 2);
+    const keep = hasTrait(this.data, p, 'steadyBar') ? p.cult : Math.floor(p.cult / 2);
     r.cultLost = p.cult - keep;
     p.cult = keep;
     p.mind++;
     p.stats.breakthroughFails++;
-    this.emit('breakthrough', `${this.pn(seat)} 闭关：${this.breakdown(r)}，走火入魔！修为 −${r.cultLost}，心境 +1`, {
+    const loss = r.cultLost > 0 ? `修为 −${r.cultLost}` : '修为未损';
+    this.emit('breakthrough', `${this.pn(seat)} 闭关：${this.breakdown(r)}，走火入魔！${loss}，心境 +1`, {
       player: seat, dice: r.dice, amount: p.realm, breakthrough: r,
     });
   }
@@ -1167,6 +1186,14 @@ export class Game {
     this.emit('duel', `斗法：${this.pn(attacker)} ${part(0)} 对 ${this.pn(defender)} ${part(1)}，${this.pn(winner)} 胜${totals[0] === totals[1] ? '（平局守方胜）' : ''}${prize}`, {
       player: winner, node: st.players[defender].pos, amount: duel.pills || duel.stones, duel,
     });
+    if (winner === attacker) this.gainMomentum(attacker);
+  }
+
+  private gainMomentum(seat: number): void {
+    const p = this.state.players[seat];
+    if (!hasTrait(this.data, p, 'momentum') || p.momentum) return;
+    p.momentum = true;
+    this.emit('status', `${this.pn(seat)} 斗法得胜，战意未消：下次闭关突破 +${this.cfg.breakthrough.momentumBonus}`, { player: seat });
   }
 
   /** 夺宝 with 元婴遁 (once per round). */
@@ -1193,7 +1220,7 @@ export class Game {
     return p.turnsTaken >= p.skillReadyTurn;
   }
 
-  /** Targets of the hero's active skill (players for 剑遁 / 乾坤挪移 / 迷魂丹, ring nodes for 镇山). */
+  /** Targets of the hero's active skill (players for 剑遁 / 迷魂丹, ring nodes for 镇山, none for 引雷破境). */
   skillTargets(seat: number): number[] | NodeId[] {
     const st = this.state;
     const p = st.players[seat];
@@ -1203,12 +1230,8 @@ export class Game {
       case 'sworddash':
         if (st.turn.duelDone) return [];
         return others.filter((o) => this.board.distance(p.pos, o.pos) <= r.swordDashRange).map((o) => o.seat);
-      case 'swap':
-        if (!this.board.node(p.pos).outer) return [];
-        return others.filter((o) => {
-          const d = this.board.outerDistance(p.pos, o.pos);
-          return d >= 0 && d <= r.swapRange;
-        }).map((o) => o.seat);
+      case 'thunder':
+        return [];
       case 'daze':
         return st.players.filter((o) => o.seat !== seat && !o.dazed).map((o) => o.seat);
       case 'roadblock':
@@ -1230,25 +1253,42 @@ export class Game {
   }
 
   private skillAvailable(seat: number, phase: 'preroll' | 'action'): boolean {
-    return this.heroOf(seat).skill.timing === phase && this.skillReady(seat) && this.skillTargets(seat).length > 0;
+    const sk = this.heroOf(seat).skill;
+    if (sk.timing !== phase || !this.skillReady(seat) || this.state.players[seat].pills < sk.pillCost) return false;
+    return sk.id === 'thunder' ? this.canThunder(seat) : this.skillTargets(seat).length > 0;
+  }
+
+  /** 引雷破境 has a use: a full bar on a tile where no ordinary 闭关 is possible. */
+  private canThunder(seat: number): boolean {
+    const st = this.state;
+    const p = st.players[seat];
+    return !st.turn.closed && barFull(this.data, p) && closureSite(st, this.data, seat, p.pos) === null;
   }
 
   private skillOption(seat: number): ChoiceOption<{ t: 'skill' }> {
     const sk = this.heroOf(seat).skill;
-    return { id: 'skill', label: `技能【${sk.name}】（冷却 ${this.cfg.rules.skillCooldownTurns} 回合）`, value: { t: 'skill' }, hint: sk.desc };
+    return { id: 'skill', label: `技能【${sk.name}】（${skillTerms(sk)}）`, value: { t: 'skill' }, hint: sk.desc };
   }
 
   private spendSkill(seat: number): void {
     const p = this.state.players[seat];
-    p.skillReadyTurn = p.turnsTaken + this.cfg.rules.skillCooldownTurns;
+    const sk = this.heroOf(seat).skill;
+    p.skillReadyTurn = p.turnsTaken + sk.cooldown;
+    p.pills -= sk.pillCost;
     p.stats.skillUses++;
-    this.emit('skill', `${this.pn(seat)} 施展技能【${this.heroOf(seat).skill.name}】`, { player: seat });
+    const cost = sk.pillCost > 0 ? `，耗 ${sk.pillCost} 颗丹药` : '';
+    this.emit('skill', `${this.pn(seat)} 施展技能【${sk.name}】${cost}`, { player: seat });
   }
 
   /** Returns 'moved' when the skill replaced this turn's roll (剑遁), 'cancel' when backed out. */
   private *useSkill(seat: number): Flow<'moved' | 'ok' | 'cancel'> {
     const sk = this.heroOf(seat).skill;
     if (sk.id === 'roadblock') return yield* this.placeRoadblock(seat);
+    if (sk.id === 'thunder') {
+      this.spendSkill(seat);
+      yield* this.closure(seat, this.cfg.breakthrough.thunderSite);
+      return 'ok';
+    }
     const seats = this.skillTargets(seat) as number[];
     const tg = yield* this.askTarget(seat, sk.name, sk.desc, seats.map((x) => ({ t: 'player' as const, seat: x })), sk.id);
     if (tg.t !== 'player') return 'cancel';
@@ -1257,8 +1297,7 @@ export class Game {
       yield* this.swordDash(seat, tg.seat);
       return 'moved';
     }
-    if (sk.id === 'swap') this.swap(seat, tg.seat);
-    else this.daze(tg.seat);
+    this.daze(tg.seat);
     return 'ok';
   }
 
@@ -1283,17 +1322,6 @@ export class Game {
     yield* this.settle(seat, p.pos);
   }
 
-  private swap(seat: number, target: number): void {
-    const p = this.state.players[seat];
-    const o = this.state.players[target];
-    const [mine, theirs] = [p.pos, o.pos];
-    p.pos = theirs;
-    o.pos = mine;
-    [p.cameFrom, o.cameFrom] = [o.cameFrom, p.cameFrom];
-    this.emit('teleport', `${this.pn(seat)} 乾坤挪移，与 ${this.pn(target)} 互换位置`, { player: seat, node: theirs, from: mine });
-    this.emit('teleport', '', { player: target, node: mine, from: theirs });
-  }
-
   private daze(target: number): void {
     this.state.players[target].dazed = true;
     this.emit('status', `${this.pn(target)} 中了迷魂丹，下次移动步数减半`, { player: target });
@@ -1301,19 +1329,27 @@ export class Game {
 
   // ------------------------------------------------------------- 修为 ---
 
-  /** Adds to the current bar, capped at its size; the overflow is wasted (GDD §5.1). */
+  /** Adds to the current bar, capped at its size; the overflow becomes 感悟 (过目不忘) or is wasted (GDD §5.1). */
   addCult(seat: number, n: number, source: CultSource, why: string): void {
     const p = this.state.players[seat];
     if (p.realm >= winRealm(this.data) || n === 0) return;
     const room = barSize(this.data, p) - p.cult;
     const gained = n > 0 ? Math.min(n, room) : -Math.min(p.cult, -n);
-    const wasted = n > 0 ? n - gained : 0;
+    const over = n > 0 ? n - gained : 0;
+    const insight = Math.min(over, insightRoom(this.data, p));
+    const change: CultChange = { source, gained, insight, wasted: over - insight };
     p.cult += gained;
-    p.stats.cultWasted += wasted;
-    const tail = wasted > 0 ? `（修为条已满，作废 ${wasted}）` : barFull(this.data, p) && gained > 0 ? '（修为条已满，可闭关突破）' : '';
-    this.emit('cult', `${this.pn(seat)} ${why}，修为 ${n > 0 ? '+' : ''}${n}${tail}`, {
-      player: seat, amount: gained, cult: { source, gained, wasted },
+    p.insight += insight;
+    p.stats.cultWasted += change.wasted;
+    this.emit('cult', `${this.pn(seat)} ${why}，修为 ${n > 0 ? '+' : ''}${n}${this.cultTail(p, change)}`, {
+      player: seat, amount: gained, cult: change,
     });
+  }
+
+  private cultTail(p: PlayerState, c: CultChange): string {
+    const parts = [c.insight > 0 ? `存为感悟 ${c.insight}` : '', c.wasted > 0 ? `作废 ${c.wasted}` : ''].filter(Boolean);
+    if (parts.length) return `（修为条已满，${parts.join('，')}）`;
+    return barFull(this.data, p) && c.gained > 0 ? '（修为条已满，可闭关突破）' : '';
   }
 
   // ------------------------------------------------------------ 白泽现世 --

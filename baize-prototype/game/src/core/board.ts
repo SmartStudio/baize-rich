@@ -100,22 +100,6 @@ export class Board {
     return (dir === 1 ? n.next : n.prev)[0];
   }
 
-  /** Fewest steps between two outer nodes over outer nodes in either direction (-1 if either is off the outer ring). */
-  outerDistance(a: NodeId, b: NodeId): number {
-    if (!this.node(a).outer || !this.node(b).outer) return -1;
-    const dist = new Map([[a, 0]]);
-    const queue = [a];
-    for (let i = 0; i < queue.length; i++) {
-      const cur = queue[i];
-      if (cur === b) return dist.get(cur)!;
-      const n = this.node(cur);
-      for (const x of [...n.next, ...n.prev]) {
-        if (this.node(x).outer && !dist.has(x)) { dist.set(x, dist.get(cur)! + 1); queue.push(x); }
-      }
-    }
-    return -1;
-  }
-
   /** Fewest steps between two nodes along edges in either direction (Infinity if unconnected). */
   distance(a: NodeId, b: NodeId): number {
     const dist = new Map([[a, 0]]);

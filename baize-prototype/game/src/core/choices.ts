@@ -16,6 +16,7 @@ export type PreRollAct =
 export type ActionAct =
   | { t: 'upgrade'; node: NodeId }
   | { t: 'eat' }
+  | { t: 'brew' }
   | { t: 'cast'; card: string }
   | { t: 'skill' }
   | { t: 'closure' }
@@ -91,7 +92,7 @@ export interface ChoiceOption<V> {
   hint?: string;
 }
 
-export type ChoicePurpose = 'rift' | 'drain' | 'bind' | 'sworddash' | 'swap' | 'roadblock' | 'daze';
+export type ChoicePurpose = 'rift' | 'drain' | 'bind' | 'sworddash' | 'roadblock' | 'daze';
 
 export interface ChoiceContext {
   /** Free-form extra info for UI/AI (e.g. rent amount, remaining steps, purpose). */
@@ -104,9 +105,10 @@ export interface ChoiceContext {
   purpose?: ChoicePurpose;
   dice?: [number, number];
   base?: number;
-  /** 闭关突破：不押丹时的检定加成与目标值 */
+  /** 闭关突破：不押丹时的检定加成、目标值与其中的地点加成 */
   bonus?: number;
   target?: number;
+  site?: number;
 }
 
 export interface PendingChoiceOf<K extends ChoiceKind> {

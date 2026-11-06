@@ -6,7 +6,7 @@ import type { ActionAct, Controller, PendingChoice, PendingChoiceOf, PreRollAct 
 import type { Game } from '../core/engine';
 import { Rng } from '../core/rng';
 import {
-  duelBonus, duelWinChance, landLevel, nominalRent, rentFor, upgradeCost, winRealm,
+  closureSite, duelBonus, duelWinChance, hasTrait, landLevel, nominalRent, rentFor, upgradeCost, winRealm,
 } from '../core/rules';
 import type { MiniGameTier, NodeId } from '../core/types';
 import {
@@ -53,6 +53,12 @@ const ALCHEMY_ODDS: Record<Difficulty, Record<MiniGameTier, number>> = {
   hard: { perfect: 0.45, ok: 0.45, fail: 0.1 },
 };
 
+/** A failure that keeps the bar only costs the stake, so 闭关 here is worth trying at lower odds. */
+const STEADY_BAR_EASE = 0.15;
+
+/** Walking on to the altar costs turns of overflowing 修为; skip a closure here only for more than this gain in odds. */
+const ALTAR_EDGE = 0.15;
+
 /** Minimum duel EV (stones) worth a challenge, by difficulty. */
 const DUEL_BAR: Record<Difficulty, number> = { easy: 150, normal: 20, hard: 0 };
 
@@ -90,7 +96,7 @@ export class AIController implements Controller {
 
   private policy(): WalkPolicy {
     return {
-      fork: (node, _remaining, options) => this.forkRule(node, options, 1),
+      fork: (node, remaining, options) => this.forkRule(node, remaining, options, 1),
       altar: () => 'stop',
       canPayToll: false,
     };
@@ -144,9 +150,15 @@ export class AIController implements Controller {
   challengeValue(target: number): number {
     const [a, d] = duelBonus(this.st, this.data, this.seat, target);
     const p = duelWinChance(a - d);
-    const gain = lootValue(this.st, this.data, target) * this.persona.attack;
+    const gain = lootValue(this.st, this.data, target) * this.persona.attack + this.momentumValue();
     const risk = lootValue(this.st, this.data, this.seat);
     return p * gain - (1 - p) * risk + (target === this.leaderOpponent() ? 30 : 0);
+  }
+
+  /** 战意 a win would add while none is held, priced as the pill stake that buys the same bonus. */
+  private momentumValue(): number {
+    if (!hasTrait(this.data, this.me, 'momentum') || this.me.momentum) return 0;
+    return this.data.config.breakthrough.momentumBonus * VALUE.pill / this.data.config.breakthrough.pillBonus;
   }
 
   private duelChoice(c: PendingChoiceOf<'duel'>): string {
@@ -183,15 +195,26 @@ export class AIController implements Controller {
     return best;
   }
 
+  /** A skill's gain on `t` net of the pills it costs. */
   private skillValue(t: number | NodeId): number {
+    return this.skillGain(t) - this.game.heroOf(this.seat).skill.pillCost * VALUE.pill;
+  }
+
+  private skillGain(t: number | NodeId): number {
     const st = this.st;
     switch (this.game.heroOf(this.seat).skill.id) {
       case 'sworddash': return this.challengeValue(t as number) + this.landingScore(st.players[t as number].pos) - this.expectedRoll(1);
-      case 'swap': return this.expectedRoll(1, [0], st.players[t as number].pos) - this.expectedRoll(1);
-      case 'daze': return 40 + (t === this.leaderOpponent() ? 40 : 0) + this.standing(t as number) * 2;
+      case 'daze': return this.dazeValue(t as number);
       case 'roadblock': return this.roadblockValue(t as NodeId);
       default: return 0;
     }
+  }
+
+  /** 迷魂丹 pays off against a rival racing to a closure site. */
+  private dazeValue(target: number): number {
+    const racing = nearlyFull({ ...this.view, seat: target }) ? 250 : 0;
+    const leader = target === this.leaderOpponent() ? 60 : 0;
+    return racing + leader + this.standing(target) * 2;
   }
 
   /** Expected gain of a 镇山 mountain on `node`: the next opponent to move is stopped there. */
@@ -225,11 +248,11 @@ export class AIController implements Controller {
     return e;
   }
 
-  // Fork rule (normal): bar about to fill → toward the altar; heavy rent in the next 6
-  // main-line cells → toward the altar; else stay on the main line.
-  private forkRule(node: NodeId, options: NodeId[], dir: 1 | -1): NodeId {
+  // Fork rule (normal): bar about to fill → toward the altar, unless the main line ends this move
+  // on an own closure site; heavy rent in the next 6 main-line cells → toward the altar; else stay.
+  private forkRule(node: NodeId, remaining: number, options: NodeId[], dir: 1 | -1): NodeId {
     const detour = this.board.altarward(options);
-    if (this.wantsAltar()) return detour;
+    if (this.wantsAltar()) return this.mainLineEndsOnOwnSite(node, remaining, dir) ? options[0] : detour;
     let cur = node;
     for (let k = 0; k < 6; k++) {
       cur = this.board.mainStep(cur, dir);
@@ -240,6 +263,11 @@ export class AIController implements Controller {
       }
     }
     return options[0];
+  }
+
+  private mainLineEndsOnOwnSite(node: NodeId, remaining: number, dir: 1 | -1): boolean {
+    const end = predictWalk(this.board, this.st, this.seat, remaining, dir, passive, node).node;
+    return end !== ALTAR && closureSite(this.st, this.data, this.seat, end) !== null;
   }
 
   private hardFork(node: NodeId, remaining: number, options: NodeId[]): NodeId {
@@ -274,7 +302,7 @@ export class AIController implements Controller {
       case 'buy': return this.buy(c);
       case 'rentReact': return this.rentReact(c.ctx.rent ?? 0);
       case 'guardReact': return this.guardChoice(c);
-      case 'stake': return `s${stakeFor(this.view, this.stakeTarget())}`;
+      case 'stake': return `s${stakeFor(this.view, this.stakeTarget(), c.ctx.site!)}`;
       case 'calm': return 'calm';
       case 'brew': return c.options[0].id;
       case 'miniGame': return this.heat();
@@ -306,7 +334,7 @@ export class AIController implements Controller {
     const options = c.options.map((o) => o.value);
     const pick = this.difficulty === 'hard'
       ? this.hardFork(node, c.ctx.remaining ?? 1, options)
-      : this.forkRule(node, options, this.st.turn.reverse ? -1 : 1);
+      : this.forkRule(node, c.ctx.remaining ?? 1, options, this.st.turn.reverse ? -1 : 1);
     return c.options.find((o) => o.value === pick)?.id;
   }
 
@@ -348,9 +376,26 @@ export class AIController implements Controller {
   /** Close here now, or walk on toward a better site (the altar). */
   private shouldClose(): boolean {
     if (this.me.pos === ALTAR || this.roundsLeft <= 1) return true;
-    const chance = closureChance(this.view, this.me.pos, stakeFor(this.view, this.stakeTarget()));
+    const chance = this.closeOdds(closureSite(this.st, this.data, this.seat, this.me.pos)!);
     if (this.difficulty === 'easy') return chance >= 0.4;
-    return chance >= this.persona.closeAt || this.board.distance(this.me.pos, ALTAR) > 10;
+    const failCheap = hasTrait(this.data, this.me, 'steadyBar') ? STEADY_BAR_EASE : 0;
+    const altarEdge = this.closeOdds(this.data.config.breakthrough.altarBonus) - chance;
+    return chance >= this.persona.closeAt - failCheap || altarEdge <= ALTAR_EDGE || this.board.distance(this.me.pos, ALTAR) > 10;
+  }
+
+  /** Breakthrough odds at site bonus `site` with the stake this AI would put down. */
+  private closeOdds(site: number): number {
+    return closureChance(this.view, site, stakeFor(this.view, this.stakeTarget(), site));
+  }
+
+  /**
+   * 引雷破境 is offered only off every closure site. Waiting keeps the bar and stores the overflow
+   * as 感悟, so strike only when the odds at the −1 site already clear the persona bar, or time is short.
+   */
+  private shouldThunder(): boolean {
+    if (this.roundsLeft <= 1) return true;
+    const chance = this.closeOdds(this.data.config.breakthrough.thunderSite);
+    return chance >= (this.difficulty === 'easy' ? 0.4 : this.persona.closeAt);
   }
 
   // ---------------------------------------------------------- pre-roll ---
@@ -384,14 +429,16 @@ export class AIController implements Controller {
 
   private action(c: PendingChoiceOf<'action'>): string {
     const find = (pred: (v: ActionAct) => boolean) => c.options.find((o) => pred(o.value));
+    if (find((v) => v.t === 'brew')) return 'brew';
     const close = find((v) => v.t === 'closure');
     if (close && this.shouldClose()) return close.id;
+    const skill = find((v) => v.t === 'skill');
+    if (skill && this.game.heroOf(this.seat).skill.id === 'thunder' && this.shouldThunder()) return skill.id;
     const bestUp = this.bestUpgrade(c.options.filter((o) => o.value.t === 'upgrade').map((o) => (o.value as { node: NodeId }).node));
     if (bestUp) return `upgrade:${bestUp}`;
     if (find((v) => v.t === 'eat') && this.shouldEat()) return 'eat';
     const cast = this.castChoice(find);
     if (cast) return cast;
-    const skill = find((v) => v.t === 'skill');
     if (skill && (this.difficulty !== 'easy' || this.rng.float() < 0.5)) {
       const sk = this.bestSkill();
       if (sk && sk.value > 20) return skill.id;
@@ -481,7 +528,7 @@ export class AIController implements Controller {
       }
       case 'drain':
         return this.bestBy(real, (o) => (o.value.t === 'player' ? this.st.players[o.value.seat].pills * 10 + this.standing(o.value.seat) : 0));
-      case 'sworddash': case 'swap': case 'daze': case 'roadblock':
+      case 'sworddash': case 'daze': case 'roadblock':
         return this.bestSkill()?.id ?? 'cancel';
       default:
         return real[0].id;

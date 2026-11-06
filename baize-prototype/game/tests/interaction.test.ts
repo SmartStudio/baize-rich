@@ -16,7 +16,6 @@ function spread(g: Game): void {
   });
 }
 
-const rules = ringGame().data.config.rules;
 const duel = ringGame().data.config.duel;
 
 describe('斗法', () => {
@@ -91,6 +90,40 @@ describe('斗法', () => {
     expect(b.pills).toBe(0);
   });
 
+  /** Bonuses of a 闭关 by `seat` on the altar with a full bar (dice 1 + 1). */
+  const closeOnAltar = (g: Game, seat: number) => {
+    const p = g.state.players[seat];
+    p.realm = 0;
+    p.cult = g.data.config.realms[0].bar;
+    p.pos = 'ALTAR';
+    g.state.rng = rngFor([1, 1]);
+    g.runFlow(g.testClosure(seat), script({}));
+    return g.log.filter((e) => e.type === 'breakthrough').pop()!.breakthrough!.bonuses;
+  };
+
+  it('战意: 燕回 winning as attacker gets +momentumBonus at her next breakthrough, one stack, spent on the attempt', () => {
+    const g = ringGame();
+    spread(g);
+    const bonus = g.data.config.breakthrough.momentumBonus;
+    g.state.rng = rngFor([6, 1, 6, 1]);
+    g.runFlow(g.testDuel(2, 3), script({}));
+    g.runFlow(g.testDuel(2, 3), script({}));
+    expect(g.log.filter((e) => e.type === 'duel').map((e) => e.duel!.winner)).toEqual([2, 2]);
+    expect(closeOnAltar(g, 2).momentum).toBe(bonus);
+    expect(closeOnAltar(g, 2).momentum).toBe(0);
+  });
+
+  it('no 战意 from winning as the defender, nor for an attacker without the passive', () => {
+    const g = ringGame();
+    spread(g);
+    g.state.rng = rngFor([1, 6, 6, 1]);
+    g.runFlow(g.testDuel(3, 2), script({}));
+    g.runFlow(g.testDuel(3, 1), script({}));
+    expect(g.log.filter((e) => e.type === 'duel').map((e) => e.duel!.winner)).toEqual([2, 3]);
+    expect(closeOnAltar(g, 2).momentum).toBe(0);
+    expect(closeOnAltar(g, 3).momentum).toBe(0);
+  });
+
   it('金光符 blocks the duel before any dice are rolled', () => {
     const g = ringGame();
     spread(g);
@@ -132,6 +165,12 @@ describe('斗法', () => {
   });
 });
 
+const actionIds = (g: Game, seat: number) => {
+  const seen: PendingChoice[] = [];
+  g.runFlow(g.testActionPhase(seat), script({ action: 'end' }, seen));
+  return seen[0].options.map((o) => o.id);
+};
+
 describe('§12 主动技能', () => {
   it('剑遁 teleports onto the target, duels at once, settles the tile and replaces the roll', () => {
     const g = ringGame();
@@ -150,29 +189,50 @@ describe('§12 主动技能', () => {
     expect(seen.map((x) => x.kind)).toEqual(['target', 'buy']); // settles the unowned land it landed on
   });
 
-  it('乾坤挪移 swaps with a nearby ring player without settling', () => {
+  it('迷魂丹 costs pillCost pills: not offered without them, paid on use', () => {
+    const g = ringGame();
+    spread(g);
+    const d = g.state.players[3];
+    d.turnsTaken = 1;
+    const cost = g.heroOf(3).skill.pillCost;
+    expect(cost).toBeGreaterThan(0);
+    d.pills = cost - 1;
+    expect(actionIds(g, 3)).not.toContain('skill');
+    d.pills = cost;
+    g.runFlow(g.testActionPhase(3), script({ action: ['skill', 'end'], target: 'p1' }));
+    expect([d.pills, g.state.players[1].dazed]).toEqual([0, true]);
+  });
+
+  it('引雷破境: a full bar off every closure site closes on the spot at the thunder site bonus, then cools down', () => {
     const g = ringGame();
     spread(g);
     const b = g.state.players[1];
-    const d = g.state.players[3];
-    b.pos = 'R5';
-    d.pos = 'R8'; // 3 steps away
-    g.state.players[0].pos = 'R20'; // far: not offered
-    expect(g.skillTargets(1)).toEqual([3]);
-    const seen: PendingChoice[] = [];
-    g.runFlow(g.testUseSkill(1), script({ target: 'p3' }, seen));
-    expect([b.pos, d.pos]).toEqual(['R8', 'R5']);
-    expect(seen.map((x) => x.kind)).toEqual(['target']);
+    b.pos = 'R14'; // 坊市
+    b.turnsTaken = 1;
+    expect(actionIds(g, 1)).not.toContain('skill');
+    b.cult = g.data.config.realms[0].bar;
+    expect(actionIds(g, 1)).toContain('skill');
+    g.state.rng = rngFor([6, 6]);
+    g.runFlow(g.testActionPhase(1), script({ action: ['skill', 'end'] }));
+    const r = g.log.find((e) => e.type === 'breakthrough')!.breakthrough!;
+    expect(r.bonuses.site).toBe(g.data.config.breakthrough.thunderSite);
+    expect(b.realm).toBe(1);
+    const cooldown = g.heroOf(1).skill.cooldown;
+    b.turnsTaken += cooldown - 1;
+    expect(g.skillReady(1)).toBe(false);
+    b.turnsTaken++;
+    expect(g.skillReady(1)).toBe(true);
   });
 
-  it(`乾坤挪移 only reaches players within swapRange`, () => {
+  it('引雷破境 is not offered where an ordinary 闭关 is possible', () => {
     const g = ringGame();
     spread(g);
-    g.state.players[1].pos = 'R0';
-    g.state.players[3].pos = `R${rules.swapRange + 1}`;
-    g.state.players[0].pos = `R${32 - rules.swapRange}`;
-    g.state.players[2].pos = 'R16';
-    expect(g.skillTargets(1)).toEqual([0]);
+    const b = g.state.players[1];
+    b.pos = 'ALTAR';
+    b.cult = g.data.config.realms[0].bar;
+    const ids = actionIds(g, 1);
+    expect(ids).toContain('closure');
+    expect(ids).not.toContain('skill');
   });
 
   it('剑遁 only reaches players within swordDashRange steps along the roads', () => {
@@ -211,6 +271,7 @@ describe('§12 主动技能', () => {
   it('迷魂丹 halves the target next move (rounded down, at least 1)', () => {
     const g = ringGame();
     spread(g);
+    g.state.players[3].pills = 1;
     g.runFlow(g.testUseSkill(3), script({ target: 'p1' }));
     const b = g.state.players[1];
     expect(b.dazed).toBe(true);
@@ -223,15 +284,16 @@ describe('§12 主动技能', () => {
     expect(b.pos).toBe('R4');
   });
 
-  it(`goes on cooldown for skillCooldownTurns of the user's own turns and is ready from turn 1`, () => {
+  it(`goes on cooldown for the skill's own cooldown in the user's turns and is ready from turn 1`, () => {
     const g = ringGame();
     spread(g);
     const d = g.state.players[3];
     d.turnsTaken = 1;
+    d.pills = 1;
     expect(g.skillReady(3)).toBe(true);
     g.runFlow(g.testUseSkill(3), script({ target: 'p1' }));
     expect(d.stats.skillUses).toBe(1);
-    for (let k = 1; k < rules.skillCooldownTurns; k++) {
+    for (let k = 1; k < g.heroOf(3).skill.cooldown; k++) {
       d.turnsTaken++;
       expect(g.skillReady(3)).toBe(false);
     }
@@ -242,6 +304,7 @@ describe('§12 主动技能', () => {
   it('the action menu offers the skill only when ready', () => {
     const g = ringGame();
     spread(g);
+    g.state.players[3].pills = 1;
     const seen: PendingChoice[] = [];
     g.runFlow(g.testPlayTurn(3), script({ buy: 'no', action: 'end', duel: 'none' }, seen));
     const acts = seen.filter((c) => c.kind === 'action').flatMap((c) => c.options.map((o) => o.id));

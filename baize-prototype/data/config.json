@@ -1,8 +1,8 @@
 {
-  "version": "0.8",
+  "version": "0.9",
   "rounds": 12,
-  "startStones": 1500,
-  "seatBonusStones": [0, 25, 50, 75],
+  "startStones": 1200,
+  "seatBonusStones": [0, 200, 300, 450],
   "startPills": 0,
   "startHerbs": 0,
   "startHand": 1,
@@ -12,39 +12,42 @@
   "altarToll": 1,
   "rentRate": 0.1,
   "realms": [
-    { "name": "练气", "bar": 4, "target": 8, "ability": null },
-    { "name": "筑基", "bar": 4, "target": 9, "ability": "steer" },
-    { "name": "结丹", "bar": 4, "target": 10, "ability": "sense" },
-    { "name": "元婴", "bar": 4, "target": 11, "ability": "escape" },
+    { "name": "练气", "bar": 4, "target": 9, "ability": null },
+    { "name": "筑基", "bar": 4, "target": 10, "ability": "steer" },
+    { "name": "结丹", "bar": 4, "target": 11, "ability": "sense" },
+    { "name": "元婴", "bar": 4, "target": 12, "ability": "escape" },
     { "name": "化神", "bar": 0, "target": 0, "ability": null }
   ],
   "landLevels": [
     { "upgradeCostP": 0, "rentMult": 1, "herbs": 0, "sit": 1, "closureBonus": null },
-    { "upgradeCostP": 0.5, "rentMult": 3, "herbs": 1, "sit": 1, "closureBonus": null },
+    { "upgradeCostP": 0.5, "rentMult": 3, "herbs": 1, "sit": 1, "closureBonus": 0 },
     { "upgradeCostP": 0.5, "rentMult": 6, "herbs": 1, "sit": 2, "closureBonus": 0 },
-    { "upgradeCostP": 1, "rentMult": 10, "herbs": 2, "sit": 2, "closureBonus": 1 }
+    { "upgradeCostP": 1, "rentMult": 10, "herbs": 1, "sit": 2, "closureBonus": 1 }
   ],
   "cultivation": {
     "breath": 1,
-    "bodySit": 1,
     "spring": 1,
     "eye": 2,
     "pill": 2,
-    "altarCalm": 1,
-    "magicBonus": 1
+    "altarCalm": 1
   },
   "breakthrough": {
     "pillBonus": 2,
     "maxPills": 3,
-    "altarBonus": 2,
+    "altarBonus": 1,
     "mindBonus": 1,
     "guidanceBonus": 2,
-    "calmBonus": 2
+    "calmBonus": 2,
+    "insightPer": 1,
+    "insightMax": 2,
+    "thunderSite": -1,
+    "momentumBonus": 2
   },
   "alchemy": {
     "herbsPerPill": 2,
     "perfectBonus": 1,
-    "alchBonus": 1
+    "alchBonus": 2,
+    "furnaceLevel": 1
   },
   "market": {
     "pillPrice": 200,
@@ -71,9 +74,7 @@
     "swiftstepMax": 3,
     "diceCardMin": 2,
     "diceCardMax": 12,
-    "skillCooldownTurns": 2,
     "roadblockRange": 6,
-    "swapRange": 8,
     "swordDashRange": 5
   }
 }

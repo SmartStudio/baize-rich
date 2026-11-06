@@ -37,12 +37,25 @@ export interface DuelResult {
   escaped: boolean;
 }
 
+/** 突破检定的各项加成；site 可为负。 */
+export interface BreakthroughBonuses {
+  pills: number;
+  site: number;
+  mind: number;
+  guidance: number;
+  /** 过目不忘 */
+  insight: number;
+  /** 战意 */
+  momentum: number;
+  calm: number;
+}
+
 /** 闭关突破的完整检定（GDD §5.3）。 */
 export interface BreakthroughResult {
   from: number;
   dice: [number, number];
   stake: number;
-  bonuses: { pills: number; site: number; mind: number; guidance: number; calm: number };
+  bonuses: BreakthroughBonuses;
   total: number;
   target: number;
   success: boolean;
@@ -50,10 +63,11 @@ export interface BreakthroughResult {
   cultLost: number;
 }
 
-/** 修为变化：gained 是实际计入修为条的点数，wasted 是溢出作废的。 */
+/** 修为变化：gained 计入修为条，insight 溢出存为感悟，wasted 溢出作废。 */
 export interface CultChange {
   source: CultSource;
   gained: number;
+  insight: number;
   wasted: number;
 }
 

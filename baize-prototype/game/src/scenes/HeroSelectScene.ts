@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { DIFFICULTY_LABEL, type Difficulty } from '../ai/ai';
 import { defaultData } from '../core/data';
-import { HERO_IDS } from '../core/heroes';
+import { HERO_IDS, skillTerms } from '../core/heroes';
 import type { HeroData, HeroId } from '../core/types';
 import { addImg } from '../ui/assets';
 import { newSession, quickSeats, urlSeed, urlSpeed } from '../ui/session';
@@ -26,9 +26,9 @@ interface AbilityCopy {
   body: string;
 }
 
-function heroAbilities(hero: HeroData, cooldownTurns: number): AbilityCopy[] {
+function heroAbilities(hero: HeroData): AbilityCopy[] {
   return [
-    { title: `技能【${hero.skill.name}】（冷却 ${cooldownTurns} 回合）`, body: hero.skill.desc },
+    { title: `技能【${hero.skill.name}】（${skillTerms(hero.skill)}）`, body: hero.skill.desc },
     { title: `被动【${hero.passive.name}】`, body: hero.passive.desc },
   ];
 }
@@ -106,7 +106,7 @@ export class HeroSelectScene extends Phaser.Scene {
     const roleY = nameY + 30;
     const role = this.add.rectangle(0, roleY, 108, 24, COLORS.ink).setStrokeStyle(2, COLORS.gold);
     const roleText = txt(this, 0, roleY, h.school, { size: 13, bold: true, color: HEX.gold, origin: [0.5, 0.5] });
-    const sections = stackAbilities(this, -w / 2 + 14, roleY + 20, heroAbilities(h, defaultData.config.rules.skillCooldownTurns));
+    const sections = stackAbilities(this, -w / 2 + 14, roleY + 20, heroAbilities(h));
     const badgeBg = this.add.rectangle(0, 0, 64, 30, COLORS.gold).setStrokeStyle(2, COLORS.outline);
     const badge = this.add.container(-w / 2 + 40, top + 4, [badgeBg, txt(this, 0, 0, '你', { size: 18, bold: true, color: HEX.ink, origin: [0.5, 0.5] })]);
     root.add([frame, backing, por, name, role, roleText, ...sections, badge]);

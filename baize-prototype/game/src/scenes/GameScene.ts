@@ -36,7 +36,7 @@ const SLOW_EVENTS = new Set<GameEvent['type']>([
 
 /** preRoll / action option ids reached through the 出符 menu (C) rather than their own button. */
 const isCastId = (id: string): boolean =>
-  id.startsWith('cast:') || id === 'skill';
+  id.startsWith('cast:') || id === 'skill' || id === 'brew';
 
 /**
  * Animation budget per beat, in ms at 1×. The AI profile lands an AI turn at about 4–5 s; a human

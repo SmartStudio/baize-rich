@@ -16,6 +16,14 @@ function readyToClose(g: Game, seat: number, node: string, realm = 0): void {
   p.pos = node;
 }
 
+/** Whether the action menu offers 闭关 to `seat` where it stands now. */
+function closureOffered(g: Game, seat: number): boolean {
+  const seen: PendingChoice[] = [];
+  g.state.turn.closed = false;
+  g.runFlow(g.testActionPhase(seat), script({ action: 'end' }, seen));
+  return seen[0].options.some((o) => o.id === 'closure');
+}
+
 describe('灵田', () => {
   it('rent is price × rentRate × the level multiplier', () => {
     const g = ringGame();
@@ -83,38 +91,23 @@ describe('修为', () => {
     expect(p.cult).toBe(Math.min(1 + 1 + lv[3].sit, g.data.config.realms[0].bar));
   });
 
-  it('铜皮铁骨: 体修 gains 1 more 修为 than others when sitting on own land', () => {
-    const g = ringGame();
-    const lv = g.data.config.landLevels;
-    g.state.tiles.R1 = { owner: 0, level: 0 };
-    g.state.tiles.R2 = { owner: 1, level: 0 };
-    g.state.players[0].pos = 'R1';
-    g.state.players[1].pos = 'R2';
-    g.testTurnEnd(0);
-    g.testTurnEnd(1);
-    expect(g.state.players[0].cult).toBe(1 + lv[0].sit + 1);
-    expect(g.state.players[1].cult).toBe(1 + lv[0].sit);
-  });
-
   it('the bar caps 修为; the overflow is wasted and counted', () => {
     const g = ringGame();
-    const p = g.state.players[1];
+    const p = g.state.players[3];
     p.cult = g.data.config.realms[0].bar - 1;
-    g.state.tiles.R1 = { owner: 1, level: 3 };
+    g.state.tiles.R1 = { owner: 3, level: 3 };
     p.pos = 'R1';
-    g.testTurnEnd(1); // +1 吐纳, +2 打坐: only 1 fits
+    g.testTurnEnd(3); // +1 吐纳, +2 打坐: only 1 fits
     expect(p.cult).toBe(g.data.config.realms[0].bar);
     expect(p.stats.cultWasted).toBe(2);
   });
 
-  it('灵泉 gives 修为 and a herb; 法修 gets +1 more', () => {
+  it('灵泉 gives 修为 and a herb, the same for every hero', () => {
     const g = ringGame();
     const c = g.data.config;
     g.runFlow(g.testSettle(0, 'S2'), script({}));
     g.runFlow(g.testSettle(1, 'S2'), script({}));
-    expect(g.state.players[0].cult).toBe(c.cultivation.spring);
-    expect(g.state.players[1].cult).toBe(c.cultivation.spring + c.cultivation.magicBonus);
-    expect(g.state.players[1].herbs).toBe(c.spring.herbs);
+    for (const p of g.state.players.slice(0, 2)) expect([p.cult, p.herbs]).toEqual([c.cultivation.spring, c.spring.herbs]);
   });
 
   it('服丹 turns one pill into 修为, once per turn', () => {
@@ -132,17 +125,12 @@ describe('修为', () => {
 describe('闭关突破', () => {
   it('is offered only with a full bar on the altar or an own 药圃+', () => {
     const g = ringGame();
-    const p = g.state.players[0];
-    const offered = () => {
-      const seen: PendingChoice[] = [];
-      g.state.turn.closed = false;
-      g.runFlow(g.testActionPhase(0), script({ action: 'end' }, seen));
-      return seen[0].options.some((o) => o.id === 'closure');
-    };
-    g.state.tiles.R1 = { owner: 0, level: 1 };
-    g.state.tiles.R2 = { owner: 0, level: 2 };
-    readyToClose(g, 0, 'R1');
-    expect(offered()).toBe(false); // 灵田 Lv1 is not a closure site
+    const p = g.state.players[3];
+    const offered = () => closureOffered(g, 3);
+    g.state.tiles.R1 = { owner: 3, level: 0 };
+    g.state.tiles.R2 = { owner: 3, level: 1 };
+    readyToClose(g, 3, 'R1');
+    expect(offered()).toBe(false); // 灵田 Lv0 is not a closure site
     p.pos = 'R2';
     expect(offered()).toBe(true);
     p.pos = 'ALTAR';
@@ -158,23 +146,23 @@ describe('闭关突破', () => {
     readyToClose(g, 0, 'ALTAR');
     p.mind = 1;
     p.pills = 4;
-    g.state.rng = rngFor([1, 1]);
+    g.state.rng = rngFor([2, 1]);
     g.runFlow(g.testClosure(0), script({ stake: 's2' }));
     const r = g.log.find((e) => e.type === 'breakthrough')!.breakthrough!;
-    expect(r.bonuses).toEqual({ pills: 2 * b.pillBonus, site: b.altarBonus, mind: b.mindBonus, guidance: 0, calm: 0 });
-    expect(r.total).toBe(2 + 2 * b.pillBonus + b.altarBonus + b.mindBonus);
-    expect(r.success).toBe(r.total >= g.data.config.realms[0].target);
+    expect(r.bonuses).toEqual({ pills: 2 * b.pillBonus, site: b.altarBonus, mind: b.mindBonus, guidance: 0, insight: 0, momentum: 0, calm: 0 });
+    expect(r.total).toBe(3 + 2 * b.pillBonus + b.altarBonus + b.mindBonus);
+    expect(r.total).toBeGreaterThanOrEqual(g.data.config.realms[0].target);
     expect([p.realm, p.cult, p.mind, p.pills]).toEqual([1, 0, 0, 2]);
   });
 
   it('走火入魔 halves the bar (rounded down) and adds 1 心境', () => {
     const g = ringGame();
-    const p = g.state.players[0];
-    g.state.tiles.R2 = { owner: 0, level: 2 };
-    readyToClose(g, 0, 'R2');
+    const p = g.state.players[3];
+    g.state.tiles.R2 = { owner: 3, level: 2 };
+    readyToClose(g, 3, 'R2');
     p.pills = 1;
     g.state.rng = rngFor([1, 2]);
-    g.runFlow(g.testClosure(0), script({ stake: 's1' }));
+    g.runFlow(g.testClosure(3), script({ stake: 's1' }));
     expect(p.realm).toBe(0);
     expect(p.cult).toBe(Math.floor(g.data.config.realms[0].bar / 2));
     expect(p.mind).toBe(1);
@@ -225,6 +213,68 @@ describe('闭关突破', () => {
   });
 });
 
+describe('石铮 · 铜皮铁骨', () => {
+  it('may close on his own Lv0 灵田 at site +0, where others may not', () => {
+    const g = ringGame();
+    g.state.tiles.R1 = { owner: 0, level: 0 };
+    g.state.tiles.R2 = { owner: 3, level: 0 };
+    readyToClose(g, 0, 'R1');
+    readyToClose(g, 3, 'R2');
+    expect(closureOffered(g, 3)).toBe(false);
+    expect(closureOffered(g, 0)).toBe(true);
+    g.state.rng = rngFor([6, 6]);
+    g.runFlow(g.testClosure(0), script({}));
+    expect(g.log.find((e) => e.type === 'breakthrough')!.breakthrough!.bonuses.site).toBe(0);
+    expect(g.state.players[0].realm).toBe(1);
+  });
+
+  it('a failed breakthrough keeps his full bar; the stake and 心境 work as for everyone', () => {
+    const g = ringGame();
+    const p = g.state.players[0];
+    g.state.tiles.R2 = { owner: 0, level: 2 };
+    readyToClose(g, 0, 'R2');
+    p.pills = 1;
+    g.state.rng = rngFor([1, 2]);
+    g.runFlow(g.testClosure(0), script({ stake: 's1' }));
+    expect([p.realm, p.cult, p.mind, p.pills]).toEqual([0, g.data.config.realms[0].bar, 1, 0]);
+  });
+});
+
+describe('沈青砚 · 过目不忘', () => {
+  it('stores 修为 overflowing a full bar as 感悟, up to what the +insightMax bonus needs; others waste it', () => {
+    const g = ringGame();
+    const b = g.data.config.breakthrough;
+    const bar = g.data.config.realms[0].bar;
+    const cap = b.insightPer * b.insightMax;
+    const [body, magic] = g.state.players;
+    body.cult = bar;
+    magic.cult = bar;
+    g.addCult(0, cap, 'event', '顿悟');
+    g.addCult(1, cap, 'event', '顿悟');
+    expect([body.cult, body.insight, body.stats.cultWasted]).toEqual([bar, 0, cap]);
+    expect([magic.cult, magic.insight, magic.stats.cultWasted]).toEqual([bar, cap, 0]);
+    g.addCult(1, 2, 'event', '顿悟');
+    expect([magic.insight, magic.stats.cultWasted]).toEqual([cap, 2]);
+  });
+
+  it('every insightPer 感悟 is +1 at the breakthrough, at most +insightMax, and the attempt spends them all', () => {
+    const g = ringGame();
+    const b = g.data.config.breakthrough;
+    const p = g.state.players[1];
+    const bonusFor = (insight: number) => {
+      readyToClose(g, 1, 'ALTAR');
+      p.insight = insight;
+      g.state.rng = rngFor([1, 1]);
+      g.runFlow(g.testClosure(1), script({}));
+      expect(p.insight).toBe(0);
+      return g.log.filter((e) => e.type === 'breakthrough').pop()!.breakthrough!.bonuses.insight;
+    };
+    expect(bonusFor(b.insightPer - 1)).toBe(0);
+    expect(bonusFor(b.insightPer)).toBe(1);
+    expect(bonusFor(b.insightPer * (b.insightMax + 1))).toBe(b.insightMax);
+  });
+});
+
 describe('丹房', () => {
   const brew = (seat: number, herbs: number, tier: string) => {
     const g = ringGame();
@@ -240,8 +290,32 @@ describe('丹房', () => {
     expect(brew(0, 4, 'fail')).toEqual([1, 0]);
   });
 
-  it('丹道: the 丹师 makes one more pill per visit', () => {
-    expect(brew(3, 4, 'ok')).toEqual([3, 0]);
+  it('丹道: the 丹师 makes alchBonus more pills per visit', () => {
+    expect(brew(3, 4, 'ok')).toEqual([2 + ringGame().data.config.alchemy.alchBonus, 0]);
+  });
+
+  it('随身药炉: the 丹师 brews on his own land of furnaceLevel+, no 火候 and no 丹道, once per turn', () => {
+    const g = ringGame();
+    const lv = g.data.config.alchemy.furnaceLevel;
+    const [a, d] = [g.state.players[0], g.state.players[3]];
+    g.state.tiles.R1 = { owner: 3, level: lv - 1 };
+    g.state.tiles.R2 = { owner: 3, level: lv };
+    g.state.tiles.R3 = { owner: 0, level: lv };
+    [a.herbs, d.herbs] = [5, 5];
+    [a.pos, d.pos] = ['R3', 'R1'];
+    const offers = (seat: number) => {
+      const seen: PendingChoice[] = [];
+      g.runFlow(g.testActionPhase(seat), script({ action: 'end' }, seen));
+      return seen[0].options.some((o) => o.id === 'brew');
+    };
+    expect(offers(0)).toBe(false);
+    expect(offers(3)).toBe(false);
+    d.pos = 'R2';
+    const seen: PendingChoice[] = [];
+    g.runFlow(g.testActionPhase(3), script({ action: ['brew', 'end'] }, seen));
+    expect([d.pills, d.herbs]).toEqual([2, 1]);
+    expect(seen.map((c) => c.kind)).toEqual(['action', 'brew', 'action']);
+    expect(seen[2].options.some((o) => o.id === 'brew')).toBe(false);
   });
 
   it('without herbs nothing is asked', () => {
@@ -253,14 +327,14 @@ describe('丹房', () => {
 });
 
 describe('妖兽谷', () => {
-  it('2D6 + realm ≥ target wins herbs, else costs stones; 体修 always wins', () => {
+  it('2D6 + realm ≥ target wins herbs, else costs stones, the 体修 included', () => {
     const g = ringGame();
     const b = g.data.config.beast;
     const [a, c] = [g.state.players[0], g.state.players[2]];
-    const c0 = c.stones;
+    const [a0, c0] = [a.stones, c.stones];
     g.state.rng = rngFor([1, 1]);
     g.runFlow(g.testSettle(0, 'R8'), script({}));
-    expect(a.herbs).toBe(b.herbs);
+    expect([a.herbs, a.stones]).toEqual([0, a0 - b.loss]);
     g.state.rng = rngFor([1, 1]);
     g.runFlow(g.testSettle(2, 'R8'), script({}));
     expect(c.stones).toBe(c0 - b.loss);
