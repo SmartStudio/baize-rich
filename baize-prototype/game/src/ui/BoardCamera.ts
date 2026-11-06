@@ -97,6 +97,12 @@ export class BoardCamera {
     this.goal = { ...this.view, zoom: this.userZoom };
   }
 
+  /** Glide to a world point and stop following. */
+  panTo(p: Point): void {
+    this.mode = { kind: 'free' };
+    this.goal = this.world.clamp({ cx: p.x, cy: p.y, zoom: this.goal.zoom });
+  }
+
   /** World rect the whole screen shows right now. */
   visibleRect(): Rect {
     return viewRect(this.view);

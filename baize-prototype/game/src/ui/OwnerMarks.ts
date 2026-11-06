@@ -74,12 +74,13 @@ function washKey(scene: Phaser.Scene, w: number, h: number, street: boolean): st
 export class OwnerMarks {
   private marks = new Map<NodeId, Mark>();
   private tick = 0;
+  private flutterTimer: Phaser.Time.TimerEvent;
 
   constructor(private scene: Phaser.Scene, private world: WorldMap, private board: Board) {
     for (const id of board.allNodeIds()) if (board.node(id).type === 'land') this.marks.set(id, this.mount(id));
     const washes = [...this.marks.values()].map((m) => m.wash);
     scene.tweens.add({ targets: washes, alpha: 0.6, duration: 1700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-    scene.time.addEvent({ delay: FLUTTER_MS, loop: true, callback: () => this.flutter() });
+    this.flutterTimer = scene.time.addEvent({ delay: FLUTTER_MS, loop: true, callback: () => this.flutter() });
   }
 
   private mount(id: NodeId): Mark {
@@ -98,6 +99,11 @@ export class OwnerMarks {
   }
 
   private flutter(): void {
+    // The title scene paints a board once and destroys its objects; the clock outlives them.
+    if ([...this.marks.values()].some((m) => !m.cloth.active)) {
+      this.flutterTimer.remove();
+      return;
+    }
     this.tick = (this.tick + 1) % CLOTH.length;
     for (const m of this.marks.values()) m.cloth.setTexture(`own_cloth${(this.tick + m.phase) % CLOTH.length}`);
   }
