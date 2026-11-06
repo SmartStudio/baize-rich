@@ -226,5 +226,35 @@
     "colors": 40,
     "ref": "tile_land_wood",
     "prompt": "HD pixel art, 2:1 isometric view from the upper right, same style as tile_land_wood, on solid magenta (#FF00FF), no ground unless stated, no shadow, no text: spirit-vein estate: small two-storey pavilion on a white stone plinth with a glowing green vein, pine tree."
+  },
+  "ic_stone": {
+    "fit": "h",
+    "size": 16,
+    "colors": 12,
+    "prompt": "Tiny game UI icon, HD pixel art, bold dark outline, readable at 16px, on solid magenta (#FF00FF), no shadow, no text: glowing cyan spirit stone crystal."
+  },
+  "ic_herb": {
+    "fit": "h",
+    "size": 16,
+    "colors": 16,
+    "prompt": "Tiny game UI icon, HD pixel art, bold dark outline, readable at 16px, on solid magenta (#FF00FF), no shadow, no text: green spirit herb sprig with a glowing white-blue bud."
+  },
+  "ic_pill": {
+    "fit": "h",
+    "size": 16,
+    "colors": 12,
+    "prompt": "Tiny game UI icon, HD pixel art, bold dark outline, readable at 16px, on solid magenta (#FF00FF), no shadow, no text: round golden-orange elixir pill with a swirl."
+  },
+  "ic_cult": {
+    "fit": "h",
+    "size": 16,
+    "colors": 12,
+    "prompt": "Tiny game UI icon, HD pixel art, bold dark outline, readable at 16px, on solid magenta (#FF00FF), no shadow, no text: golden qi swirl with a bright core."
+  },
+  "ic_mind": {
+    "fit": "w",
+    "size": 16,
+    "colors": 12,
+    "prompt": "Tiny game UI icon, HD pixel art, bold dark outline, readable at 16px, on solid magenta (#FF00FF), no shadow, no text: white and pale blue five-petal lotus."
   }
 }

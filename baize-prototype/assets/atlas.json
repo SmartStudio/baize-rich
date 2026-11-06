@@ -900,11 +900,11 @@
     "h": 16
    }
   },
-  "ic_pill": {
+  "ic_herb": {
    "frame": {
     "x": 628,
     "y": 779,
-    "w": 16,
+    "w": 12,
     "h": 16
    },
    "rotated": false,
@@ -912,19 +912,59 @@
    "spriteSourceSize": {
     "x": 0,
     "y": 0,
-    "w": 16,
+    "w": 12,
     "h": 16
    },
    "sourceSize": {
+    "w": 12,
+    "h": 16
+   }
+  },
+  "ic_mind": {
+   "frame": {
+    "x": 674,
+    "y": 779,
     "w": 16,
+    "h": 15
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 16,
+    "h": 15
+   },
+   "sourceSize": {
+    "w": 16,
+    "h": 15
+   }
+  },
+  "ic_pill": {
+   "frame": {
+    "x": 642,
+    "y": 779,
+    "w": 15,
+    "h": 16
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 15,
+    "h": 16
+   },
+   "sourceSize": {
+    "w": 15,
     "h": 16
    }
   },
   "ic_stone": {
    "frame": {
-    "x": 646,
+    "x": 659,
     "y": 779,
-    "w": 16,
+    "w": 13,
     "h": 16
    },
    "rotated": false,
@@ -932,11 +972,11 @@
    "spriteSourceSize": {
     "x": 0,
     "y": 0,
-    "w": 16,
+    "w": 13,
     "h": 16
    },
    "sourceSize": {
-    "w": 16,
+    "w": 13,
     "h": 16
    }
   },
@@ -1482,7 +1522,7 @@
   },
   "owner_p1": {
    "frame": {
-    "x": 664,
+    "x": 692,
     "y": 779,
     "w": 64,
     "h": 10
@@ -1502,7 +1542,7 @@
   },
   "owner_p2": {
    "frame": {
-    "x": 730,
+    "x": 758,
     "y": 779,
     "w": 64,
     "h": 10
@@ -1522,7 +1562,7 @@
   },
   "owner_p3": {
    "frame": {
-    "x": 796,
+    "x": 824,
     "y": 779,
     "w": 64,
     "h": 10
@@ -1542,7 +1582,7 @@
   },
   "owner_p4": {
    "frame": {
-    "x": 862,
+    "x": 890,
     "y": 779,
     "w": 64,
     "h": 10

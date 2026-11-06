@@ -37,7 +37,7 @@ DIE = 24
 ISO_TILE, ISO_TILE_CENTRE = (96, 120), (48, 64)
 ISO_ALTAR, ISO_ALTAR_CENTRE = (288, 352), (144, 230)
 PROPS = [f'lm_{t}' for t in ('start', 'gate', 'alchemy', 'market', 'secret', 'spring', 'beast', 'ruins', 'eye')] + [
-    f'iso_bld_{n}' for n in (1, 2, 3)]
+    f'iso_bld_{n}' for n in (1, 2, 3)] + [f'ic_{n}' for n in ('stone', 'herb', 'pill', 'cult', 'mind')]
 
 
 def rgb(hex_colour: str) -> tuple[int, int, int, int]:
