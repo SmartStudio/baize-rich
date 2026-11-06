@@ -37,12 +37,21 @@ export interface DuelResult {
   escaped: boolean;
 }
 
+/** 突破检定的各项加成；site 可为负。 */
+export interface BreakthroughBonuses {
+  pills: number;
+  site: number;
+  mind: number;
+  guidance: number;
+  calm: number;
+}
+
 /** 闭关突破的完整检定（GDD §5.3）。 */
 export interface BreakthroughResult {
   from: number;
   dice: [number, number];
   stake: number;
-  bonuses: { pills: number; site: number; mind: number; guidance: number; calm: number };
+  bonuses: BreakthroughBonuses;
   total: number;
   target: number;
   success: boolean;

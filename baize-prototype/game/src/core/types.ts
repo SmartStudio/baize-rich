@@ -171,9 +171,17 @@ export interface HeroData {
   /** 选中台词。 */
   quote: string;
   color: string;
-  passive: { id: string; name: string; desc: string };
+  passive: { id: string; name: string; desc: string; traits: HeroTrait[] };
   skill: HeroSkillData;
 }
+/** One rule a passive adds. Rules and AI ask `hasTrait`, never the hero id. */
+export type HeroTrait =
+  /** 斗法守方 +duel.bodyDefense */
+  | 'guard'
+  /** 斗法攻方 +duel.swordAttack */
+  | 'swordQi'
+  /** 每次停在丹房炼丹 +alchemy.alchBonus */
+  | 'pillway';
 export interface HeroSkillData {
   id: HeroSkillId;
   name: string;

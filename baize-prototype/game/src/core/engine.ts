@@ -19,11 +19,11 @@ import type {
   MarketBuy, PendingChoice, PendingChoiceOf, PreRollAct, Target, ThreatKind,
 } from './choices';
 import { defaultData } from './data';
-import type { BreakthroughResult, CultSource, DuelResult, GameEvent, GameEventType } from './events';
+import type { BreakthroughBonuses, BreakthroughResult, CultSource, DuelResult, GameEvent, GameEventType } from './events';
 import { skillTerms } from './heroes';
 import { hashSeed, nextFloat } from './rng';
 import {
-  barFull, barSize, canClose, closureBonus, closureSite, compareStanding, duelBonus, hasAbility, herbYield, isGlowing, maxLevel,
+  barFull, barSize, canClose, closureBonus, closureSite, compareStanding, duelBonus, fixedBonuses, hasAbility, hasTrait, herbYield, isGlowing, maxLevel,
   realmName, realmOf, rentFor, sitGain, upgradeCost, winRealm,
 } from './rules';
 import type {
@@ -703,7 +703,7 @@ export class Game {
     p.herbs -= n * a.herbsPerPill;
     const tier = (yield* this.askHeat(seat)).tier;
     const extra = tier === 'perfect' ? a.perfectBonus : tier === 'fail' ? -1 : 0;
-    const pills = n + extra + (p.hero === 'alch' ? a.alchBonus : 0);
+    const pills = n + extra + (hasTrait(this.data, p, 'pillway') ? a.alchBonus : 0);
     p.pills += pills;
     p.stats.pillsMade += pills;
     p.stats.miniGames++;
@@ -1004,15 +1004,14 @@ export class Game {
   // --------------------------------------------------------- 闭关突破 ---
 
   /** 闭关突破 (GDD §5.3): stake 0–3 pills, roll 2D6 + bonuses against the realm's target. */
-  private *closure(seat: number): Flow {
+  private *closure(seat: number, site = closureSite(this.state, this.data, seat, this.state.players[seat].pos)!): Flow {
     const st = this.state;
     const p = st.players[seat];
     st.turn.closed = true;
     const target = realmOf(this.data, p.realm).target;
-    const fixed = closureBonus(st, this.data, seat);
-    const stake = yield* this.askStake(seat, fixed, target);
+    const stake = yield* this.askStake(seat, site, target);
     const calm = yield* this.askCalm(seat);
-    const r = this.rollBreakthrough(seat, stake, calm, target);
+    const r = this.rollBreakthrough(seat, site, stake, calm, target);
     p.pills -= stake;
     if (p.guidance > 0) p.guidance--;
     p.stats.breakthroughs++;
@@ -1020,17 +1019,18 @@ export class Game {
     else this.failBreakthrough(seat, r);
   }
 
-  private *askStake(seat: number, fixed: number, target: number): Flow<number> {
+  private *askStake(seat: number, site: number, target: number): Flow<number> {
     const p = this.state.players[seat];
     const b = this.cfg.breakthrough;
+    const fixed = closureBonus(this.state, this.data, seat, site);
     const opts: ChoiceOption<number>[] = [];
     for (let k = 0; k <= Math.min(b.maxPills, p.pills); k++) {
       opts.push({ id: `s${k}`, label: k === 0 ? '不押丹' : `押 ${k} 颗（+${k * b.pillBonus}）`, value: k, hint: `需掷出 ${target - fixed - k * b.pillBonus} 以上` });
     }
     return yield* this.ask({
       player: seat, kind: 'stake', title: `闭关 · ${this.realmLabel(seat)}冲${realmName(this.data, p.realm + 1)}`,
-      desc: `2D6 + 加成 ≥ ${target}。地点与心境等加成 +${fixed}，每颗丹药 +${b.pillBonus}，押上的丹药无论成败都会消耗。`,
-      options: opts, defaultId: 's0', ctx: { bonus: fixed, target },
+      desc: `2D6 + 加成 ≥ ${target}。地点与心境等加成 ${fixed >= 0 ? '+' : ''}${fixed}，每颗丹药 +${b.pillBonus}，押上的丹药无论成败都会消耗。`,
+      options: opts, defaultId: 's0', ctx: { bonus: fixed, target, site },
     });
   }
 
@@ -1048,15 +1048,12 @@ export class Game {
     return use;
   }
 
-  private rollBreakthrough(seat: number, stake: number, calm: boolean, target: number): BreakthroughResult {
-    const st = this.state;
-    const p = st.players[seat];
+  private rollBreakthrough(seat: number, site: number, stake: number, calm: boolean, target: number): BreakthroughResult {
+    const p = this.state.players[seat];
     const b = this.cfg.breakthrough;
-    const bonuses = {
+    const bonuses: BreakthroughBonuses = {
       pills: stake * b.pillBonus,
-      site: closureSite(st, this.data, seat, p.pos) ?? 0,
-      mind: p.mind * b.mindBonus,
-      guidance: p.guidance > 0 ? b.guidanceBonus : 0,
+      ...fixedBonuses(this.state, this.data, seat, site),
       calm: calm ? b.calmBonus : 0,
     };
     const dice = this.roll2d6();
@@ -1068,8 +1065,8 @@ export class Game {
     const names: [keyof BreakthroughResult['bonuses'], string][] = [
       ['pills', '押丹'], ['site', '地点'], ['mind', '心境'], ['guidance', '指点'], ['calm', '清心'],
     ];
-    const parts = names.filter(([k]) => r.bonuses[k] > 0).map(([k, n]) => `${n} ${r.bonuses[k]}`);
-    return `${r.dice[0]} + ${r.dice[1]}${parts.length ? ` + ${parts.join(' + ')}` : ''} = ${r.total}（目标 ${r.target}）`;
+    const parts = names.filter(([k]) => r.bonuses[k] !== 0).map(([k, n]) => `${r.bonuses[k] > 0 ? '+' : '−'} ${n} ${Math.abs(r.bonuses[k])}`);
+    return `${r.dice[0]} + ${r.dice[1]}${parts.map((s) => ` ${s}`).join('')} = ${r.total}（目标 ${r.target}）`;
   }
 
   private ascendRealm(seat: number, r: BreakthroughResult): void {

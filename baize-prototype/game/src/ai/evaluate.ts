@@ -3,7 +3,7 @@
 import type { Board } from '../core/board';
 import type { ManifestGift } from '../core/choices';
 import {
-  barSize, chance2d6, closureBonus, closureSite, hasAbility, isGlowing, rentFor, sitGain, winRealm,
+  barSize, chance2d6, closureBonus, closureSite, hasAbility, hasTrait, isGlowing, rentFor, sitGain, winRealm,
 } from '../core/rules';
 import type { EventEffect, GameData, GameState, NodeId, PlayerState } from '../core/types';
 
@@ -35,22 +35,19 @@ export function nearlyFull(v: View): boolean {
   return me(v).realm < winRealm(v.data) && barRoom(v) <= 1;
 }
 
-/** Best success chance for 闭关 at `node` with up to `pills` staked (清心符 included when held). */
-export function closureChance(v: View, node: NodeId, pills: number): number {
+/** Success chance for 闭关 with site bonus `site` and up to `pills` staked (清心符 included when held). */
+export function closureChance(v: View, site: number, pills: number): number {
   const p = me(v);
-  const site = closureSite(v.st, v.data, v.seat, node);
-  if (site === null) return 0;
   const b = v.data.config.breakthrough;
-  const here = { ...v.st, players: v.st.players.map((o) => (o.seat === v.seat ? { ...o, pos: node } : o)) };
-  const fixed = closureBonus(here, v.data, v.seat) + (p.hand.includes('calm') ? b.calmBonus : 0);
+  const fixed = closureBonus(v.st, v.data, v.seat, site) + (p.hand.includes('calm') ? b.calmBonus : 0);
   const stake = Math.min(pills, b.maxPills, p.pills);
   return chance2d6(v.data.config.realms[p.realm].target - fixed - stake * b.pillBonus);
 }
 
-/** Smallest stake reaching `want` success chance, else everything allowed. */
-export function stakeFor(v: View, want: number): number {
+/** Smallest stake reaching `want` success chance at site bonus `site`, else everything allowed. */
+export function stakeFor(v: View, want: number, site: number): number {
   const max = Math.min(v.data.config.breakthrough.maxPills, me(v).pills);
-  for (let k = 0; k <= max; k++) if (closureChance(v, me(v).pos, k) >= want) return k;
+  for (let k = 0; k <= max; k++) if (closureChance(v, site, k) >= want) return k;
   return max;
 }
 
@@ -99,7 +96,7 @@ export function tileValue(v: View, node: NodeId): number {
   switch (v.board.node(node).type) {
     case 'start': return cfg.salaryLand;
     case 'land': return landValue(v, node);
-    case 'alchemy': return Math.floor(p.herbs / cfg.alchemy.herbsPerPill) * VALUE.pill * 0.9 + (p.hero === 'alch' && p.herbs >= 2 ? VALUE.pill : 0);
+    case 'alchemy': return Math.floor(p.herbs / cfg.alchemy.herbsPerPill) * VALUE.pill * 0.9 + (hasTrait(v.data, p, 'pillway') && p.herbs >= 2 ? VALUE.pill : 0);
     case 'market': return p.stones > 900 ? 60 : 0;
     case 'secret': return deckValue(v);
     case 'spring': return cultValue(v, cfg.cultivation.spring) + cfg.spring.herbs * VALUE.herb;
@@ -129,5 +126,6 @@ function landValue(v: View, node: NodeId): number {
 
 /** A full bar standing on an own closure site lets the AI close right away. */
 function closureSiteValue(v: View, node: NodeId): number {
-  return closureSite(v.st, v.data, v.seat, node) === null ? 0 : 500 * closureChance(v, node, me(v).pills);
+  const site = closureSite(v.st, v.data, v.seat, node);
+  return site === null ? 0 : 500 * closureChance(v, site, me(v).pills);
 }

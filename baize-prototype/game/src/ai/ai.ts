@@ -6,7 +6,7 @@ import type { ActionAct, Controller, PendingChoice, PendingChoiceOf, PreRollAct 
 import type { Game } from '../core/engine';
 import { Rng } from '../core/rng';
 import {
-  duelBonus, duelWinChance, landLevel, nominalRent, rentFor, upgradeCost, winRealm,
+  closureSite, duelBonus, duelWinChance, landLevel, nominalRent, rentFor, upgradeCost, winRealm,
 } from '../core/rules';
 import type { MiniGameTier, NodeId } from '../core/types';
 import {
@@ -274,7 +274,7 @@ export class AIController implements Controller {
       case 'buy': return this.buy(c);
       case 'rentReact': return this.rentReact(c.ctx.rent ?? 0);
       case 'guardReact': return this.guardChoice(c);
-      case 'stake': return `s${stakeFor(this.view, this.stakeTarget())}`;
+      case 'stake': return `s${stakeFor(this.view, this.stakeTarget(), c.ctx.site!)}`;
       case 'calm': return 'calm';
       case 'brew': return c.options[0].id;
       case 'miniGame': return this.heat();
@@ -348,7 +348,8 @@ export class AIController implements Controller {
   /** Close here now, or walk on toward a better site (the altar). */
   private shouldClose(): boolean {
     if (this.me.pos === ALTAR || this.roundsLeft <= 1) return true;
-    const chance = closureChance(this.view, this.me.pos, stakeFor(this.view, this.stakeTarget()));
+    const site = closureSite(this.st, this.data, this.seat, this.me.pos)!;
+    const chance = closureChance(this.view, site, stakeFor(this.view, this.stakeTarget(), site));
     if (this.difficulty === 'easy') return chance >= 0.4;
     return chance >= this.persona.closeAt || this.board.distance(this.me.pos, ALTAR) > 10;
   }

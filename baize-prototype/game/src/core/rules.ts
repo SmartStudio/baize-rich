@@ -1,7 +1,8 @@
 // Pure rule calculations (no mutation, no randomness). Shared by the engine,
 // the AI and the UI (e.g. to preview rent / costs / breakthrough odds).
 import { ALTAR, type Board } from './board';
-import type { GameData, GameState, LandLevelData, NodeId, PlayerState, RealmAbility, RealmData } from './types';
+import type { BreakthroughBonuses } from './events';
+import type { GameData, GameState, HeroTrait, LandLevelData, NodeId, PlayerState, RealmAbility, RealmData } from './types';
 
 // ---- realms -------------------------------------------------------------
 
@@ -21,6 +22,10 @@ export function winRealm(data: GameData): number {
 /** Abilities are permanent: every realm reached so far contributes its ability. */
 export function hasAbility(data: GameData, p: PlayerState, ability: RealmAbility): boolean {
   return data.config.realms.slice(0, p.realm + 1).some((r) => r.ability === ability);
+}
+
+export function hasTrait(data: GameData, p: PlayerState, trait: HeroTrait): boolean {
+  return data.heroes.find((h) => h.id === p.hero)!.passive.traits.includes(trait);
 }
 
 export function barSize(data: GameData, p: PlayerState): number {
@@ -112,11 +117,15 @@ export function canClose(state: GameState, data: GameData, seat: number): boolea
   return barFull(data, p) && closureSite(state, data, seat, p.pos) !== null;
 }
 
-/** Fixed part of the breakthrough check before stake and 清心符: site + 心境 + 前辈指点. */
-export function closureBonus(state: GameState, data: GameData, seat: number): number {
+/** The bonuses known before the stake and 清心符, for a closure whose site bonus is `site`. */
+export function fixedBonuses(state: GameState, data: GameData, seat: number, site: number): Omit<BreakthroughBonuses, 'pills' | 'calm'> {
   const p = state.players[seat];
   const b = data.config.breakthrough;
-  return (closureSite(state, data, seat, p.pos) ?? 0) + p.mind * b.mindBonus + Math.min(p.guidance, 1) * b.guidanceBonus;
+  return { site, mind: p.mind * b.mindBonus, guidance: p.guidance > 0 ? b.guidanceBonus : 0 };
+}
+
+export function closureBonus(state: GameState, data: GameData, seat: number, site: number): number {
+  return Object.values(fixedBonuses(state, data, seat, site)).reduce((a, v) => a + v, 0);
 }
 
 /** P(2D6 ≥ need). */
@@ -141,8 +150,8 @@ export function duelBonus(state: GameState, data: GameData, attacker: number, de
   const pd = state.players[defender];
   const gap = pa.realm - pd.realm;
   const side = (p: PlayerState) => (hasAbility(data, p, 'sense') ? d.senseBonus : 0);
-  const a = Math.max(0, gap) + side(pa) + (pa.hero === 'sword' ? d.swordAttack : 0) + (isGlowing(state, data, defender) ? d.glowBonus : 0);
-  const b = Math.max(0, -gap) + side(pd) + (pd.hero === 'body' ? d.bodyDefense : 0);
+  const a = Math.max(0, gap) + side(pa) + (hasTrait(data, pa, 'swordQi') ? d.swordAttack : 0) + (isGlowing(state, data, defender) ? d.glowBonus : 0);
+  const b = Math.max(0, -gap) + side(pd) + (hasTrait(data, pd, 'guard') ? d.bodyDefense : 0);
   return [a, b];
 }
 
