@@ -6,6 +6,10 @@
 Needs Pillow and NumPy. The key colour is sampled from the image corners, so a magenta that drifted
 pink in generation still keys out. Output: tools/art/out/<id>.png, cropped to the subject, or the whole
 square for `"fit": "frame"` (portraits). An entry with `"src"` reuses another entry's source image.
+
+`"fit": "quad"` keys the source, then maps the quadrilateral `quad` onto exactly `size`.
+`"fit": "tile"` takes a full-bleed texture (no key colour), cuts `crop` (fractions of the source; default
+a centred cut at the target aspect) and cross-fades the edges along the axes in `wrap` so it tiles.
 """
 import json
 import sys
@@ -18,6 +22,7 @@ ROOT = Path(__file__).resolve().parent
 KEY_DISTANCE = 70
 CORNER = 24
 ALPHA_CUT = 140
+WRAP = 0.15
 
 
 def key_mask(rgb: np.ndarray, top_only: bool) -> np.ndarray:
@@ -37,7 +42,41 @@ def despill(rgb: np.ndarray) -> np.ndarray:
     return np.clip(f, 0, 255).astype(np.uint8)
 
 
+def wrap_blend(f: np.ndarray, axis: int) -> np.ndarray:
+    """Cross-fade the far edge band onto the near edge, so the result repeats seamlessly along `axis`."""
+    n = f.shape[axis]
+    k = int(n * WRAP)
+    w = (np.arange(k) / k).reshape([-1 if a == axis else 1 for a in range(f.ndim)])
+    head = np.take(f, range(k), axis) * w + np.take(f, range(n - k, n), axis) * (1 - w)
+    return np.concatenate([head, np.take(f, range(k, n - k), axis)], axis)
+
+
+def texture(src: Path, spec: dict) -> Image.Image:
+    """A full-bleed texture (no key colour) cut to `size` and made to tile along the axes in `wrap`."""
+    rgb = np.asarray(Image.open(src).convert('RGB')).astype(float)
+    tw, th = spec['size']
+    wrap = spec.get('wrap', '')
+    h, w = rgb.shape[:2]
+    if 'crop' in spec:
+        left, top, right, bottom = spec['crop']
+        f = rgb[round(top * h):round(bottom * h), round(left * w):round(right * w)]
+    else:
+        keep_x, keep_y = (1 - WRAP if axis in wrap else 1 for axis in 'xy')
+        aspect = tw / th * keep_y / keep_x
+        cw, ch = (round(h * aspect), h) if w / h > aspect else (w, round(w / aspect))
+        x0, y0 = (w - cw) // 2, (h - ch) // 2
+        f = rgb[y0:y0 + ch, x0:x0 + cw]
+    if 'x' in wrap:
+        f = wrap_blend(f, 1)
+    if 'y' in wrap:
+        f = wrap_blend(f, 0)
+    small = Image.fromarray(f.astype(np.uint8)).resize((tw, th), Image.BOX)
+    return small.quantize(colors=spec['colors'], method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE).convert('RGBA')
+
+
 def pixelize(src: Path, spec: dict) -> Image.Image:
+    if spec['fit'] == 'tile':
+        return texture(src, spec)
     rgb = np.asarray(Image.open(src).convert('RGB'))
     frame = spec['fit'] == 'frame'
     # A portrait's shoulders run off the bottom edge, so only the top corners are reliably background.
@@ -47,10 +86,15 @@ def pixelize(src: Path, spec: dict) -> Image.Image:
     a = np.asarray(alpha)
     ys, xs = np.where(a > 0)
     box = (0, 0, a.shape[1], a.shape[0]) if frame else (xs.min(), ys.min(), xs.max() + 1, ys.max() + 1)
-    crop = Image.fromarray(np.dstack([despill(rgb), a]), 'RGBA').crop(box)
+    keyed = Image.fromarray(np.dstack([despill(rgb), a]), 'RGBA')
+    crop = keyed.crop(box)
     w, h = crop.size
     if frame:
         size = (spec['size'], spec['size'])
+    elif spec['fit'] == 'quad':
+        # Straighten a perspective view: `quad` is the source's upper-left, lower-left, lower-right, upper-right.
+        size = tuple(spec['size'])
+        crop = keyed.transform((size[0] * 8, size[1] * 8), Image.QUAD, spec['quad'], Image.BILINEAR)
     elif spec['fit'] == 'w':
         size = (spec['size'], max(1, round(h * spec['size'] / w)))
     else:
