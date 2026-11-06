@@ -39,13 +39,16 @@ if (json) {
   const ix = r.interaction;
   const cfg = defaultData.config;
   const seatSpread = Math.max(...r.seatWinRate) - Math.min(...r.seatWinRate);
+  // 95th percentile of max − min over four fair seats is about 4.2 standard errors (multinomial Monte Carlo).
+  const seatNoise = 4.2 * Math.sqrt(0.25 * 0.75 / games);
+  const econ = r.economy;
   console.log(`\n凡人问道 · AI 自对弈  games=${games} seed=${seed} difficulty=${difficulty}  (${ms} ms, ${(ms / games).toFixed(1)} ms/game)`);
   console.log('—'.repeat(60));
   console.log('§12 调参目标');
   console.log(`  平均轮数 ${r.avgRounds.toFixed(2)}  (目标 10–12，上限 ${cfg.rounds})`);
   console.log(`  化神结束 ${pct(r.ascendRate)}  (目标 ≥ 60%)`);
   console.log(`  修士胜率 ${HERO_IDS.map((h) => `${heroName[h]} ${pct(r.heroWinRate[h])}`).join(' / ')}  (目标 23–27%)`);
-  console.log(`  座位胜率 ${r.seatWinRate.map(pct).join(' / ')}，差 ${pct(seatSpread)}  (目标 ≤ 3%)`);
+  console.log(`  座位胜率 ${r.seatWinRate.map(pct).join(' / ')}，差 ${pct(seatSpread)}  (目标 ≤ 3%；座位全公平时本局数的噪声 95% 上限 ${pct(seatNoise)})`);
   console.log(`  每人突破 ${pp.breakthroughs.toFixed(2)} 次，走火入魔 ${pp.breakthroughFails.toFixed(2)} 次  (目标 3.5–4.5 / 约 1.5)`);
   console.log(`  每局斗法 ${ix.duels.toFixed(2)}  (目标 ≥ 6)；被夺丹药回合 ${pct(ix.pillStolenTurnRate)}  (目标 ≥ 5%)`);
   console.log(`  第 ${LEADER_CHECK_ROUND} 轮领先者获胜 ${pct(r.leaderWins)}  (目标 ≤ 70%，n=${r.gamesReachingCheck})`);
@@ -56,6 +59,7 @@ if (json) {
   console.log(`  每局 山岳拦人 ${ix.roadblockHits.toFixed(2)} · 火候小游戏 ${ix.miniGames.toFixed(2)}`);
   console.log(`  技能使用 ${HERO_IDS.map((h) => `${heroName[h]} ${ix.skillUsesByHero[h].toFixed(2)}`).join(' / ')}`);
   console.log(`  回合占比 有互动 ${pct(ix.interactionTurnRate)} · 付租 ${pct(ix.rentTurnRate)} · 斗法 ${pct(ix.duelTurnRate)} · 用符 ${pct(ix.castTurnRate)}`);
+  console.log(`  灵田经济 付租回合 ${pct(ix.rentTurnRate)} (底线 ≥ 2.5%) · 每局租金 ${econ.rentPaid.toFixed(0)} · 买地升级 ${econ.landSpend.toFixed(0)} · 租金回本 ${pct(econ.payback)} · 终局有主 ${econ.ownedLands.toFixed(1)} / ${defaultData.board.nodes.filter((n) => n.type === 'land').length} 块`);
   console.log('—'.repeat(60));
   console.log('主线诊断（每名修士每局；目标 自家灵田突破 ≥ 30%，终局剩草 ≤ 6）');
   for (const h of HERO_IDS) {
