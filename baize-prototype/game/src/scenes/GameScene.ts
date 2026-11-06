@@ -80,8 +80,8 @@ const CUTSCENES: Partial<Record<GameEventType, (g: Game, e: GameEvent) => Banner
     return { title, sub: e.text, icon: `spirit_${sp.kind}`, color: SPIRIT_COLOR[sp.kind] };
   },
   breakthrough: (g, e) => ({ title: '破境！', sub: e.text, icon: portrait(g, e), color: COLORS.gold }),
-  demonSpawn: (_g, e) => ({ title: '天魔降世', sub: e.text, icon: 'demon', color: 0xc04ad0 }),
-  manifest: (_g, e) => ({ title: '白泽现世', sub: e.text, icon: 'baize', color: 0xe6e4f0 }),
+  demonSpawn: (_g, e) => ({ title: '天魔降世', sub: e.text, icon: 'demon', color: 0xc04ad0, dim: true }),
+  manifest: (_g, e) => ({ title: '白泽现世', sub: e.text, icon: 'baize', color: 0xe6e4f0, dim: true }),
   ult: (g, e) => {
     const p = g.state.players[e.player!];
     const ult = g.data.heroes.find((h) => h.id === p.hero)!.ult;
@@ -89,7 +89,7 @@ const CUTSCENES: Partial<Record<GameEventType, (g: Game, e: GameEvent) => Banner
   },
   duel: (g, e) => ({ title: '斗法', sub: e.text, icon: portrait(g, e), color: PLAYER_COLORS[e.player!] }),
   bankrupt: (g, e) => ({ title: '破产重整', sub: e.text, icon: portrait(g, e), color: COLORS.bad }),
-  win: (g, e) => ({ title: g.state.endReason === 'cultivation' ? '渡劫飞升' : '夺得魁首', sub: e.text, icon: portrait(g, e), color: COLORS.gold }),
+  win: (g, e) => ({ title: g.state.endReason === 'cultivation' ? '渡劫飞升' : '夺得魁首', sub: e.text, icon: portrait(g, e), color: COLORS.gold, dim: true }),
 };
 
 /** Smaller beats get a non-blocking ribbon under the top bar. */

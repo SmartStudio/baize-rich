@@ -12,38 +12,38 @@ export interface BannerSpec {
   /** Frame shown left of the title: a hero portrait, 'demon', 'baize'… */
   icon: string;
   color: number;
+  /** Full-screen dim. Climactic beats set this. Other banners leave the board bright. */
+  dim?: boolean;
 }
 
 const DEPTH = 9900;
+const BANNER_H = 100;
+const BANNER_ICON = 72;
+const PLATE_R = 6;
 
 export class Cutscene {
   constructor(private scene: Phaser.Scene) {}
 
-  /** Full-width strip across the screen centre; resolves when it has gone. */
+  /** Full-width strip in the upper screen. Resolves when it has gone. */
   banner(spec: BannerSpec, ms: number): Promise<void> {
     const s = this.scene;
-    const cy = STAGE.cy;
-    const h = 130;
-    const dim = s.add.rectangle(0, 0, W, H, 0x000000, 0.35).setOrigin(0, 0);
-    const strip = s.add.rectangle(0, cy, W, h, COLORS.ink, 0.94).setOrigin(0, 0.5);
-    const edgeT = s.add.rectangle(0, cy - h / 2, W, 4, spec.color).setOrigin(0, 0.5);
-    const edgeB = s.add.rectangle(0, cy + h / 2, W, 4, spec.color).setOrigin(0, 0.5);
-    const icon = addImg(s, 0, 0, spec.icon).setOrigin(0.5, 0.5);
-    icon.setScale(Math.min(96 / icon.width, 96 / icon.height));
-    const title = txt(s, 76, -14, spec.title, { size: FS.hero, bold: true, color: Phaser.Display.Color.IntegerToColor(spec.color).rgba, stroke: HEX.ink, origin: [0, 0.5] });
-    const sub = txt(s, 78, 28, spec.sub, { size: FS.md, color: HEX.parchment, origin: [0, 0.5], wrap: 640 });
-    const contentW = 76 + Math.max(title.width, sub.width);
-    const content = s.add.container(W / 2 - contentW / 2 + 30, cy, [icon, title, sub]);
-    const layer = s.add.container(0, 0, [dim, strip, edgeT, edgeB, content]).setDepth(DEPTH);
+    const cy = STAGE.bannerY;
+    const dim = spec.dim ? s.add.rectangle(0, 0, W, H, 0x000000, 0.35).setOrigin(0, 0).setAlpha(0) : null;
+    const strip = s.add.rectangle(0, cy, W, BANNER_H, COLORS.ink, 0.94).setOrigin(0, 0.5);
+    const edgeT = s.add.rectangle(0, cy - BANNER_H / 2, W, 4, spec.color).setOrigin(0, 0.5);
+    const edgeB = s.add.rectangle(0, cy + BANNER_H / 2, W, 4, spec.color).setOrigin(0, 0.5);
+    const content = bannerContent(s, spec, cy);
+    const parts: Phaser.GameObjects.GameObject[] = [strip, edgeT, edgeB, content.root];
+    if (dim) parts.unshift(dim);
+    const layer = s.add.container(0, 0, parts).setDepth(DEPTH);
     const inMs = Math.min(180, ms * 0.2);
     const outMs = Math.min(220, ms * 0.2);
     strip.setScale(1, 0);
-    content.setAlpha(0).setX(content.x - 120);
-    dim.setAlpha(0);
+    content.root.setAlpha(0).setX(content.root.x - 120);
     s.tweens.add({ targets: strip, scaleY: 1, duration: inMs, ease: 'Back.easeOut' });
-    s.tweens.add({ targets: dim, alpha: 1, duration: inMs });
-    s.tweens.add({ targets: content, alpha: 1, x: content.x + 120, duration: inMs * 1.4, ease: 'Cubic.easeOut' });
-    s.tweens.add({ targets: icon, scale: icon.scale * 1.12, duration: ms * 0.3, delay: inMs, yoyo: true, ease: 'Sine.easeInOut' });
+    if (dim) s.tweens.add({ targets: dim, alpha: 1, duration: inMs });
+    s.tweens.add({ targets: content.root, alpha: 1, x: content.root.x + 120, duration: inMs * 1.4, ease: 'Cubic.easeOut' });
+    s.tweens.add({ targets: content.icon, scale: content.icon.scale * 1.12, duration: ms * 0.3, delay: inMs, yoyo: true, ease: 'Sine.easeInOut' });
     return new Promise((res) => {
       s.tweens.add({
         targets: layer, alpha: 0, x: 60, duration: outMs, delay: ms - outMs, ease: 'Cubic.easeIn',
@@ -71,11 +71,7 @@ export class Cutscene {
    */
   rollDice(d: [number, number], ms: number, hold: number): Promise<void> {
     const s = this.scene;
-    const y = STAGE.diceY;
-    const dice = [-30, 30].map((dx) => addImg(s, STAGE.cx + dx, y, 'die_1').setScale(STAGE.dice).setDepth(DEPTH - 2));
-    const sum = txt(s, STAGE.cx, y + 42, `${d[0]} + ${d[1]} = ${d[0] + d[1]}${d[0] === d[1] ? '  双数！' : ''}`, {
-      size: FS.lg, bold: true, color: HEX.gold, stroke: HEX.ink, origin: [0.5, 0.5],
-    }).setDepth(DEPTH - 2).setAlpha(0);
+    const row = diceRow(s, d);
     const ticks = Math.max(2, Math.floor(ms / 60));
     let k = 0;
     return new Promise((res) => {
@@ -83,16 +79,79 @@ export class Cutscene {
         delay: ms / ticks, repeat: ticks - 1,
         callback: () => {
           k++;
-          dice.forEach((img, i) => {
+          row.dice.forEach((img, i) => {
             setFrame(img, `die_${k >= ticks ? d[i] : 1 + Math.floor(Math.random() * 6)}`);
             img.setAngle(k >= ticks ? 0 : Phaser.Math.Between(-25, 25));
           });
           if (k < ticks) return;
-          sum.setAlpha(1);
-          s.tweens.add({ targets: [...dice, sum], alpha: 0, duration: 250, delay: hold + 500, onComplete: () => { dice.forEach((x) => x.destroy()); sum.destroy(); } });
+          row.sum.setAlpha(1);
+          s.tweens.add({
+            targets: [row.plate, ...row.dice, row.sum], alpha: 0, duration: 250, delay: hold + 500,
+            onComplete: () => row.root.destroy(),
+          });
           s.time.delayedCall(hold, res);
         },
       });
     });
   }
+}
+
+function bannerContent(s: Phaser.Scene, spec: BannerSpec, cy: number): { root: Phaser.GameObjects.Container; icon: Phaser.GameObjects.Image } {
+  const icon = addImg(s, 0, 0, spec.icon).setOrigin(0.5, 0.5);
+  icon.setScale(Math.min(BANNER_ICON / icon.width, BANNER_ICON / icon.height));
+  const titleX = icon.displayWidth / 2 + 18;
+  const title = txt(s, titleX, -18, spec.title, {
+    size: FS.hero, bold: true, color: Phaser.Display.Color.IntegerToColor(spec.color).rgba, stroke: HEX.ink, origin: [0, 0.5],
+  });
+  const sub = txt(s, titleX + 2, 20, spec.sub, { size: FS.md, color: HEX.parchment, origin: [0, 0.5], wrap: 640 });
+  const left = -icon.displayWidth / 2;
+  const right = titleX + Math.max(title.width, sub.width);
+  const root = s.add.container(W / 2 - (left + right) / 2, cy, [icon, title, sub]);
+  return { root, icon };
+}
+
+function diceLabel(d: [number, number]): string {
+  const mark = d[0] === d[1] ? '  双数！' : '';
+  return `${d[0]} + ${d[1]} = ${d[0] + d[1]}${mark}`;
+}
+
+/** Ink plate behind the dice and their sum. Fades with the row that owns it. */
+function inkPlate(scene: Phaser.Scene, x: number, y: number, w: number, h: number): Phaser.GameObjects.Graphics {
+  const g = scene.add.graphics();
+  g.fillStyle(COLORS.ink, 0.9);
+  g.fillRoundedRect(x, y, w, h, PLATE_R);
+  g.lineStyle(2, COLORS.gold, 1);
+  g.strokeRoundedRect(x + 1, y + 1, w - 2, h - 2, PLATE_R - 1);
+  return g;
+}
+
+function even(n: number): number {
+  return Math.ceil(n / 2) * 2;
+}
+
+interface DiceRow {
+  root: Phaser.GameObjects.Container;
+  plate: Phaser.GameObjects.Graphics;
+  dice: Phaser.GameObjects.Image[];
+  sum: Phaser.GameObjects.Text;
+}
+
+function diceRow(scene: Phaser.Scene, d: [number, number]): DiceRow {
+  const dice = [0, 1].map(() => addImg(scene, 0, 0, 'die_1').setScale(STAGE.dice));
+  const sum = txt(scene, 0, 0, diceLabel(d), {
+    size: FS.lg, bold: true, color: HEX.gold, stroke: HEX.ink, origin: [0.5, 0.5],
+  }).setAlpha(0);
+  const dieW = dice[0].displayWidth;
+  const rowH = Math.max(dice[0].displayHeight, sum.height);
+  const pairW = 60 + dieW;
+  const rowW = pairW + 16 + sum.width;
+  const plateW = even(rowW + 28);
+  const plateH = even(rowH + 16);
+  const plate = inkPlate(scene, -plateW / 2, -plateH / 2, plateW, plateH);
+  const left = -rowW / 2;
+  dice[0].setPosition(Math.round(left + dieW / 2), 0);
+  dice[1].setPosition(Math.round(left + dieW / 2 + 60), 0);
+  sum.setPosition(Math.round(left + pairW + 16 + sum.width / 2), 0);
+  const root = scene.add.container(STAGE.cx, STAGE.diceY, [plate, dice[0], dice[1], sum]).setDepth(DEPTH - 2);
+  return { root, plate, dice, sum };
 }

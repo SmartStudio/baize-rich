@@ -37,8 +37,12 @@ export const RIGHT = { x: W - M - SIDE_W, w: SIDE_W, utilY: M, utilH: 28 };
 export const DOCK = { pad: 10, headH: 46, rollH: 58, btnH: 32, handH: 64, gap: 8 };
 /** Minimap under the utility pills (shown only when the world is bigger than the screen). */
 export const MINI = { maxH: 150, gap: 6, btnH: 24 };
-/** Transient overlays in screen space: dice, ribbons, toasts. */
-export const STAGE = { cx: W / 2, cy: H / 2, diceY: 150, turnRibbonY: 84, toastY: H - 98, dice: 1.6 };
+/**
+ * Transient overlays in screen space: dice, ribbons, toasts.
+ * The dice row sits under the turn ribbon and the cutscene strip sits under that row,
+ * so a 100px banner stays above a recentred token instead of covering it.
+ */
+export const STAGE = { cx: W / 2, cy: H / 2, diceY: 141, bannerY: 231, turnRibbonY: 84, toastY: H - 98, dice: 1.6 };
 /** Screen area no HUD column covers. The camera keeps what matters (moving token, choice targets) inside it. */
 export const SAFE = { x: M + SIDE_W + M, y: 16, w: W - 2 * (M + SIDE_W + M), h: H - 32 };
 
