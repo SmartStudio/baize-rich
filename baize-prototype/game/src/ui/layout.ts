@@ -28,8 +28,8 @@ export const SPRITE = {
 const M = 8;
 /** Width of each HUD margin column: the screen left over beside a 9-cell-wide board at zoom 1. */
 const SIDE_W = (W - 9 * CELL) / 2 - 2 * M;
-/** Left margin: round line, one chip per seat, 战报 ticker. */
-export const LEFT = { x: M, w: SIDE_W, lineY: M, lineH: 30, chipY: 48, chipH: 60, chipGap: 8, tickerY: H - M - 28, tickerH: 28 };
+/** Left margin: round line, one chip per seat, 战报 ticker. chipH fits the realm bar, resources and a tag row above the ticker. */
+export const LEFT = { x: M, w: SIDE_W, lineY: M, lineH: 30, chipY: 48, chipH: 88, chipGap: 8, tickerY: H - M - 28, tickerH: 28 };
 /** Right margin: utility pills on top, the action dock at the bottom. */
 export const RIGHT = { x: W - M - SIDE_W, w: SIDE_W, utilY: M, utilH: 28 };
 /** Dock rows, top to bottom. The dock is bottom-anchored; AI-only games show only the header. */
