@@ -117,67 +117,67 @@
     "prompt": "HD pixel art, 2:1 isometric view from the upper right, same style as tile_land_wood, on solid magenta (#FF00FF), no ground unless stated, no shadow, no text: 3x3 white jade Baize altar platform, stairs on each side, bronze incense burners, Baize statue with golden halo."
   },
   "lm_start": {
-    "fit": "h",
-    "size": 76,
+    "fit": "w",
+    "size": 60,
     "colors": 40,
-    "ref": "tile_land_wood",
-    "prompt": "HD pixel art, 2:1 isometric view from the upper right, same style as tile_land_wood, on solid magenta (#FF00FF), no ground unless stated, no shadow, no text: sect hall: two-tier red-pillared pavilion, green tiled roofs, gold ridges, stone lanterns."
+    "aspect": "3:4",
+    "prompt": "HD-2D pixel art game sprite (Octopath Traveler style), crisp square pixels, clean 1px dark outline, limited palette, light from the upper left. Strict front elevation: camera directly in front and a little above, the subject faces the viewer squarely and is symmetric left-right, no isometric, no diagonal, no 3/4 angle. Subject: a Chinese xianxia sect head hall: a two-tier pavilion with red lacquered pillars, green glazed tile roofs with upturned eave tips and gold ridge ornaments, a blank gold-framed plaque under the upper eave, carved red lattice doors, a pale stone base with central front steps, two small stone lanterns at the front corners. Single object centred, occupying about 85% of the image. Background: flat bright pure magenta #FF00FF (255,0,255) everywhere else, not maroon, not dark red. No ground plane, no cast shadow, no scenery, no text."
   },
   "lm_gate": {
     "fit": "h",
-    "size": 72,
+    "size": 64,
     "colors": 32,
-    "ref": "tile_land_wood",
-    "prompt": "HD pixel art, 2:1 isometric view from the upper right, same style as tile_land_wood, on solid magenta (#FF00FF), no ground unless stated, no shadow, no text: mountain gate paifang: stone pillars, dark tiled roof, blank plaque, two-way signpost."
+    "aspect": "3:4",
+    "prompt": "HD-2D pixel art game sprite (Octopath Traveler style), crisp square pixels, clean 1px dark outline, limited palette, light from the upper left. Strict front elevation: camera directly in front and a little above, the subject faces the viewer squarely and is symmetric left-right, no isometric, no diagonal, no 3/4 angle. Subject: a Chinese mountain sect gate (paifang archway): two weathered pale grey stone pillars on square stone bases, a dark slate-grey tiled roof with upturned eave tips, carved brown wooden brackets, a blank dark wooden plaque with a gold frame, a small wooden two-way signpost in front of the right pillar. Single object centred, occupying about 85% of the image. Background: flat bright pure magenta #FF00FF (255,0,255) everywhere else, not maroon, not dark red. No ground plane, no cast shadow, no scenery, no text."
   },
   "lm_alchemy": {
     "fit": "h",
-    "size": 68,
+    "size": 60,
     "colors": 32,
-    "ref": "tile_land_wood",
-    "prompt": "HD pixel art, 2:1 isometric view from the upper right, same style as tile_land_wood, on solid magenta (#FF00FF), no ground unless stated, no shadow, no text: alchemy furnace: bronze three-legged ding over fire, smoke and pill sparks, small wooden shelter."
+    "aspect": "3:4",
+    "prompt": "HD-2D pixel art game sprite (Octopath Traveler style), crisp square pixels, clean 1px dark outline, limited palette, light from the upper left. Strict front elevation: camera directly in front and a little above, the subject faces the viewer squarely and is symmetric left-right, no isometric, no diagonal, no 3/4 angle. Subject: an alchemy furnace shrine: a big bronze three-legged ding cauldron with two upright ear handles and a domed lid, warm orange flames under its belly, a wisp of white smoke and golden pill sparks rising from the lid, framed by a small open wooden gateway shelter with a short dark tiled roof. Single object centred, occupying about 85% of the image. Background: flat bright pure magenta #FF00FF (255,0,255) everywhere else, not maroon, not dark red. No ground plane, no cast shadow, no scenery, no text."
   },
   "lm_market": {
-    "fit": "h",
-    "size": 68,
+    "fit": "w",
+    "size": 56,
     "colors": 32,
-    "ref": "tile_land_wood",
-    "prompt": "HD pixel art, 2:1 isometric view from the upper right, same style as tile_land_wood, on solid magenta (#FF00FF), no ground unless stated, no shadow, no text: market stall: striped red-yellow awning, pill bottles, talismans, lantern, banner."
+    "aspect": "3:4",
+    "prompt": "HD-2D pixel art game sprite (Octopath Traveler style), crisp square pixels, clean 1px dark outline, limited palette, light from the upper left. Strict front elevation: camera directly in front and a little above, the subject faces the viewer squarely and is symmetric left-right, no isometric, no diagonal, no 3/4 angle. Subject: a xianxia market stall: a wooden stall with a scalloped striped red and golden-yellow awning, two shelves of pill bottles, brown gourds and yellow paper talismans, a glowing red paper lantern at the right corner, a small red cloth banner on a pole at the left corner. Single object centred, occupying about 85% of the image. Background: flat bright pure magenta #FF00FF (255,0,255) everywhere else, not maroon, not dark red. No ground plane, no cast shadow, no scenery, no text."
   },
   "lm_secret": {
-    "fit": "w",
+    "fit": "h",
     "size": 64,
     "colors": 32,
-    "ref": "tile_land_wood",
-    "prompt": "HD pixel art, 2:1 isometric view from the upper right, same style as tile_land_wood, on solid magenta (#FF00FF), no ground unless stated, no shadow, no text: secret realm portal: rock arch with cyan runes around a navy-teal-cyan vortex, no pink."
+    "aspect": "3:4",
+    "prompt": "HD-2D pixel art game sprite (Octopath Traveler style), crisp square pixels, clean 1px dark outline, limited palette, light from the upper left. Strict front elevation: camera directly in front and a little above, the subject faces the viewer squarely and is symmetric left-right, no isometric, no diagonal, no 3/4 angle. Subject: a secret realm portal: a rough grey rock arch carved with glowing cyan runes, framing a swirling vortex of deep navy, teal and bright cyan light, small cyan sparkles, mossy stones at its foot; only greys, navy, teal, cyan and white, no pink, no purple. Single object centred, occupying about 85% of the image. Background: flat bright pure magenta #FF00FF (255,0,255) everywhere else, not maroon, not dark red. No ground plane, no cast shadow, no scenery, no text."
   },
   "lm_spring": {
     "fit": "w",
-    "size": 64,
+    "size": 56,
     "colors": 32,
-    "ref": "tile_land_wood",
-    "prompt": "HD pixel art, 2:1 isometric view from the upper right, same style as tile_land_wood, on solid magenta (#FF00FF), no ground unless stated, no shadow, no text: spirit spring: mossy stone pool, glowing cyan water, lotus leaves, sparkles."
+    "aspect": "4:3",
+    "prompt": "HD-2D pixel art game sprite (Octopath Traveler style), crisp square pixels, clean 1px dark outline, limited palette, light from the upper left. Front view from in front and above (about 45 degrees down), symmetric, no isometric or diagonal angle. Subject: a spirit spring: a round pool rimmed with mossy grey stones, seen as a wide oval, glowing bright cyan water with ripples, green lotus leaves and one white lotus flower, a small jet of water bubbling up in the middle, tiny sparkles. Single object centred, occupying about 85% of the image. Background: flat bright pure magenta #FF00FF (255,0,255) everywhere else, not maroon, not dark red. No ground plane, no cast shadow, no scenery, no text."
   },
   "lm_beast": {
     "fit": "w",
-    "size": 72,
+    "size": 58,
     "colors": 32,
-    "ref": "tile_land_wood",
-    "prompt": "HD pixel art, 2:1 isometric view from the upper right, same style as tile_land_wood, on solid magenta (#FF00FF), no ground unless stated, no shadow, no text: beast den: rock cave with claw marks, horned skull, red eyes, bones, dead branches."
+    "aspect": "1:1",
+    "prompt": "HD-2D pixel art game sprite (Octopath Traveler style), crisp square pixels, clean 1px dark outline, limited palette, light from the upper left. Strict front elevation: camera directly in front and a little above, the subject faces the viewer squarely and is symmetric left-right, no isometric, no diagonal, no 3/4 angle. Subject: a demon beast den: a dark brown-grey rock cave mound with a black cave mouth facing the viewer, two glowing red eyes inside, deep claw marks, a big horned bleached beast skull above the entrance, scattered bones and dead twisted branches. Single object centred, occupying about 85% of the image. Background: flat bright pure magenta #FF00FF (255,0,255) everywhere else, not maroon, not dark red. No ground plane, no cast shadow, no scenery, no text."
   },
   "lm_ruins": {
     "fit": "w",
-    "size": 72,
+    "size": 60,
     "colors": 32,
-    "ref": "tile_land_wood",
-    "prompt": "HD pixel art, 2:1 isometric view from the upper right, same style as tile_land_wood, on solid magenta (#FF00FF), no ground unless stated, no shadow, no text: ancient cave abode: mossy rock with carved stone double door, gold seals, guardian statues, stele."
+    "aspect": "1:1",
+    "prompt": "HD-2D pixel art game sprite (Octopath Traveler style), crisp square pixels, clean 1px dark outline, limited palette, light from the upper left. Strict front elevation: camera directly in front and a little above, the subject faces the viewer squarely and is symmetric left-right, no isometric, no diagonal, no 3/4 angle. Subject: an ancient immortal's cave abode in ruins: a mossy grey rock outcrop with a carved stone double door, faded gold seals on the door, two small stone guardian lions flanking it, a weathered stone stele leaning at one side, ivy and moss. Single object centred, occupying about 85% of the image. Background: flat bright pure magenta #FF00FF (255,0,255) everywhere else, not maroon, not dark red. No ground plane, no cast shadow, no scenery, no text."
   },
   "lm_eye": {
-    "fit": "w",
-    "size": 64,
+    "fit": "h",
+    "size": 60,
     "colors": 32,
-    "ref": "tile_land_wood",
-    "prompt": "HD pixel art, 2:1 isometric view from the upper right, same style as tile_land_wood, on solid magenta (#FF00FF), no ground unless stated, no shadow, no text: spirit eye: ring of carved white stones with eye marks, floating golden qi orb."
+    "aspect": "3:4",
+    "prompt": "HD-2D pixel art game sprite (Octopath Traveler style), crisp square pixels, clean 1px dark outline, limited palette, light from the upper left. Front view from in front and above (about 45 degrees down), symmetric, no isometric or diagonal angle. Subject: a spirit eye shrine: five carved white standing stones in a semicircle on a low round stone dais, each carved with a glowing gold eye symbol, a glowing golden qi orb with soft light rays floating above the centre. Single object centred, occupying about 85% of the image. Background: flat bright pure magenta #FF00FF (255,0,255) everywhere else, not maroon, not dark red. No ground plane, no cast shadow, no scenery, no text."
   },
   "iso_bld_1": {
     "fit": "w",
@@ -229,5 +229,236 @@
     "size": 16,
     "colors": 12,
     "prompt": "Tiny game UI icon, HD pixel art, bold dark outline, readable at 16px, on solid magenta (#FF00FF), no shadow, no text: white and pale blue five-petal lotus."
+  },
+  "bld_1": {
+    "fit": "w",
+    "size": 52,
+    "colors": 32,
+    "aspect": "4:3",
+    "prompt": "HD-2D pixel art game sprite (Octopath Traveler style), crisp square pixels, clean 1px dark outline, limited palette, light from the upper left. Front view from in front and above (about 45 degrees down), symmetric, no isometric or diagonal angle. Subject: a small xianxia spirit herb garden: a low square plot of dark soil enclosed by a short green bamboo fence, three rows of glowing spirit herbs with jade-green leaves and white-cyan buds, a wooden post with a woven straw hat, a small wooden bucket. Single object centred, occupying about 85% of the image. Background: flat bright pure magenta #FF00FF (255,0,255) everywhere else, not maroon, not dark red. No ground plane, no cast shadow, no scenery, no text."
+  },
+  "bld_2": {
+    "fit": "w",
+    "size": 56,
+    "colors": 32,
+    "aspect": "1:1",
+    "prompt": "HD-2D pixel art game sprite (Octopath Traveler style), crisp square pixels, clean 1px dark outline, limited palette, light from the upper left. Strict front elevation: camera directly in front and a little above, the subject faces the viewer squarely and is symmetric left-right, no isometric, no diagonal, no 3/4 angle. Subject: a cultivator's cave dwelling: a rounded mossy grey rock outcrop with a round wooden moon door, a small dark tiled awning over the door, a glowing paper lantern, a straw meditation cushion and a small bronze incense burner with smoke, a little pine on top. Single object centred, occupying about 85% of the image. Background: flat bright pure magenta #FF00FF (255,0,255) everywhere else, not maroon, not dark red. No ground plane, no cast shadow, no scenery, no text."
+  },
+  "bld_3": {
+    "fit": "w",
+    "size": 60,
+    "colors": 40,
+    "aspect": "3:4",
+    "prompt": "HD-2D pixel art game sprite (Octopath Traveler style), crisp square pixels, clean 1px dark outline, limited palette, light from the upper left. Strict front elevation: camera directly in front and a little above, the subject faces the viewer squarely and is symmetric left-right, no isometric, no diagonal, no 3/4 angle. Subject: a spirit-vein blessed estate: a small two-storey Chinese pavilion with dark green tiled roofs, gold eave tips, red pillars and white walls, on a white jade plinth with front steps, a glowing jade-green spirit vein crack across the plinth, a twisted pine beside it, floating green qi motes. Single object centred, occupying about 85% of the image. Background: flat bright pure magenta #FF00FF (255,0,255) everywhere else, not maroon, not dark red. No ground plane, no cast shadow, no scenery, no text."
+  },
+  "ft_top_wood": {
+    "fit": "tile",
+    "size": [
+      64,
+      48
+    ],
+    "wrap": "xy",
+    "colors": 24,
+    "aspect": "4:3",
+    "prompt": "Seamless tileable ground texture for an HD-2D pixel art JRPG (Octopath Traveler style board tile top surface), seen from straight above, texture fills the whole image edge to edge with no border and no frame. Jade bamboo forest meadow: lush jade-green grass made of many distinct small grass tufts, each lit bright yellow-green on its upper-left blades with a dark green shadow at its lower-right base, small clusters of tiny white and pale yellow flowers, a few fallen bamboo leaves, evenly distributed. Light from the upper left. Crisp square pixels on a chunky grid of about 64 pixels across, hand-placed pixel clusters, no anti-aliasing, no blur, no text.",
+    "crop": [
+      0.2,
+      0.2,
+      0.7,
+      0.7
+    ]
+  },
+  "ft_top_fire": {
+    "fit": "tile",
+    "size": [
+      64,
+      48
+    ],
+    "wrap": "xy",
+    "colors": 24,
+    "aspect": "4:3",
+    "ref": "iso_land_fire",
+    "prompt": "Seamless tileable ground texture for an HD-2D pixel art JRPG (Octopath Traveler style board tile top surface), seen from straight above, texture fills the whole image edge to edge with no border and no frame. Red volcanic fire region: dark reddish-brown scorched basalt ground broken into irregular flat plates, separated by thin glowing orange and yellow lava cracks, a few small black pebbles and ember specks, subtle ash patches, evenly distributed. Light from the upper left. Crisp square pixels on a chunky grid of about 64 pixels across, hand-placed pixel clusters, no anti-aliasing, no blur, no text."
+  },
+  "ft_top_water": {
+    "fit": "tile",
+    "size": [
+      64,
+      48
+    ],
+    "wrap": "xy",
+    "colors": 24,
+    "aspect": "4:3",
+    "prompt": "Seamless tileable ground texture for an HD-2D style pixel art role-playing game board tile, seen from straight above, texture fills the whole image edge to edge with no border and no frame. Snow-covered mountain ground: mostly white snow with soft pale grey-blue shading in shallow irregular hollows, a few small dark slate rocks and tufts of frosted dry grass poking through the snow, a couple of tiny pale-cyan ice crystals, irregular organic distribution, no stripes, no clouds, no holes, no single focal object. Light from the upper left. Crisp square pixels on a chunky grid of about 64 pixels across, hand-placed pixel clusters, no anti-aliasing, no blur, no text.",
+    "crop": [
+      0.05,
+      0.05,
+      0.55,
+      0.55
+    ]
+  },
+  "ft_top_earth": {
+    "fit": "tile",
+    "size": [
+      64,
+      48
+    ],
+    "wrap": "xy",
+    "colors": 24,
+    "aspect": "4:3",
+    "prompt": "Seamless tileable ground texture for an HD-2D pixel art JRPG (Octopath Traveler style board tile top surface), seen from straight above, texture fills the whole image edge to edge with no border and no frame. Earth region under moonlight: dark indigo soil with clearly readable mid-tones, scattered flat slate-blue stones lit silver-blue on their upper-left edges, clumps of dark teal moss, a few tiny glowing pale-cyan night flowers and dew sparkles, evenly distributed; no pink, no purple, no magenta. Light from the upper left. Crisp square pixels on a chunky grid of about 64 pixels across, hand-placed pixel clusters, no anti-aliasing, no blur, no text.",
+    "crop": [
+      0.15,
+      0.15,
+      0.75,
+      0.75
+    ]
+  },
+  "ft_top_jade": {
+    "fit": "tile",
+    "size": [
+      64,
+      48
+    ],
+    "colors": 16,
+    "aspect": "4:3",
+    "ref": "iso_jade",
+    "prompt": "Pixel art floor tile for an HD-2D JRPG (Octopath Traveler style), seen from straight above, one single square white jade paving slab filling the entire image edge to edge: polished white jade with faint pale green-grey veins, a thin inlaid gold line parallel to the slab edges just inside each edge, a softly carved auspicious cloud scroll in the centre in very light grey relief, a darker bevel along the bottom and right edges and a highlight along the top and left edges (light from upper left). Crisp square pixels on a chunky grid of about 64 pixels across, no anti-aliasing, no blur, no text."
+  },
+  "ft_front_wood": {
+    "fit": "tile",
+    "size": [
+      64,
+      16
+    ],
+    "wrap": "x",
+    "crop": [
+      0,
+      0.02,
+      1,
+      0.47
+    ],
+    "colors": 12,
+    "aspect": "16:9",
+    "prompt": "Seamless horizontally tileable side-wall texture for an HD-2D pixel art JRPG (Octopath Traveler style): the vertical front cross-section of a raised grassy earth block, seen straight on. Warm brown soil in clear horizontal strata of alternating lighter and darker browns, rounded grey and tan pebbles embedded along the layers with lit upper-left edges, thin pale roots dangling in the upper layer; no grass top. Texture fills the whole image edge to edge with no border, no sky, no frame. Crisp square pixels on a chunky grid of about 128 pixels across, no anti-aliasing, no blur, no text."
+  },
+  "ft_front_fire": {
+    "fit": "tile",
+    "size": [
+      64,
+      16
+    ],
+    "wrap": "x",
+    "crop": [
+      0,
+      0.27,
+      1,
+      0.75
+    ],
+    "colors": 12,
+    "aspect": "16:9",
+    "ref": "iso_land_fire",
+    "prompt": "Seamless horizontally tileable side-wall texture for an HD-2D pixel art JRPG (Octopath Traveler style): the vertical front face of a raised block of dark volcanic basalt, seen straight on. Near-black and dark red-brown columnar basalt with a few thin glowing orange magma veins running mostly sideways, small ember specks; no top surface. Texture fills the whole image edge to edge with no border, no sky, no frame. Crisp square pixels on a chunky grid of about 128 pixels across, no anti-aliasing, no blur, no text."
+  },
+  "ft_front_water": {
+    "fit": "tile",
+    "size": [
+      64,
+      16
+    ],
+    "wrap": "x",
+    "crop": [
+      0,
+      0.08,
+      1,
+      0.5
+    ],
+    "colors": 12,
+    "aspect": "16:9",
+    "ref": "iso_land_water",
+    "prompt": "Seamless horizontally tileable side-wall texture for an HD-2D pixel art JRPG (Octopath Traveler style): the vertical front face of a raised block of frozen ground, seen straight on. Packed blue-grey frosted stone and clear blue glacier ice in rough horizontal layers, pale cyan highlights, white frost flecks, deeper blue toward the bottom; no snow top, no icicles. Texture fills the whole image edge to edge with no border, no sky, no frame. Crisp square pixels on a chunky grid of about 128 pixels across, no anti-aliasing, no blur, no text."
+  },
+  "ft_front_earth": {
+    "fit": "tile",
+    "size": [
+      64,
+      16
+    ],
+    "wrap": "x",
+    "crop": [
+      0,
+      0.22,
+      1,
+      0.7
+    ],
+    "colors": 12,
+    "aspect": "16:9",
+    "ref": "iso_land_earth",
+    "prompt": "Seamless horizontally tileable side-wall texture for an HD-2D pixel art JRPG (Octopath Traveler style): the vertical front cross-section of a raised block of night earth, seen straight on. Dark indigo and navy packed soil in soft horizontal strata, embedded dark slate stones, thin black roots, a few tiny faint cyan glowing specks, darker toward the bottom; no pink, no magenta. Texture fills the whole image edge to edge with no border, no sky, no frame. Crisp square pixels on a chunky grid of about 128 pixels across, no anti-aliasing, no blur, no text."
+  },
+  "ft_front_jade": {
+    "fit": "tile",
+    "size": [
+      64,
+      16
+    ],
+    "wrap": "x",
+    "crop": [
+      0,
+      0.07,
+      1,
+      0.62
+    ],
+    "colors": 12,
+    "aspect": "16:9",
+    "ref": "iso_jade",
+    "prompt": "Seamless horizontally tileable side-wall texture for an HD-2D pixel art JRPG (Octopath Traveler style): the vertical front face of a white jade paved road block, seen straight on. Polished white marble jade blocks in courses with thin pale grey joints, a thin gold inlay band near the top, a softly carved repeating cloud scroll frieze in light grey relief across the middle. Texture fills the whole image edge to edge with no border, no sky, no frame. Crisp square pixels on a chunky grid of about 128 pixels across, no anti-aliasing, no blur, no text."
+  },
+  "ft_altar_top": {
+    "src": "ft_altar_base",
+    "fit": "quad",
+    "quad": [
+      199,
+      88,
+      87,
+      616,
+      1065,
+      616,
+      953,
+      88
+    ],
+    "size": [
+      192,
+      144
+    ],
+    "colors": 40,
+    "aspect": "4:3",
+    "prompt": "HD-2D pixel art game sprite (Octopath Traveler style), crisp square pixels, clean 1px dark outline, limited palette, light from the upper left. A large square white jade altar terrace seen from directly in front and above, orthographic front-tilt view like a top-down 16-bit JRPG map, left and right edges vertical, symmetric. The top is paved with 3x3 big polished white jade slabs separated by thin gold inlay lines, a jade-green inlaid border band around the outer edge, a large round carved lotus and cloud medallion with gold inlay in the centre slab. A thin carved white marble front face with a gold trim band and a short flight of white steps set into the middle of the front edge. Nothing standing on the terrace. The terrace fills the full width of the image. Background: flat bright pure magenta #FF00FF (255,0,255) everywhere else, not maroon, not dark red. No shadow, no scenery, no text."
+  },
+  "ft_altar_front": {
+    "src": "ft_altar_base",
+    "fit": "quad",
+    "quad": [
+      87,
+      616,
+      87,
+      726,
+      1065,
+      726,
+      1065,
+      616
+    ],
+    "size": [
+      192,
+      16
+    ],
+    "colors": 24
+  },
+  "ft_altar_statue": {
+    "fit": "h",
+    "size": 112,
+    "colors": 40,
+    "aspect": "3:4",
+    "prompt": "HD-2D pixel art game sprite (Octopath Traveler style), crisp square pixels, clean 1px dark outline, limited palette, light from the upper left. A white jade statue of Baize, the auspicious white mythical beast of Chinese legend: a majestic fluffy white lion-like guardian beast with a calm wise face, a flowing pale blue-white mane, two golden curved horns, a gold collar with a round jade jewel, a bushy cloud-like tail, sitting upright and facing the viewer directly (front view, symmetric), on a round two-tier white stone lotus pedestal, a glowing golden halo ring behind its head. Seen from in front and slightly above. Single object centred, occupying about 85% of the image. Background: flat bright pure magenta #FF00FF (255,0,255) everywhere else, not maroon, not dark red. No ground plane, no cast shadow, no scenery, no text."
   }
 }

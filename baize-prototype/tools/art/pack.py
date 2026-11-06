@@ -37,7 +37,20 @@ DIE = 24
 ISO_TILE, ISO_TILE_CENTRE = (96, 120), (48, 64)
 ISO_ALTAR, ISO_ALTAR_CENTRE = (288, 352), (144, 230)
 PROPS = [f'lm_{t}' for t in ('start', 'gate', 'alchemy', 'market', 'secret', 'spring', 'beast', 'ruins', 'eye')] + [
-    f'iso_bld_{n}' for n in (1, 2, 3)] + [f'ic_{n}' for n in ('stone', 'herb', 'pill', 'cult', 'mind')]
+    f'iso_bld_{n}' for n in (1, 2, 3)] + [f'bld_{n}' for n in (1, 2, 3)] + [
+    f'ic_{n}' for n in ('stone', 'herb', 'pill', 'cult', 'mind')]
+
+# Front-tilt blocks (docs/assets.md 2b): a 48px top face over a 16px front face. Per block, how many rows the
+# top surface may hang over the front edge (grass tufts, snow lips).
+FT_BLOCKS = {'ft_land_wood': 2, 'ft_land_fire': 0, 'ft_land_water': 3, 'ft_land_earth': 1, 'ft_jade': 0}
+FT_TOP = 48
+# Each cell's top face is bevelled (lit upper-left edges, shaded lower-right) so the board reads as a grid
+# while the texture still runs on across cells.
+FT_BEVEL_LIT, FT_BEVEL_SHADE = 1.15, 0.72
+FT_FRONT_SHADE = np.array([1.12] + [0.8] * 12 + [0.68, 0.6])
+FT_BLOCK_COLOURS, FT_ALTAR_COLOURS = 32, 64
+FT_ALTAR = (192, 240)
+FT_ALTAR_STATUE_FOOT = (96, 168)
 
 
 def rgb(hex_colour: str) -> tuple[int, int, int, int]:
@@ -107,8 +120,49 @@ def iso_block(name: str, size: tuple[int, int], centre: tuple[int, int]) -> Imag
     return frame
 
 
+def out_rgba(name: str) -> np.ndarray:
+    return np.asarray(Image.open(ROOT / 'out' / f'{name}.png').convert('RGBA')).astype(float)
+
+
+def limit_palette(im: Image.Image, colours: int) -> Image.Image:
+    """Shading and compositing multiply the colour count; fold the frame back to one small palette."""
+    rgb = im.convert('RGB').quantize(colors=colours, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
+    return Image.fromarray(np.dstack([np.asarray(rgb.convert('RGB')), np.asarray(im.getchannel('A'))]), 'RGBA')
+
+
+def ft_block(name: str, overhang: int) -> Image.Image:
+    """Stack a tiling top texture over its shaded front face, with an ink bottom edge and a ragged top lip."""
+    kind = name.rsplit('_', 1)[1]
+    top, front = out_rgba(f'ft_top_{kind}'), out_rgba(f'ft_front_{kind}')
+    top[0, :, :3] *= FT_BEVEL_LIT
+    top[:, 0, :3] *= FT_BEVEL_LIT
+    top[-1, :, :3] *= FT_BEVEL_SHADE
+    top[:, -1, :3] *= FT_BEVEL_SHADE
+    front[:-1, :, :3] *= FT_FRONT_SHADE[:, None, None]
+    front[-1] = INK
+    lengths = np.random.default_rng(0).integers(0, overhang + 1, top.shape[1])
+    for x, n in enumerate(lengths):
+        front[:n, x, :3] = top[FT_TOP - 1, x, :3] * 0.85
+    block = Image.fromarray(np.clip(np.concatenate([top, front]), 0, 255).astype(np.uint8), 'RGBA')
+    return limit_palette(block, FT_BLOCK_COLOURS)
+
+
+def ft_altar() -> Image.Image:
+    """The 3x3 platform (top face, then front face) at the bottom of the frame, the Baize statue standing on it."""
+    frame = Image.new('RGBA', FT_ALTAR, (0, 0, 0, 0))
+    top = Image.open(ROOT / 'out' / 'ft_altar_top.png').convert('RGBA')
+    front = Image.open(ROOT / 'out' / 'ft_altar_front.png').convert('RGBA')
+    frame.alpha_composite(top, (0, FT_ALTAR[1] - front.height - top.height))
+    frame.alpha_composite(front, (0, FT_ALTAR[1] - front.height))
+    statue = Image.open(ROOT / 'out' / 'ft_altar_statue.png').convert('RGBA')
+    fx, fy = FT_ALTAR_STATUE_FOOT
+    frame.alpha_composite(statue, (fx - statue.width // 2, fy - statue.height))
+    return limit_palette(frame, FT_ALTAR_COLOURS)
+
+
 def frames() -> dict[str, Image.Image]:
-    made: dict[str, Image.Image] = {}
+    made: dict[str, Image.Image] = {name: ft_block(name, overhang) for name, overhang in FT_BLOCKS.items()}
+    made['ft_altar'] = ft_altar()
     for name in [f'iso_land_{r}' for r in ('wood', 'fire', 'water', 'earth')] + ['iso_jade']:
         made[name] = iso_block(name, ISO_TILE, ISO_TILE_CENTRE)
     made['iso_altar'] = iso_block('iso_altar', ISO_ALTAR, ISO_ALTAR_CENTRE)
