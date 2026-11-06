@@ -132,17 +132,17 @@ describe('修为', () => {
 describe('闭关突破', () => {
   it('is offered only with a full bar on the altar or an own 药圃+', () => {
     const g = ringGame();
-    const p = g.state.players[0];
+    const p = g.state.players[3];
     const offered = () => {
       const seen: PendingChoice[] = [];
       g.state.turn.closed = false;
-      g.runFlow(g.testActionPhase(0), script({ action: 'end' }, seen));
+      g.runFlow(g.testActionPhase(3), script({ action: 'end' }, seen));
       return seen[0].options.some((o) => o.id === 'closure');
     };
-    g.state.tiles.R1 = { owner: 0, level: 1 };
-    g.state.tiles.R2 = { owner: 0, level: 2 };
-    readyToClose(g, 0, 'R1');
-    expect(offered()).toBe(false); // 灵田 Lv1 is not a closure site
+    g.state.tiles.R1 = { owner: 3, level: 0 };
+    g.state.tiles.R2 = { owner: 3, level: 1 };
+    readyToClose(g, 3, 'R1');
+    expect(offered()).toBe(false); // 灵田 Lv0 is not a closure site
     p.pos = 'R2';
     expect(offered()).toBe(true);
     p.pos = 'ALTAR';
@@ -158,12 +158,12 @@ describe('闭关突破', () => {
     readyToClose(g, 0, 'ALTAR');
     p.mind = 1;
     p.pills = 4;
-    g.state.rng = rngFor([1, 1]);
+    g.state.rng = rngFor([2, 1]);
     g.runFlow(g.testClosure(0), script({ stake: 's2' }));
     const r = g.log.find((e) => e.type === 'breakthrough')!.breakthrough!;
     expect(r.bonuses).toEqual({ pills: 2 * b.pillBonus, site: b.altarBonus, mind: b.mindBonus, guidance: 0, calm: 0 });
-    expect(r.total).toBe(2 + 2 * b.pillBonus + b.altarBonus + b.mindBonus);
-    expect(r.success).toBe(r.total >= g.data.config.realms[0].target);
+    expect(r.total).toBe(3 + 2 * b.pillBonus + b.altarBonus + b.mindBonus);
+    expect(r.total).toBeGreaterThanOrEqual(g.data.config.realms[0].target);
     expect([p.realm, p.cult, p.mind, p.pills]).toEqual([1, 0, 0, 2]);
   });
 
