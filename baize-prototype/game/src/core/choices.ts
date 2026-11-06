@@ -5,46 +5,37 @@
 // answers with one of the option ids via `game.answer(id)`. Every decision in
 // the game, from "roll the dice" to "use 金光符?", goes through this one door,
 // which is what lets the same engine drive the UI, the AI and the headless sim.
-import type { MiniGameId, MiniGameTier, NodeId, RegionId, SpecialKind } from './types';
+import type { MiniGameId, MiniGameTier, NodeId } from './types';
 
 export type PreRollAct =
   | { t: 'roll' }
   | { t: 'cast'; card: string }
-  | { t: 'ult' }
-  | { t: 'shrink' }
   | { t: 'skill' };
 
 export type ActionAct =
-  /** 升级一级；带 special 时改为把脚下的 Lv0 灵田改建为功能建筑（§18.4，与升级共用每回合 1 次）。 */
-  | { t: 'upgrade'; node: NodeId; special?: SpecialKind }
+  | { t: 'upgrade'; node: NodeId }
   | { t: 'cast'; card: string }
-  | { t: 'ult' }
   | { t: 'skill' }
-  | { t: 'trap'; node: NodeId }
   | { t: 'end' };
 
 export type Target =
-  | { t: 'land'; node: NodeId }
-  | { t: 'demon' }
   | { t: 'player'; seat: number }
   | { t: 'node'; node: NodeId }
   | { t: 'cancel' };
 
-/** What kind of attack/threat a guard reaction (金光符) is being asked about. */
-export type ThreatKind = 'thunder' | 'fivethunder' | 'drain' | 'bind' | 'buyout' | 'eruption';
+/** What kind of attack a guard reaction (金光符) is being asked about. */
+export type ThreatKind = 'drain' | 'bind';
 
-export type NodePurpose = 'array' | 'guide' | 'shrink' | 'auspice';
+export type NodePurpose = 'array';
 
 /** Value type carried by the options of each choice kind. */
 export interface ChoiceValueMap {
   preRoll: PreRollAct;
   action: ActionAct;
-  /** 灵兽引路: pick the movement value directly. */
+  /** 御骰符 / 灵兽引路: pick the movement value directly. */
   rollValue: number;
-  /** Final movement total after 神行符 / 身轻如燕 / 御剑飞行. */
+  /** Final movement total after 神行符. */
   adjust: number;
-  /** 迷踪: +1 clockwise, -1 counter-clockwise. */
-  direction: 1 | -1;
   /** At a fork: the next node to step to. */
   fork: NodeId;
   /** At the altar with steps left: stop, or pay toll and leave through this neighbour. */
@@ -54,40 +45,23 @@ export interface ChoiceValueMap {
   buy: boolean;
   /** 避劫符 when paying rent. */
   rentReact: boolean;
-  /** 金光符 when attacked / bought out / erupted. */
+  /** 金光符 when attacked. */
   guardReact: boolean;
   altar: 'break' | 'calm' | 'leave';
-  divinePick: string;
-  heavenPick: string;
-  /** 神识: draw 2 机缘 choose 1. */
-  eventPick: string;
   /** 坊市拍卖: buy 1 修为. */
   auction: boolean;
   /** 坊市: number of spell cards to buy. */
   market: number;
   node: NodeId;
   target: Target;
-  region: RegionId | 'cancel';
-  cliff: 'pay' | 'roll' | 'calm';
-  /** §17 斗法：挑战哪位玩家（null = 不斗法）。 */
+  /** 斗法：挑战哪位玩家（null = 不斗法）。 */
   duel: number | null;
-  /** §17 斗法：押注几颗灵丹（每颗 +1 点，胜负都消耗）。 */
+  /** 斗法：押注几颗灵丹（每颗 +1 点，胜负都消耗）。 */
   duelBet: number;
-  /** §18.3 百宝阁：买哪件（null = 离开）。 */
-  shop: { card: string; price: number } | null;
-  /** §18.5 小游戏结果档位（option.id 即 tier），真人由界面小游戏产出。 */
+  /** 炼丹房结果档位（option.id 即 tier），真人由界面小游戏产出。 */
   miniGame: { game: MiniGameId; tier: MiniGameTier };
-  /** §18.5 灵骰台押注。 */
-  diceBet: DiceBet;
-  /** §18.4 挪移阵：传送到哪座（null = 留下）。 */
-  portal: NodeId | null;
 }
 
-export interface DiceBet {
-  /** 押注灵石（config.rules.diceStakes 之一） */
-  stake: number;
-  side: 'big' | 'small';
-}
 export type ChoiceKind = keyof ChoiceValueMap;
 
 export interface ChoiceOption<V> {
@@ -108,12 +82,9 @@ export interface ChoiceContext {
   card?: string;
   threat?: ThreatKind;
   attacker?: number;
-  purpose?: NodePurpose | 'thunder' | 'fivethunder' | 'drain' | 'bind' | 'buyout' | 'treasure'
-    | 'sworddash' | 'swap' | 'roadblock' | 'daze' | 'barrier' | 'blast';
-  /** 小游戏：玩法（miniGame / diceBet） */
+  purpose?: NodePurpose | 'drain' | 'bind' | 'sworddash' | 'swap' | 'roadblock' | 'daze';
+  /** 小游戏：玩法 */
   game?: MiniGameId;
-  /** 灵骰台：已押的注（miniGame 询问时可见） */
-  diceBet?: DiceBet;
   dice?: [number, number];
   base?: number;
   cost?: number;

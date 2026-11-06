@@ -35,7 +35,7 @@ export class ResultScene extends Phaser.Scene {
       addImg(this, 350, y + 12, `por_${p.hero}`).setOrigin(0, 0);
       txt(this, 430, y + 14, `${p.name}  ${r.label}`, { size: 18, bold: true, color: PLAYER_HEX[seat] });
       txt(this, 430, y + 44, `修为 ${r.cult} · ${r.realm}    灵石 ${p.stones}    灵丹 ${p.pills}    总资产 ${r.assets}`, { size: 14 });
-      txt(this, 430, y + 66, `突破 ${p.stats.breakthroughs} 次 · 神通 ${p.divines.length} · 收租 ${p.stats.rentCollected} · 任务 ${p.stats.tasksDone} · 破产 ${p.stats.bankruptcies}`, { size: 12, color: HEX.dim });
+      txt(this, 430, y + 66, `突破 ${p.stats.breakthroughs} 次 · 收租 ${p.stats.rentCollected} · 破产 ${p.stats.bankruptcies}`, { size: 12, color: HEX.dim });
     });
     new Button(this, 300, 600, { w: 200, h: 56, label: '再来一局', size: 22, fill: 0x8a5a1e }).onClick(() => fadeToScene(this, 'HeroSelect'));
     new Button(this, 530, 600, { w: 220, h: 56, label: '下载对局记录', size: 20, hint: '可用 npm run replay 复盘' }).onClick(() => downloadRecord(d.record));

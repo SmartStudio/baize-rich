@@ -5,7 +5,6 @@
 // coloured placeholder texture under the frame's own name, so game code can
 // always call `addImg(scene, x, y, 'tile_gate')` without caring which exists.
 import Phaser from 'phaser';
-import { defaultData } from '../core/data';
 import { ITEM_PICTURES, paintPixels, PIXEL_FRAMES, pixelSize } from './sprites';
 import { FONT } from './theme';
 
@@ -230,8 +229,6 @@ export function frameSpecs(): FrameSpec[] {
   }
   add('card_divine', 80, 108, both(box('#F4E9D0'), (ctx, w, h) => { ctx.strokeStyle = '#F2B93B'; ctx.lineWidth = 3; ctx.strokeRect(6, 6, w - 12, h - 12); }));
   add('card_heaven', 80, 108, both(box('#E6E4F0'), (ctx, w, h) => { ctx.strokeStyle = '#5FB7E0'; ctx.lineWidth = 3; ctx.strokeRect(6, 6, w - 12, h - 12); }));
-  for (const d of defaultData.blessings.divine) add(`div_${d.id}`, 24, 24, both(box('#F2B93B'), glyph(d.name[0], '#2A2238', 14)));
-  for (const d of defaultData.blessings.heaven) add(`hv_${d.id}`, 24, 24, both(box('#5FB7E0'), glyph(d.name[0], '#0F0E1A', 14)));
   return out;
 }
 

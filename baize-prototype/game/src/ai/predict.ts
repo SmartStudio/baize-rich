@@ -1,5 +1,5 @@
 // Lightweight movement predictor for AI look-ahead. Mirrors engine.walk() rules
-// (forks, altar stop/toll, mire, 镇山 roadblock, 路障符 barriers, slide, start salary) without mutating
+// (forks, altar stop/toll, 镇山 roadblock, start salary) without mutating
 // state or asking anybody; fork / altar decisions come from a policy callback.
 import { ALTAR, type Board } from '../core/board';
 import type { GameState, NodeId } from '../core/types';
@@ -29,10 +29,8 @@ export function predictWalk(
   let cameFrom = !from && board.isTwoWay(node) ? p.cameFrom : null;
   let forced = node === ALTAR ? policy.exit ?? board.node(ALTAR).next[0] : null;
   let remaining = steps;
-  let mireUsed = state.turn.seat === seat ? state.turn.mireUsed : false;
   let passStart = 0;
   let stoppedAtAltar = false;
-  let blocked = false;
   const rb = state.roadblock;
   const path = [node];
   let guard = 0;
@@ -47,14 +45,8 @@ export function predictWalk(
     cameFrom = node;
     node = next;
     path.push(next);
-    if (rb && rb.node === next && rb.seat !== seat) { blocked = true; break; }
-    if (state.barriers.some((x) => x.node === next && x.seat !== seat)) { blocked = true; break; }
-    const n = board.node(next);
-    if (n.type === 'start' && remaining > 0) passStart++;
-    if (n.type === 'land' && n.region === 'earth' && !mireUsed) {
-      mireUsed = true;
-      if (remaining > 0) remaining--;
-    }
+    if (rb && rb.node === next && rb.seat !== seat) break;
+    if (board.node(next).type === 'start' && remaining > 0) passStart++;
     if (next === ALTAR) {
       if (remaining > 0 && policy.canPayToll) {
         const ch = policy.altar(remaining);
@@ -62,11 +54,6 @@ export function predictWalk(
         else forced = ch;
       } else { remaining = 0; stoppedAtAltar = true; }
     }
-  }
-  const fin = board.node(node);
-  if (!blocked && fin.type === 'land' && fin.region === 'water') {
-    node = board.exits(node, cameFrom, dir)[0];
-    path.push(node);
   }
   return { node, passStart, path, stoppedAtAltar };
 }

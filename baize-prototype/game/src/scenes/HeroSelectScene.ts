@@ -37,7 +37,6 @@ function heroAbilities(hero: HeroData, cooldownTurns: number): AbilityCopy[] {
   return [
     { title: `技能【${hero.skill.name}】（冷却 ${cooldownTurns} 回合）`, body: hero.skill.desc },
     { title: `被动【${hero.passive.name}】`, body: hero.passive.desc },
-    { title: `大招【${hero.ult.name}】`, body: hero.ult.desc },
   ];
 }
 

@@ -7,21 +7,12 @@
     "wealth": { "name": "财运", "color": "gold" }
   },
   "cards": [
-    { "id": "thunder",   "name": "五雷符", "cat": "attack", "cost": 2, "timing": "action",   "desc": "指定他人一块洞府降 1 级，或对天魔造成 2 伤害" },
     { "id": "drain",     "name": "夺灵符", "cat": "attack", "cost": 1, "timing": "action",   "desc": "从一名对手处夺取 1 灵丹" },
     { "id": "bind",      "name": "定身符", "cat": "attack", "cost": 2, "timing": "action",   "desc": "指定对手下回合不能移动" },
-    { "id": "goldlight", "name": "金光符", "cat": "guard",  "cost": 1, "timing": "reaction", "price": 150, "desc": "抵挡 1 次攻伐符或收购" },
-    { "id": "evade",     "name": "避劫符", "cat": "guard",  "cost": 2, "timing": "rent",     "price": 180, "desc": "免付本次租金" },
-    { "id": "calm",      "name": "清心符", "cat": "guard",  "cost": 1, "timing": "start",    "desc": "立即离开思过崖" },
-    { "id": "swiftstep", "name": "神行符", "cat": "move",   "cost": 1, "timing": "preroll",  "price": 120, "desc": "本次点数 +1 至 +3，自选" },
+    { "id": "goldlight", "name": "金光符", "cat": "guard",  "cost": 1, "timing": "reaction", "desc": "抵挡 1 次攻伐符" },
+    { "id": "evade",     "name": "避劫符", "cat": "guard",  "cost": 2, "timing": "rent",     "desc": "免付本次租金" },
+    { "id": "swiftstep", "name": "神行符", "cat": "move",   "cost": 1, "timing": "preroll",  "desc": "本次点数 +1 至 +3，自选" },
     { "id": "reverse",   "name": "回首符", "cat": "move",   "cost": 1, "timing": "preroll",  "desc": "本回合反向移动，沿来路倒走" },
-    { "id": "burrow",    "name": "遁地符", "cat": "move",   "cost": 1, "timing": "preroll",  "desc": "不掷骰，直接移动到前方最近的山门" },
-    { "id": "treasure",  "name": "聚宝符", "cat": "wealth", "cost": 2, "timing": "preroll",  "desc": "指定一个灵域，本轮你在该灵域的租金 ×2" },
-    { "id": "goldtouch", "name": "点金符", "cat": "wealth", "cost": 1, "timing": "action",   "desc": "+200 灵石" },
-    { "id": "discount",  "name": "折扣符", "cat": "wealth", "cost": 1, "timing": "action",   "price": 120, "desc": "本回合购地 / 升级 7 折" },
-    { "id": "dice",      "name": "御骰符", "cat": "move",   "cost": 0, "timing": "preroll",  "price": 150, "shopOnly": true, "desc": "本次不掷骰，自选 2–12 点移动" },
-    { "id": "barrier",   "name": "路障符", "cat": "attack", "cost": 0, "timing": "action",   "price": 120, "shopOnly": true, "desc": "在前方 1–6 格放下路障，下一个经过的他人在此停下" },
-    { "id": "blast",     "name": "爆炎阵", "cat": "attack", "cost": 0, "timing": "action",   "price": 200, "shopOnly": true, "desc": "暗埋在任意无人的格子，下一个停上去的他人被送去医馆休养 1 回合" },
-    { "id": "turnback",  "name": "倒行符", "cat": "move",   "cost": 0, "timing": "preroll",  "price": 100, "shopOnly": true, "desc": "本回合沿反方向倒走（不耗灵丹的回首符）" }
+    { "id": "dice",      "name": "御骰符", "cat": "move",   "cost": 0, "timing": "preroll",  "desc": "本次不掷骰，自选 2–12 点移动" }
   ]
 }

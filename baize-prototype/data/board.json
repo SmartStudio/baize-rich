@@ -8,29 +8,21 @@
     "wood": {
       "name": "青木灵林",
       "element": "木",
-      "rule": "maze",
-      "ruleName": "迷踪",
       "color": "#4FA35A"
     },
     "fire": {
       "name": "赤焰火域",
       "element": "火",
-      "rule": "eruption",
-      "ruleName": "地火喷发",
       "color": "#E0663A"
     },
     "water": {
       "name": "玄冰寒渊",
       "element": "水",
-      "rule": "slide",
-      "ruleName": "寒冰滑行",
       "color": "#5FB7E0"
     },
     "earth": {
       "name": "厚土瘴泽",
       "element": "土",
-      "rule": "mire",
-      "ruleName": "瘴泽泥沼",
       "color": "#8E5BC2"
     }
   },
@@ -135,7 +127,7 @@
     {"id": "F14", "type": "gate", "pos": [2,5], "region": "fire", "outer": true, "next": ["F15", "F18"]},
     {"id": "F15", "type": "land", "pos": [2,4], "region": "fire", "street": "huoyun", "name": "离火殿", "price": 320, "outer": true, "next": ["F16"]},
     {"id": "F16", "type": "land", "pos": [2,3], "region": "fire", "street": "huoyun", "name": "金乌楼", "price": 340, "outer": true, "next": ["F17", "S11"]},
-    {"id": "F17", "type": "minigame", "game": "dice", "name": "灵骰台", "pos": [1,3], "region": "fire", "outer": true, "next": ["F7"]},
+    {"id": "F17", "type": "trial", "pos": [1,3], "region": "fire", "outer": true, "next": ["F7"]},
     {"id": "F18", "type": "spring", "pos": [3,5], "road": "west", "next": ["ALTAR", "F14"]},
     {"id": "S0", "type": "array", "pos": [0,0], "region": "water", "outer": true, "next": ["S1"]},
     {"id": "S1", "type": "furnace", "pos": [1,0], "region": "water", "outer": true, "next": ["S2"]},
@@ -173,7 +165,7 @@
     {"id": "E14", "type": "hospital", "pos": [8,5], "region": "earth", "outer": true, "next": ["E15", "E18"]},
     {"id": "E15", "type": "land", "pos": [8,6], "region": "earth", "street": "shilin", "name": "紫芝洞", "price": 230, "outer": true, "next": ["E16"]},
     {"id": "E16", "type": "land", "pos": [8,7], "region": "earth", "street": "shilin", "name": "地脉台", "price": 240, "outer": true, "next": ["E17", "W11"]},
-    {"id": "E17", "type": "minigame", "game": "dice", "name": "灵骰台", "pos": [9,7], "region": "earth", "outer": true, "next": ["E7"]},
+    {"id": "E17", "type": "trial", "pos": [9,7], "region": "earth", "outer": true, "next": ["E7"]},
     {"id": "E18", "type": "spring", "pos": [7,5], "road": "east", "next": ["ALTAR", "E14"]},
     {"id": "ALTAR", "type": "altar", "pos": [5,5], "rect": [4,4,6,6], "next": ["W18", "F18", "S18", "E18"]}
   ],
@@ -196,7 +188,7 @@
     },
     "spring": {
       "name": "灵泉",
-      "desc": "+1 灵丹，解除 1 个负面状态"
+      "desc": "+1 灵丹"
     },
     "market": {
       "name": "坊市",
@@ -208,7 +200,7 @@
     },
     "cliff": {
       "name": "思过崖",
-      "desc": "面壁 1–3 回合；付 100 灵石或掷双数离开"
+      "desc": "暂无效果"
     },
     "array": {
       "name": "传送阵",
@@ -216,50 +208,31 @@
     },
     "shrine": {
       "name": "白泽祠",
-      "desc": "+1 灵丹，获祠印：下次突破费用 −1"
+      "desc": "+1 灵丹"
     },
     "altar": {
       "name": "白泽灵台",
-      "desc": "突破换神通，或静心 +1 灵丹并抽机缘"
+      "desc": "突破，或静心 +1 灵丹并抽机缘"
     },
     "shop": {
       "name": "百宝阁",
-      "desc": "用灵石买 1 件道具或符箓（手牌上限 5）"
+      "desc": "暂无效果"
     },
     "minigame": {
       "name": "小游戏",
-      "desc": "炼丹房比火候，灵骰台押大小"
+      "desc": "炼丹房比火候"
     },
     "hospital": {
       "name": "医馆",
-      "desc": "被爆炎阵炸伤者在此休养 1 回合；停留只是探望"
+      "desc": "暂无效果"
     }
   },
   "games": {
     "alchemy": {
       "name": "炼丹房",
       "desc": "指针来回摆动，停在绿区：完美 +3 灵丹，命中 +1，失手无所得"
-    },
-    "dice": {
-      "name": "灵骰台",
-      "desc": "押 0 / 100 / 200 灵石猜大小（8 点及以上为大，6 点及以下为小，7 点庄家通吃），猜中押注翻倍并 +1 灵丹"
     }
   },
-  "specials": {
-    "garden": {
-      "name": "药园",
-      "desc": "每轮开始，拥有者 +1 灵丹"
-    },
-    "bazaar": {
-      "name": "集市",
-      "desc": "他人停留时改收 100 灵石过路费，并须按价买下你手里最早得到的 1 张符箓"
-    },
-    "portal": {
-      "name": "挪移阵",
-      "desc": "停在自己的挪移阵上，可传送到你的另一座挪移阵"
-    }
-  },
-  "spiritSpawns": ["W8", "W12", "F8", "F12", "S8", "S12", "E8", "E12"],
   "buildings": [
     {
       "level": 0,
