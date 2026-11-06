@@ -10,7 +10,7 @@ import { defaultData } from '../core/data';
 import { randomPersonality, type Difficulty } from '../ai/ai';
 import { runHeadless } from './headless';
 
-/** GDD §12: the round-8 realm leader should win ≤ 65%. */
+/** GDD §12: the round-8 realm leader should win ≤ 70%. */
 export const LEADER_CHECK_ROUND = 8;
 
 /** Events that mean the active player touched another player this turn. */

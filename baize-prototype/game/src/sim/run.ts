@@ -46,9 +46,9 @@ if (json) {
   console.log(`  化神结束 ${pct(r.ascendRate)}  (目标 ≥ 60%)`);
   console.log(`  修士胜率 ${HERO_IDS.map((h) => `${heroName[h]} ${pct(r.heroWinRate[h])}`).join(' / ')}  (目标 23–27%)`);
   console.log(`  座位胜率 ${r.seatWinRate.map(pct).join(' / ')}，差 ${pct(seatSpread)}  (目标 ≤ 3%)`);
-  console.log(`  每人突破 ${pp.breakthroughs.toFixed(2)} 次，走火入魔 ${pp.breakthroughFails.toFixed(2)} 次  (目标 2.5–3.5 / 约 1)`);
+  console.log(`  每人突破 ${pp.breakthroughs.toFixed(2)} 次，走火入魔 ${pp.breakthroughFails.toFixed(2)} 次  (目标 3.5–4.5 / 约 1.5)`);
   console.log(`  每局斗法 ${ix.duels.toFixed(2)}  (目标 ≥ 6)；被夺丹药回合 ${pct(ix.pillStolenTurnRate)}  (目标 ≥ 5%)`);
-  console.log(`  第 ${LEADER_CHECK_ROUND} 轮领先者获胜 ${pct(r.leaderWins)}  (目标 ≤ 65%，n=${r.gamesReachingCheck})`);
+  console.log(`  第 ${LEADER_CHECK_ROUND} 轮领先者获胜 ${pct(r.leaderWins)}  (目标 ≤ 70%，n=${r.gamesReachingCheck})`);
   console.log('—'.repeat(60));
   console.log('诊断（每人平均）');
   console.log(`  最终境界 ${pp.finalRealm.toFixed(2)} · 炼丹 ${pp.pillsMade.toFixed(2)} · 服丹 ${pp.pillsEaten.toFixed(2)} · 被夺 ${pp.pillsLost.toFixed(2)} · 溢出修为 ${pp.cultWasted.toFixed(2)}`);
