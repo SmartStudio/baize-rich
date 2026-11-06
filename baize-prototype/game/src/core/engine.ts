@@ -1084,12 +1084,13 @@ export class Game {
 
   private failBreakthrough(seat: number, r: BreakthroughResult): void {
     const p = this.state.players[seat];
-    const keep = Math.floor(p.cult / 2);
+    const keep = hasTrait(this.data, p, 'steadyBar') ? p.cult : Math.floor(p.cult / 2);
     r.cultLost = p.cult - keep;
     p.cult = keep;
     p.mind++;
     p.stats.breakthroughFails++;
-    this.emit('breakthrough', `${this.pn(seat)} 闭关：${this.breakdown(r)}，走火入魔！修为 −${r.cultLost}，心境 +1`, {
+    const loss = r.cultLost > 0 ? `修为 −${r.cultLost}` : '修为未损';
+    this.emit('breakthrough', `${this.pn(seat)} 闭关：${this.breakdown(r)}，走火入魔！${loss}，心境 +1`, {
       player: seat, dice: r.dice, amount: p.realm, breakthrough: r,
     });
   }

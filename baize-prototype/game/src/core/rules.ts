@@ -109,7 +109,7 @@ export function closureSite(state: GameState, data: GameData, seat: number, node
   if (node === ALTAR) return data.config.breakthrough.altarBonus;
   const t = state.tiles[node];
   if (!t || t.owner !== seat) return null;
-  return landLevel(data, t.level).closureBonus;
+  return landLevel(data, t.level).closureBonus ?? (hasTrait(data, state.players[seat], 'homeClosure') ? 0 : null);
 }
 
 export function canClose(state: GameState, data: GameData, seat: number): boolean {

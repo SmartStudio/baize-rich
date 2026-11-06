@@ -6,7 +6,7 @@ import type { ActionAct, Controller, PendingChoice, PendingChoiceOf, PreRollAct 
 import type { Game } from '../core/engine';
 import { Rng } from '../core/rng';
 import {
-  closureSite, duelBonus, duelWinChance, landLevel, nominalRent, rentFor, upgradeCost, winRealm,
+  closureSite, duelBonus, duelWinChance, hasTrait, landLevel, nominalRent, rentFor, upgradeCost, winRealm,
 } from '../core/rules';
 import type { MiniGameTier, NodeId } from '../core/types';
 import {
@@ -52,6 +52,9 @@ const ALCHEMY_ODDS: Record<Difficulty, Record<MiniGameTier, number>> = {
   normal: { perfect: 0.3, ok: 0.5, fail: 0.2 },
   hard: { perfect: 0.45, ok: 0.45, fail: 0.1 },
 };
+
+/** A failure that keeps the bar only costs the stake, so 闭关 here is worth trying at lower odds. */
+const STEADY_BAR_EASE = 0.15;
 
 /** Minimum duel EV (stones) worth a challenge, by difficulty. */
 const DUEL_BAR: Record<Difficulty, number> = { easy: 150, normal: 20, hard: 0 };
@@ -351,7 +354,8 @@ export class AIController implements Controller {
     const site = closureSite(this.st, this.data, this.seat, this.me.pos)!;
     const chance = closureChance(this.view, site, stakeFor(this.view, this.stakeTarget(), site));
     if (this.difficulty === 'easy') return chance >= 0.4;
-    return chance >= this.persona.closeAt || this.board.distance(this.me.pos, ALTAR) > 10;
+    const failCheap = hasTrait(this.data, this.me, 'steadyBar') ? STEADY_BAR_EASE : 0;
+    return chance >= this.persona.closeAt - failCheap || this.board.distance(this.me.pos, ALTAR) > 10;
   }
 
   // ---------------------------------------------------------- pre-roll ---

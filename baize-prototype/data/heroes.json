@@ -2,7 +2,7 @@
   {
     "id": "body", "name": "石铮", "school": "体修", "origin": "铁匠之子 · 土灵根",
     "quote": "「打不过就挨着，挨得住就赢了。」", "color": "gold",
-    "passive": { "id": "ironskin", "name": "铜皮铁骨", "desc": "斗法守方 +2", "traits": ["guard"] },
+    "passive": { "id": "ironskin", "name": "铜皮铁骨", "desc": "斗法守方 +2；自家任意灵田都能闭关（灵田按 +0 算）；走火入魔不掉修为", "traits": ["guard", "homeClosure", "steadyBar"] },
     "skill": { "id": "roadblock", "name": "镇山", "timing": "action", "cooldown": 2, "desc": "在前方 1–6 格落下山岳：下一个走进这格的他人被拦停于此并结算；你下回合开始时消散" }
   },
   {

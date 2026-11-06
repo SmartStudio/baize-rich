@@ -16,6 +16,14 @@ function readyToClose(g: Game, seat: number, node: string, realm = 0): void {
   p.pos = node;
 }
 
+/** Whether the action menu offers 闭关 to `seat` where it stands now. */
+function closureOffered(g: Game, seat: number): boolean {
+  const seen: PendingChoice[] = [];
+  g.state.turn.closed = false;
+  g.runFlow(g.testActionPhase(seat), script({ action: 'end' }, seen));
+  return seen[0].options.some((o) => o.id === 'closure');
+}
+
 describe('灵田', () => {
   it('rent is price × rentRate × the level multiplier', () => {
     const g = ringGame();
@@ -118,12 +126,7 @@ describe('闭关突破', () => {
   it('is offered only with a full bar on the altar or an own 药圃+', () => {
     const g = ringGame();
     const p = g.state.players[3];
-    const offered = () => {
-      const seen: PendingChoice[] = [];
-      g.state.turn.closed = false;
-      g.runFlow(g.testActionPhase(3), script({ action: 'end' }, seen));
-      return seen[0].options.some((o) => o.id === 'closure');
-    };
+    const offered = () => closureOffered(g, 3);
     g.state.tiles.R1 = { owner: 3, level: 0 };
     g.state.tiles.R2 = { owner: 3, level: 1 };
     readyToClose(g, 3, 'R1');
@@ -154,12 +157,12 @@ describe('闭关突破', () => {
 
   it('走火入魔 halves the bar (rounded down) and adds 1 心境', () => {
     const g = ringGame();
-    const p = g.state.players[0];
-    g.state.tiles.R2 = { owner: 0, level: 2 };
-    readyToClose(g, 0, 'R2');
+    const p = g.state.players[3];
+    g.state.tiles.R2 = { owner: 3, level: 2 };
+    readyToClose(g, 3, 'R2');
     p.pills = 1;
     g.state.rng = rngFor([1, 2]);
-    g.runFlow(g.testClosure(0), script({ stake: 's1' }));
+    g.runFlow(g.testClosure(3), script({ stake: 's1' }));
     expect(p.realm).toBe(0);
     expect(p.cult).toBe(Math.floor(g.data.config.realms[0].bar / 2));
     expect(p.mind).toBe(1);
@@ -207,6 +210,33 @@ describe('闭关突破', () => {
     expect(g.state.over).toBe(true);
     expect(g.state.winner).toBe(2);
     expect(g.state.endReason).toBe('ascend');
+  });
+});
+
+describe('石铮 · 铜皮铁骨', () => {
+  it('may close on his own Lv0 灵田 at site +0, where others may not', () => {
+    const g = ringGame();
+    g.state.tiles.R1 = { owner: 0, level: 0 };
+    g.state.tiles.R2 = { owner: 3, level: 0 };
+    readyToClose(g, 0, 'R1');
+    readyToClose(g, 3, 'R2');
+    expect(closureOffered(g, 3)).toBe(false);
+    expect(closureOffered(g, 0)).toBe(true);
+    g.state.rng = rngFor([6, 6]);
+    g.runFlow(g.testClosure(0), script({}));
+    expect(g.log.find((e) => e.type === 'breakthrough')!.breakthrough!.bonuses.site).toBe(0);
+    expect(g.state.players[0].realm).toBe(1);
+  });
+
+  it('a failed breakthrough keeps his full bar; the stake and 心境 work as for everyone', () => {
+    const g = ringGame();
+    const p = g.state.players[0];
+    g.state.tiles.R2 = { owner: 0, level: 2 };
+    readyToClose(g, 0, 'R2');
+    p.pills = 1;
+    g.state.rng = rngFor([1, 2]);
+    g.runFlow(g.testClosure(0), script({ stake: 's1' }));
+    expect([p.realm, p.cult, p.mind, p.pills]).toEqual([0, g.data.config.realms[0].bar, 1, 0]);
   });
 });
 

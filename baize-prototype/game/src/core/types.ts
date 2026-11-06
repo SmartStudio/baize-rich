@@ -178,6 +178,10 @@ export interface HeroData {
 export type HeroTrait =
   /** 斗法守方 +duel.bodyDefense */
   | 'guard'
+  /** 自家任意等级的灵田都能闭关；不能闭关的等级按地点加成 0 算 */
+  | 'homeClosure'
+  /** 走火入魔不掉修为（丹药照扣、心境照加） */
+  | 'steadyBar'
   /** 斗法攻方 +duel.swordAttack */
   | 'swordQi'
   /** 每次停在丹房炼丹 +alchemy.alchBonus */
