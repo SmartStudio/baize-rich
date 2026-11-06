@@ -7,6 +7,7 @@ import { defaultData } from '../src/core/data';
 import { Game } from '../src/core/engine';
 import { toRecord, type GameRecord } from '../src/core/record';
 import type { HeroId } from '../src/core/types';
+import { pickPlan } from '../src/ui/pickPlan';
 import { newSession, quickSeats } from '../src/ui/session';
 
 const MAX_SEED = 400;
@@ -37,6 +38,12 @@ const stakeDecides = (g: Game, c: PendingChoice): boolean => {
   return c.options.length >= 3 && !g.state.players[0].hand.includes('calm') && breakthroughAfter(g, most) && !breakthroughAfter(g, 's0');
 };
 
+/** A board pick with at least `n` lit cells, every landing shown. */
+const lights = (n: number) => (g: Game, c: PendingChoice): boolean => {
+  const plan = pickPlan(g, c)!;
+  return plan.cells.length >= n && !plan.asksLater;
+};
+
 const stake = findAsk('body', 'stake', stakeDecides);
 const stakeOptions = Game.replay(stake.setup, stake.history).pending!.options;
 console.log(JSON.stringify({
@@ -45,4 +52,6 @@ console.log(JSON.stringify({
   market: { record: findAsk('magic', 'market') },
   fortune: { record: findAsk('sword', 'fortunePick') },
   manifest: { record: findAsk('body', 'manifestPick', (_g, c) => c.options.length >= 3) },
+  fork: { record: findAsk('sword', 'fork', lights(3)) },
+  adjust: { record: findAsk('body', 'adjust', (g, c) => c.options.length >= 3 && lights(3)(g, c)) },
 }));

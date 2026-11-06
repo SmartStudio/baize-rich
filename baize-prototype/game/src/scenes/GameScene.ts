@@ -9,9 +9,9 @@ import { Game } from '../core/engine';
 import type { GameEvent, GameEventType } from '../core/events';
 import { toRecord, type GameRecord } from '../core/record';
 import { isGlowing, realmName, totalAssets } from '../core/rules';
-import { ALTAR } from '../core/board';
 import type { GameState, NodeId } from '../core/types';
 import { BoardCamera } from '../ui/BoardCamera';
+import { BoardPick } from '../ui/BoardPick';
 import { BoardView } from '../ui/BoardView';
 import { Breakthrough } from '../ui/Breakthrough';
 import { breakthroughView } from '../ui/breakthroughView';
@@ -26,6 +26,7 @@ import { LogPanel } from '../ui/LogPanel';
 import { playMiniGame } from '../ui/MiniGame';
 import { Minimap } from '../ui/Minimap';
 import { aiTurnNarration, heroNameForSeat, narrateEvent, resumeNarration, roundNarration, turnNarration } from '../ui/narration';
+import { pickPlan, ROUTE_KINDS, type PickCell, type PickPlan } from '../ui/pickPlan';
 import { PlayerCards } from '../ui/PlayerCards';
 import { downloadRecord, loadCoach, saveAutosave, saveCoach } from '../ui/saves';
 import type { SessionConfig } from '../ui/session';
@@ -141,6 +142,11 @@ export class GameScene extends Phaser.Scene {
   /** Screen rect of a coach bubble that should not also click the board underneath. */
   private coachBlock: Rect | null = null;
   private shownPlan: DockPlan = IDLE_PLAN;
+  private pick!: BoardPick;
+  /** A spatial ask waiting on a board click or a number key. */
+  private picking: { plan: PickPlan; resolve: (id: string) => void } | null = null;
+  /** Fork / altar answers still owed by the landing the human picked; they answer themselves. */
+  private route: string[] = [];
 
   constructor() {
     super('Game');
@@ -153,6 +159,8 @@ export class GameScene extends Phaser.Scene {
     this.queue = [];
     this.mainChoice = null;
     this.mainResolve = null;
+    this.picking = null;
+    this.route = [];
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => { this.alive = false; this.game.scene.stop('Hud'); });
     this.cameras.main.setBackgroundColor(COLORS.bg);
 
@@ -171,6 +179,7 @@ export class GameScene extends Phaser.Scene {
     this.hud = hud;
     this.playedMini = false;
     this.boardView = new BoardView(this, this.engine.board, session.setup.players.map((p) => p.hero));
+    this.pick = new BoardPick(this, this.boardView.world);
     this.cam = new BoardCamera(this, this.boardView.world, (seat) => this.boardView.tokenFocus(seat), () => this.speed);
     this.tip = new Tooltip(hud);
     this.top = new TopBar(hud, this.engine, this.tip);
@@ -475,6 +484,8 @@ export class GameScene extends Phaser.Scene {
   // -------------------------------------------------------------- humans
 
   private askHuman(c: PendingChoice): Promise<string> {
+    const routed = this.followRoute(c);
+    if (routed) return Promise.resolve(routed);
     if (c.kind === 'preRoll' || c.kind === 'action') {
       this.mainChoice = c;
       this.setMainButtons(c);
@@ -483,7 +494,51 @@ export class GameScene extends Phaser.Scene {
     }
     if (c.kind === 'miniGame') return this.playHumanMini(c);
     this.noteCoach(this.momentFromChoice(c));
-    return this.modalChoice(c);
+    const plan = pickPlan(this.engine, c);
+    return plan ? this.boardChoice(c, plan) : this.modalChoice(c);
+  }
+
+  /** The next answer the picked landing already settled, if this ask is the one it was for. */
+  private followRoute(c: PendingChoice): string | null {
+    const next = this.route.shift();
+    if (next && ROUTE_KINDS.includes(c.kind) && c.options.some((o) => o.id === next)) return next;
+    this.route = [];
+    return null;
+  }
+
+  /** A spatial ask answered on the board: the landing cells lit and numbered, the dock saying what they mean. */
+  private boardChoice(c: PendingChoice, plan: PickPlan): Promise<string> {
+    if (plan.cells.length === 1 && !plan.asksLater) return Promise.resolve(this.takeRoute(plan.cells[0]));
+    const multiHuman = this.ais.filter((a) => a === null).length > 1;
+    this.side.setPick(multiHuman ? `${this.engine.state.players[c.player].name} · ${plan.hint}` : plan.hint);
+    this.setNodeOptions(plan.cells);
+    this.boardView.setClickable(plan.cells.map((cell) => cell.node));
+    this.pick.show(plan.cells);
+    this.frameTargets(c.player);
+    return new Promise((resolve) => { this.picking = { plan, resolve }; });
+  }
+
+  private answerPick(cell: PickCell): void {
+    const p = this.picking;
+    if (!p) return;
+    this.picking = null;
+    this.pick.clear();
+    this.setMainButtons(null);
+    this.cam.release();
+    p.resolve(this.takeRoute(cell));
+  }
+
+  private takeRoute(cell: PickCell): string {
+    this.route = [...cell.route];
+    return cell.id;
+  }
+
+  private pickKey(k: string, ev: KeyboardEvent): void {
+    const cells = this.picking!.plan.cells;
+    const cell = k === ' ' || k === 'Enter' ? cells.find((x) => x.primary) : cells.find((x) => x.key === k);
+    if (!cell) return;
+    ev.preventDefault();
+    this.answerPick(cell);
   }
 
   /** §18.5 The human plays the alchemy overlay; its tier is the answer. */
@@ -578,9 +633,6 @@ export class GameScene extends Phaser.Scene {
     // Generic asks keep the first option per tile: a click there must answer, there is no narrower menu.
     this.setNodeOptions(c.options);
     for (const [n, ids] of this.nodeOptions) this.nodeOptions.set(n, ids.slice(0, 1));
-    if (c.kind === 'exitRoad' || c.kind === 'altarPass') {
-      for (const o of c.options) if (o.id !== 'stop') this.nodeOptions.set(g.board.corridorEnd(ALTAR, o.id), [o.id]);
-    }
     this.boardView.setClickable([...this.nodeOptions.keys()]);
     this.frameTargets(c.player);
     const multiHuman = this.ais.filter((a) => a === null).length > 1;
@@ -604,7 +656,8 @@ export class GameScene extends Phaser.Scene {
       this.tip.toggle(`tile:${n}`, this.toScreen(this.boardView.nodeRect(n)), tileTip(this.engine, this.shownState, n));
       return;
     }
-    if (ids.length > 1 && this.modal.isOpen) this.modal.close(`${NARROW}${n}`);
+    if (this.picking) this.answerPick(this.picking.plan.cells.find((cell) => cell.node === n)!);
+    else if (ids.length > 1 && this.modal.isOpen) this.modal.close(`${NARROW}${n}`);
     else if (this.modal.isOpen) this.modal.close(ids[0]);
     else if (this.mainChoice) this.mainAnswer(ids[0]);
   }
@@ -663,6 +716,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     if (k === 's' || k === 'S') { this.saveRecord(); return; }
+    if (this.picking) { this.pickKey(k, ev); return; }
     if (!this.mainChoice) return;
     if (k === ' ') { ev.preventDefault(); this.mainAnswer('roll'); }
     else if (k === 'Enter') this.mainAnswer('end');

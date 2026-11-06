@@ -81,7 +81,7 @@ const PLANNERS: { [K in PickKind]: Planner<K> } = {
     defaultId: c.defaultId,
   }),
   adjust: (g, c) => ({
-    lead: `掷出 ${c.ctx.base}，点落点决定走几步。`,
+    lead: `掷出 ${c.ctx.base}，选最终步数。`,
     candidates: c.options.flatMap((o) => walkFrom(g, c.player, o.value.steps).map((l) => ({
       id: o.id,
       landing: l,
@@ -92,7 +92,7 @@ const PLANNERS: { [K in PickKind]: Planner<K> } = {
     defaultId: c.defaultId,
   }),
   rollValue: (g, c) => ({
-    lead: '御骰符：点落点决定点数。',
+    lead: '御骰符：选本次点数。',
     candidates: c.options.flatMap((o) => walkFrom(g, c.player, o.value).map((l) => ({
       id: o.id, landing: l, label: `${o.value} 点`, sub: costLine(undefined, l.toll), rank: 0, key: valueKey(o.value),
     }))),

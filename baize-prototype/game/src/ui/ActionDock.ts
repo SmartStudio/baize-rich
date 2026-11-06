@@ -40,6 +40,8 @@ export class ActionDock {
   private rollPulse: Phaser.Tweens.Tween | null = null;
   private lastTurn: [GameState, boolean] | null = null;
   private plan: DockPlan = IDLE_PLAN;
+  /** A board pick's line. While set the dock only explains the lit cells: no roll button. */
+  private pickHint: string | null = null;
   private offerButtons: OfferButton[] = [];
   private moreButton: Button | null = null;
   private offerHandler: ((id: string) => void) | null = null;
@@ -103,6 +105,15 @@ export class ActionDock {
 
   setPlan(plan: DockPlan): void {
     this.plan = plan;
+    this.pickHint = null;
+    this.layout();
+    if (this.lastTurn) this.applyTurn(this.lastTurn[0], this.lastTurn[1]);
+  }
+
+  /** Answer on the board: the plan goes idle and the dock shows `hint` instead. */
+  setPick(hint: string): void {
+    this.setPlan(IDLE_PLAN);
+    this.pickHint = hint;
     this.layout();
     if (this.lastTurn) this.applyTurn(this.lastTurn[0], this.lastTurn[1]);
   }
@@ -136,6 +147,7 @@ export class ActionDock {
   private phaseLine(state: GameState, human: boolean): string {
     if (state.over) return '';
     if (!human) return 'AI 正在行动…';
+    if (this.pickHint !== null) return '在棋盘上选';
     if (this.plan.roll) return '掷骰前';
     if (this.plan.end) return '行动阶段';
     return '';
@@ -244,8 +256,9 @@ export class ActionDock {
   }
 
   private measureHint(): number {
-    this.planHint.setText(this.plan.hint).setVisible(this.plan.hint !== '');
-    return this.plan.hint ? Math.ceil(this.planHint.height) : 0;
+    const hint = this.pickHint ?? this.plan.hint;
+    this.planHint.setText(hint).setVisible(hint !== '');
+    return hint ? Math.ceil(this.planHint.height) : 0;
   }
 
   private placeChrome(y: number, h: number): void {
@@ -331,7 +344,7 @@ export class ActionDock {
   }
 
   private showsRoll(): boolean {
-    return this.actions && !this.plan.end;
+    return this.actions && !this.plan.end && this.pickHint === null;
   }
 
   private showsRow(): boolean {

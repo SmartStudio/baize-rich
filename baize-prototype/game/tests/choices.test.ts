@@ -159,14 +159,3 @@ describe('breakthrough cutscene', () => {
     expect(v.lines).toEqual(['气血逆冲……这一次，没成。']);
   });
 });
-
-describe('御骰符 screen', () => {
-  it('keys every value by its own digit, 10 by 0, and leaves 11 and 12 to the arrow keys', () => {
-    const g = ringGame();
-    const options = Array.from({ length: 11 }, (_, i) => ({ id: `v${i + 2}`, label: `${i + 2} 点`, value: i + 2 }));
-    const choice = { player: 0, kind: 'rollValue', title: '御骰符', options } as unknown as PendingChoice;
-    const spec = presentChoice(choice, { game: g });
-    expect(spec.layout).toBe('tiles');
-    expect(keys(spec)).toEqual(['2', '3', '4', '5', '6', '7', '8', '9', '0', null, null]);
-  });
-});
