@@ -528,3 +528,32 @@
 5. 出符后镜头会重新取景，刚选中的目标格可能移出画面。
 6. 附身、医馆标签只在玩家卡的详情提示里，卡面上看不到。
 7. 回合交替时弹出的天赐选择或百宝阁，左侧高亮的仍是上一位（P4）。
+
+## 界面待重建（v0.8 规则层合并时留下）
+
+规则层为保持能编译，删掉或临时改了下面这些界面引用。画面重写阶段按 GDD v0.8 §14 重做。
+
+### UI references removed in unit 1 (subtract)
+- BoardView: spirits/auras (renderSpirits, animateSpirit, spiritPoints, placeSpirit, setAura), demon sprite + moveDemon, 禁制 trap marker, 路障/爆炎阵 marks (renderMarks, MARKS), whole-street double rim + flashStreet, special building frames, render(state, blastAlpha) → render(state)
+- Spirits.ts deleted (addSpirit, possessionAura); PreviewScene spirit/aura preview row removed
+- Minimap.update: demon + spirits params removed
+- TopBar: 天魔 icon/countdown + tooltip line
+- TileInfo: special building, 整街 ×mult tail, region ruleName, onTile (spirits, 路障)
+- PlayerCards: 神通 icons/divineTip, 任务 tag, 面壁/护道/祠印/不动明王/地脉异动/迷踪/悬赏令/灵狐/心魔/医馆/禁制/灵脉之主 tags, 大招 tag, 神识 hand peek (viewer param), cult-source lines for 灵脉之主/任务/天魔/悬赏/白泽图
+- GameScene: cutscenes street/blast/spirit/demonSpawn/ult, ribbons special/shop/barrier/barrierHit/blastSet/hospital/spirit, events slide/demonMove/demonSpawn/spirit/street, blastAlpha, dice mini-game spec, heavenPick/divinePick card modals, buy-modal 灵脉之主/一域独占 lines, shop/diceBet previews, Pace.slide/demon, cast ids trap:/ult/shrink
+- HowToPlay: pages 整街/附身/功能建筑 and 百宝阁/小游戏/医馆; lines for 双数/思过崖, 灵脉之主, 任务, 天魔, 悬赏, 白泽图, 禁制, 神通, 大招
+- HeroSelect/Setup/Versus: 大招 lines (Versus now shows 技能)
+- ResultScene: 神通 count, 任务 count
+- assets.ts: div_*/hv_* icon frames
+- Left in place, now dead (compile fine): MiniGame.ts dice mode, sprites.ts spirit/shop/hospital/special/card frames, PreviewScene FRAMES list + dice runs, layout SPRITE.demon, card_divine/card_heaven frames
+
+### Unit 2 (v0.8 model) UI touch-ups, minimal, for compile only
+- GameScene: miniSpec(MiniGameResult.game) removed, always the alchemy 火候 overlay (HEAT_SPEC). DELTAS now 灵石 / 丹药 / 灵草 / 修为(bar). win cutscene 'cultivation' → 'ascend' 渡劫化神. roundRibbon text no longer mentions winCultivation. baizeManifestRound → manifest.round.
+- ResultScene / SetupScene / TitleScene: winCultivation copy replaced by 化神 win text; result rows show realm + bar.
+- ActionDock: spell cost badge (circle + number) and "· N 灵丹" in card tooltip removed (cards are free in v0.8). timingName gained adjust / closure labels; 'start' timing removed.
+- BoardView: obj_minigame_${game} lookup removed, uses obj_${type}. New placeholder fills in assets.ts TYPE_FILL for secret/alchemy/beast/ruins/eye (trial/cliff/array/shrine fills removed; furnace kept for MiniGame).
+- TileInfo: mini-game description (board.games) and rent multiplier list removed; rent ladder loops to maxLevel (Lv0–Lv3).
+- TopBar: win tooltip rewritten (化神 / round cap by realm→bar→assets / bankruptcy clears bar); 灵雨 rent-halving text removed.
+- PlayerCards: chip shows realm + bar (cult/bar, 可闭关); tags 灵兽引路 removed, 宝光 and 指点 added; cultTip rewritten (no thresholds / cultivationOnBuild / breakthroughCost).
+- HowToPlay: pages 目标 / 修为从哪里来 / 斗法与宝光 / 闭关突破 rewritten from config; realm bar art replaces the old 修为 threshold strip; duel bet/steal-pct copy removed.
+- Not yet surfaced in UI (needs Phase B): herbs on chips beyond tooltip, brew / stake / calm / market / fortunePick / manifestPick / rift node prompts rely on the generic choice menu; no art for new tile types beyond placeholders.
