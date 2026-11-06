@@ -4,7 +4,7 @@ import type { Flow, Game } from '../src/core/engine';
 import { chance2d6 } from '../src/core/rules';
 import type { NodeId } from '../src/core/types';
 import { breakthroughView } from '../src/ui/breakthroughView';
-import { presentChoice } from '../src/ui/choices/registry';
+import { onlyAnswer, presentChoice } from '../src/ui/choices/registry';
 import { optionKey, type ModalSpec } from '../src/ui/choices/spec';
 import { newGame, ringGame, rngFor, script } from './helpers';
 
@@ -105,6 +105,15 @@ describe('机缘 and 白泽现世 screens', () => {
     const { spec } = screenFor(g, g.testRoundStart(), 'manifestPick');
     expect(spec.layout).toBe('cards');
     expect(spec.options.map((o) => o.id)).toEqual(['chart', 'stones', 'pills', 'guide']);
+  });
+
+  it('answers the last 白泽 gift without a screen, and still asks while there is a pick', () => {
+    const g = newGame();
+    g.state.round = g.data.config.manifest.round;
+    const seen: PendingChoice[] = [];
+    g.runFlow(g.testRoundStart(), script({}, seen));
+    const picks = seen.filter((c) => c.kind === 'manifestPick');
+    expect(picks.map((c) => onlyAnswer(c))).toEqual([null, null, null, picks[3].options[0].id]);
   });
 });
 

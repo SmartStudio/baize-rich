@@ -16,7 +16,7 @@ import { BoardView } from '../ui/BoardView';
 import { Breakthrough } from '../ui/Breakthrough';
 import { breakthroughView } from '../ui/breakthroughView';
 import { ChoiceModal } from '../ui/ChoiceModal';
-import { presentChoice } from '../ui/choices/registry';
+import { onlyAnswer, presentChoice } from '../ui/choices/registry';
 import { Coach, coachHudRect } from '../ui/Coach';
 import { COACH_STEPS, coachCopy, dismiss, emptyBook, nudge, observe, type CoachBook, type CoachCue, type CoachMoment } from '../ui/coachTriggers';
 import { Cutscene, type BannerSpec } from '../ui/Cutscene';
@@ -493,6 +493,8 @@ export class GameScene extends Phaser.Scene {
       return new Promise((res) => { this.mainResolve = res; });
     }
     if (c.kind === 'miniGame') return this.playHumanMini(c);
+    const only = onlyAnswer(c);
+    if (only) return Promise.resolve(only);
     this.noteCoach(this.momentFromChoice(c));
     const plan = pickPlan(this.engine, c);
     return plan ? this.boardChoice(c, plan) : this.modalChoice(c);
