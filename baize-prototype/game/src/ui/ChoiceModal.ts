@@ -6,38 +6,12 @@
 //  - 'cards' layout shows options as 神通 / 天赐 cards (frame + icon).
 import Phaser from 'phaser';
 import { frameRef } from './assets';
+import { optionKey, type ModalOption, type ModalSpec } from './choices/spec';
 import { H, RIGHT, W, type Rect } from './layout';
 import { COLORS, FS, HEX, txt } from './theme';
 import { Button } from './widgets';
 
-export interface ModalOption {
-  id: string;
-  label: string;
-  hint?: string;
-  /** Icon frame (24×24) — shown on the card in 'cards' layout, left of the label otherwise. */
-  icon?: string;
-}
-
-export interface ModalSpec {
-  title: string;
-  desc?: string;
-  options: ModalOption[];
-  defaultId?: string;
-  /** Option id returned on Esc. `null` = Esc closes the modal and resolves null. */
-  cancelId?: string | null;
-  placement?: 'center' | 'side';
-  /** Extra "返回" button that resolves null (sub-menus). */
-  closable?: boolean;
-  layout?: 'list' | 'cards';
-  /** Card frame for 'cards' layout ('card_divine' / 'card_heaven'). */
-  cardFrame?: string;
-  cardLabel?: string;
-  /** Frames stacked into a 2× preview at the left (e.g. tile + decor for 购买灵田). */
-  preview?: { tile: string; obj?: string };
-  /** false hides the "1. " key prefix when the label already is the number (灵兽引路). */
-  numbered?: boolean;
-  avoid?: Rect;
-}
+export type { ModalOption, ModalSpec };
 
 const EDGE = 8;
 
@@ -127,7 +101,8 @@ export class ChoiceModal {
       const r = Math.floor(i / cols);
       const bx = cx + c * (bw + gap);
       const by = py + 32 + descH + r * (bh + gap);
-      const num = i < 9 && o.id !== '__close' && spec.numbered !== false ? `${i + 1}. ` : '';
+      const key = o.id === '__close' || spec.numbered === false ? null : optionKey(o, i);
+      const num = key ? `${key}. ` : '';
       const style = o.id === spec.defaultId ? PRIMARY : SECONDARY;
       const btn = new Button(s, bx, by, {
         w: bw, h: bh, label: (o.icon ? '    ' : '') + num + o.label, hint: o.hint, size: compact ? FS.xs : FS.sm,
@@ -207,12 +182,9 @@ export class ChoiceModal {
       if (id) this.close(id);
       return true;
     }
-    const d = Number(key);
-    if (d >= 1 && d <= 9 && spec.options[d - 1]) {
-      this.close(spec.options[d - 1].id);
-      return true;
-    }
-    return false;
+    const picked = spec.options.find((o, i) => optionKey(o, i) === key);
+    if (picked) this.close(picked.id);
+    return !!picked;
   }
 }
 
