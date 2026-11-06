@@ -92,7 +92,7 @@
   },
   "nodes": [
     {"id": "W0", "type": "start", "pos": [10,10], "region": "wood", "outer": true, "next": ["W1"]},
-    {"id": "W1", "type": "furnace", "pos": [9,10], "region": "wood", "outer": true, "next": ["W2"]},
+    {"id": "W1", "type": "alchemy", "pos": [9,10], "region": "wood", "outer": true, "next": ["W2"]},
     {"id": "W2", "type": "gate", "pos": [8,10], "region": "wood", "outer": true, "next": ["W3", "W10"]},
     {"id": "W3", "type": "land", "pos": [7,10], "region": "wood", "street": "qingzhu", "name": "竹溪村", "price": 100, "outer": true, "next": ["W4"]},
     {"id": "W4", "type": "land", "pos": [6,10], "region": "wood", "street": "qingzhu", "name": "青竹林", "price": 110, "outer": true, "next": ["W5"]},
@@ -101,55 +101,55 @@
     {"id": "W7", "type": "land", "pos": [3,10], "region": "wood", "street": "songfeng", "name": "松风岭", "price": 120, "outer": true, "next": ["W8"]},
     {"id": "W8", "type": "land", "pos": [2,10], "region": "wood", "street": "songfeng", "name": "古柏岗", "price": 130, "outer": true, "next": ["W9"]},
     {"id": "W9", "type": "land", "pos": [1,10], "region": "wood", "street": "songfeng", "name": "翠微亭", "price": 140, "outer": true, "next": ["F0"]},
-    {"id": "W10", "type": "trial", "pos": [8,9], "region": "wood", "outer": true, "next": ["W11"]},
+    {"id": "W10", "type": "secret", "pos": [8,9], "region": "wood", "outer": true, "next": ["W11"]},
     {"id": "W11", "type": "land", "pos": [8,8], "region": "wood", "street": "baicao", "name": "百草坡", "price": 140, "outer": true, "next": ["W12"]},
     {"id": "W12", "type": "land", "pos": [7,8], "region": "wood", "street": "baicao", "name": "灵芝圃", "price": 160, "outer": true, "next": ["W13"]},
     {"id": "W13", "type": "land", "pos": [6,8], "region": "wood", "street": "baicao", "name": "药王坊", "price": 170, "outer": true, "next": ["W14"]},
     {"id": "W14", "type": "gate", "pos": [5,8], "region": "wood", "outer": true, "next": ["W15", "W18"]},
     {"id": "W15", "type": "land", "pos": [4,8], "region": "wood", "street": "baicao", "name": "杏林居", "price": 180, "outer": true, "next": ["W16"]},
     {"id": "W16", "type": "land", "pos": [3,8], "region": "wood", "street": "baicao", "name": "青藤阁", "price": 190, "outer": true, "next": ["W17", "F11"]},
-    {"id": "W17", "type": "minigame", "game": "alchemy", "name": "炼丹房", "pos": [3,9], "region": "wood", "outer": true, "next": ["W7"]},
+    {"id": "W17", "type": "alchemy", "pos": [3,9], "region": "wood", "outer": true, "next": ["W7"]},
     {"id": "W18", "type": "spring", "pos": [5,7], "road": "south", "next": ["ALTAR", "W14"]},
-    {"id": "F0", "type": "cliff", "pos": [0,10], "region": "fire", "outer": true, "next": ["F1"]},
-    {"id": "F1", "type": "furnace", "pos": [0,9], "region": "fire", "outer": true, "next": ["F2"]},
+    {"id": "F0", "type": "beast", "pos": [0,10], "region": "fire", "outer": true, "next": ["F1"]},
+    {"id": "F1", "type": "alchemy", "pos": [0,9], "region": "fire", "outer": true, "next": ["F2"]},
     {"id": "F2", "type": "gate", "pos": [0,8], "region": "fire", "outer": true, "next": ["F3", "F10"]},
     {"id": "F3", "type": "land", "pos": [0,7], "region": "fire", "street": "yanyang", "name": "赤霞谷", "price": 240, "outer": true, "next": ["F4"]},
     {"id": "F4", "type": "land", "pos": [0,6], "region": "fire", "street": "yanyang", "name": "熔金坡", "price": 250, "outer": true, "next": ["F5"]},
     {"id": "F5", "type": "land", "pos": [0,5], "region": "fire", "street": "yanyang", "name": "炎阳岭", "price": 260, "outer": true, "next": ["F6"]},
-    {"id": "F6", "type": "shop", "pos": [0,4], "region": "fire", "outer": true, "next": ["F7"]},
+    {"id": "F6", "type": "market", "pos": [0,4], "region": "fire", "outer": true, "next": ["F7"]},
     {"id": "F7", "type": "land", "pos": [0,3], "region": "fire", "street": "rongyan", "name": "熔岩坑", "price": 260, "outer": true, "next": ["F8"]},
     {"id": "F8", "type": "land", "pos": [0,2], "region": "fire", "street": "rongyan", "name": "烈焰坊", "price": 280, "outer": true, "next": ["F9"]},
     {"id": "F9", "type": "land", "pos": [0,1], "region": "fire", "street": "rongyan", "name": "朱雀亭", "price": 290, "outer": true, "next": ["S0"]},
-    {"id": "F10", "type": "trial", "pos": [1,8], "region": "fire", "outer": true, "next": ["F11"]},
+    {"id": "F10", "type": "secret", "pos": [1,8], "region": "fire", "outer": true, "next": ["F11"]},
     {"id": "F11", "type": "land", "pos": [2,8], "region": "fire", "street": "huoyun", "name": "火云洞", "price": 290, "outer": true, "next": ["F12"]},
     {"id": "F12", "type": "land", "pos": [2,7], "region": "fire", "street": "huoyun", "name": "焚天崖", "price": 300, "outer": true, "next": ["F13"]},
     {"id": "F13", "type": "land", "pos": [2,6], "region": "fire", "street": "huoyun", "name": "赤炼台", "price": 310, "outer": true, "next": ["F14"]},
     {"id": "F14", "type": "gate", "pos": [2,5], "region": "fire", "outer": true, "next": ["F15", "F18"]},
     {"id": "F15", "type": "land", "pos": [2,4], "region": "fire", "street": "huoyun", "name": "离火殿", "price": 320, "outer": true, "next": ["F16"]},
     {"id": "F16", "type": "land", "pos": [2,3], "region": "fire", "street": "huoyun", "name": "金乌楼", "price": 340, "outer": true, "next": ["F17", "S11"]},
-    {"id": "F17", "type": "trial", "pos": [1,3], "region": "fire", "outer": true, "next": ["F7"]},
+    {"id": "F17", "type": "secret", "pos": [1,3], "region": "fire", "outer": true, "next": ["F7"]},
     {"id": "F18", "type": "spring", "pos": [3,5], "road": "west", "next": ["ALTAR", "F14"]},
-    {"id": "S0", "type": "array", "pos": [0,0], "region": "water", "outer": true, "next": ["S1"]},
-    {"id": "S1", "type": "furnace", "pos": [1,0], "region": "water", "outer": true, "next": ["S2"]},
+    {"id": "S0", "type": "ruins", "pos": [0,0], "region": "water", "outer": true, "next": ["S1"]},
+    {"id": "S1", "type": "alchemy", "pos": [1,0], "region": "water", "outer": true, "next": ["S2"]},
     {"id": "S2", "type": "gate", "pos": [2,0], "region": "water", "outer": true, "next": ["S3", "S10"]},
     {"id": "S3", "type": "land", "pos": [3,0], "region": "water", "street": "hantan", "name": "寒潭", "price": 190, "outer": true, "next": ["S4"]},
     {"id": "S4", "type": "land", "pos": [4,0], "region": "water", "street": "hantan", "name": "冰魄谷", "price": 200, "outer": true, "next": ["S5"]},
     {"id": "S5", "type": "land", "pos": [5,0], "region": "water", "street": "hantan", "name": "雪莲峰", "price": 220, "outer": true, "next": ["S6"]},
-    {"id": "S6", "type": "shop", "pos": [6,0], "region": "water", "outer": true, "next": ["S7"]},
+    {"id": "S6", "type": "market", "pos": [6,0], "region": "water", "outer": true, "next": ["S7"]},
     {"id": "S7", "type": "land", "pos": [7,0], "region": "water", "street": "canglang", "name": "沧浪渡", "price": 220, "outer": true, "next": ["S8"]},
     {"id": "S8", "type": "land", "pos": [8,0], "region": "water", "street": "canglang", "name": "白露洲", "price": 230, "outer": true, "next": ["S9"]},
     {"id": "S9", "type": "land", "pos": [9,0], "region": "water", "street": "canglang", "name": "碧波亭", "price": 240, "outer": true, "next": ["E0"]},
-    {"id": "S10", "type": "trial", "pos": [2,1], "region": "water", "outer": true, "next": ["S11"]},
+    {"id": "S10", "type": "secret", "pos": [2,1], "region": "water", "outer": true, "next": ["S11"]},
     {"id": "S11", "type": "land", "pos": [2,2], "region": "water", "street": "xuanbing", "name": "玄冰洞", "price": 240, "outer": true, "next": ["S12"]},
     {"id": "S12", "type": "land", "pos": [3,2], "region": "water", "street": "xuanbing", "name": "霜月湖", "price": 250, "outer": true, "next": ["S13"]},
     {"id": "S13", "type": "land", "pos": [4,2], "region": "water", "street": "xuanbing", "name": "凝露台", "price": 260, "outer": true, "next": ["S14"]},
     {"id": "S14", "type": "gate", "pos": [5,2], "region": "water", "outer": true, "next": ["S15", "S18"]},
     {"id": "S15", "type": "land", "pos": [6,2], "region": "water", "street": "xuanbing", "name": "听涛阁", "price": 280, "outer": true, "next": ["S16"]},
     {"id": "S16", "type": "land", "pos": [7,2], "region": "water", "street": "xuanbing", "name": "镜湖居", "price": 290, "outer": true, "next": ["S17", "E11"]},
-    {"id": "S17", "type": "minigame", "game": "alchemy", "name": "炼丹房", "pos": [7,1], "region": "water", "outer": true, "next": ["S7"]},
+    {"id": "S17", "type": "alchemy", "pos": [7,1], "region": "water", "outer": true, "next": ["S7"]},
     {"id": "S18", "type": "spring", "pos": [5,3], "road": "north", "next": ["ALTAR", "S14"]},
-    {"id": "E0", "type": "shrine", "pos": [10,0], "region": "earth", "outer": true, "next": ["E1"]},
-    {"id": "E1", "type": "furnace", "pos": [10,1], "region": "earth", "outer": true, "next": ["E2"]},
+    {"id": "E0", "type": "eye", "pos": [10,0], "region": "earth", "outer": true, "next": ["E1"]},
+    {"id": "E1", "type": "alchemy", "pos": [10,1], "region": "earth", "outer": true, "next": ["E2"]},
     {"id": "E2", "type": "gate", "pos": [10,2], "region": "earth", "outer": true, "next": ["E3", "E10"]},
     {"id": "E3", "type": "land", "pos": [10,3], "region": "earth", "street": "huangsha", "name": "黄沙坳", "price": 140, "outer": true, "next": ["E4"]},
     {"id": "E4", "type": "land", "pos": [10,4], "region": "earth", "street": "huangsha", "name": "瘴林", "price": 160, "outer": true, "next": ["E5"]},
@@ -158,101 +158,79 @@
     {"id": "E7", "type": "land", "pos": [10,7], "region": "earth", "street": "zhangze", "name": "瘴泽口", "price": 170, "outer": true, "next": ["E8"]},
     {"id": "E8", "type": "land", "pos": [10,8], "region": "earth", "street": "zhangze", "name": "枯藤岭", "price": 180, "outer": true, "next": ["E9"]},
     {"id": "E9", "type": "land", "pos": [10,9], "region": "earth", "street": "zhangze", "name": "沉沙渡", "price": 190, "outer": true, "next": ["W0"]},
-    {"id": "E10", "type": "trial", "pos": [9,2], "region": "earth", "outer": true, "next": ["E11"]},
+    {"id": "E10", "type": "secret", "pos": [9,2], "region": "earth", "outer": true, "next": ["E11"]},
     {"id": "E11", "type": "land", "pos": [8,2], "region": "earth", "street": "shilin", "name": "石林寨", "price": 190, "outer": true, "next": ["E12"]},
     {"id": "E12", "type": "land", "pos": [8,3], "region": "earth", "street": "shilin", "name": "厚土原", "price": 200, "outer": true, "next": ["E13"]},
     {"id": "E13", "type": "land", "pos": [8,4], "region": "earth", "street": "shilin", "name": "磐石堡", "price": 220, "outer": true, "next": ["E14"]},
-    {"id": "E14", "type": "hospital", "pos": [8,5], "region": "earth", "outer": true, "next": ["E15", "E18"]},
+    {"id": "E14", "type": "gate", "pos": [8,5], "region": "earth", "outer": true, "next": ["E15", "E18"]},
     {"id": "E15", "type": "land", "pos": [8,6], "region": "earth", "street": "shilin", "name": "紫芝洞", "price": 230, "outer": true, "next": ["E16"]},
     {"id": "E16", "type": "land", "pos": [8,7], "region": "earth", "street": "shilin", "name": "地脉台", "price": 240, "outer": true, "next": ["E17", "W11"]},
-    {"id": "E17", "type": "trial", "pos": [9,7], "region": "earth", "outer": true, "next": ["E7"]},
+    {"id": "E17", "type": "secret", "pos": [9,7], "region": "earth", "outer": true, "next": ["E7"]},
     {"id": "E18", "type": "spring", "pos": [7,5], "road": "east", "next": ["ALTAR", "E14"]},
     {"id": "ALTAR", "type": "altar", "pos": [5,5], "rect": [4,4,6,6], "next": ["W18", "F18", "S18", "E18"]}
   ],
   "tileTypes": {
     "start": {
-      "name": "宗门山门",
-      "desc": "经过 +200 灵石，停留 +400 灵石"
+      "name": "宗门",
+      "desc": "经过 +200 灵石，停下 +400 灵石"
     },
     "land": {
       "name": "灵田",
-      "desc": "可购买、建洞府、收租"
+      "desc": "买下、建洞府、收租、产灵草"
     },
     "gate": {
       "name": "山门",
-      "desc": "岔路口：可拐入问道之路"
+      "desc": "岔路口，无结算"
     },
-    "trial": {
-      "name": "历练碑",
+    "alchemy": {
+      "name": "丹房",
+      "desc": "每 2 灵草炼 1 颗丹药，可连炼；第一炉看火候"
+    },
+    "market": {
+      "name": "坊市",
+      "desc": "丹药 200 灵石一颗（最多 2 颗），或符箓 100 灵石一张"
+    },
+    "secret": {
+      "name": "秘境",
       "desc": "抽 1 张机缘卡"
     },
     "spring": {
       "name": "灵泉",
-      "desc": "+1 灵丹"
+      "desc": "+1 修为、+1 灵草"
     },
-    "market": {
-      "name": "坊市",
-      "desc": "100 灵石购 1 张符箓（最多 2 张）"
+    "beast": {
+      "name": "妖兽谷",
+      "desc": "掷 2D6 + 境界序数，≥ 8 得 3 灵草，否则失 100 灵石"
     },
-    "furnace": {
-      "name": "丹炉",
-      "desc": "+2 灵丹"
+    "ruins": {
+      "name": "古修洞府",
+      "desc": "抽 2 张机缘卡，留 1 张"
     },
-    "cliff": {
-      "name": "思过崖",
-      "desc": "暂无效果"
-    },
-    "array": {
-      "name": "传送阵",
-      "desc": "传送到任意无主灵田或自己的洞府"
-    },
-    "shrine": {
-      "name": "白泽祠",
-      "desc": "+1 灵丹"
+    "eye": {
+      "name": "灵眼",
+      "desc": "+2 修为"
     },
     "altar": {
       "name": "白泽灵台",
-      "desc": "突破，或静心 +1 灵丹并抽机缘"
-    },
-    "shop": {
-      "name": "百宝阁",
-      "desc": "暂无效果"
-    },
-    "minigame": {
-      "name": "小游戏",
-      "desc": "炼丹房比火候"
-    },
-    "hospital": {
-      "name": "医馆",
-      "desc": "暂无效果"
-    }
-  },
-  "games": {
-    "alchemy": {
-      "name": "炼丹房",
-      "desc": "指针来回摆动，停在绿区：完美 +3 灵丹，命中 +1，失手无所得"
+      "desc": "最佳闭关地（突破 +2）；停下不突破 +1 修为"
     }
   },
   "buildings": [
     {
       "level": 0,
-      "name": "空地"
+      "name": "灵田"
     },
     {
       "level": 1,
-      "name": "草庐"
+      "name": "药圃"
     },
     {
       "level": 2,
-      "name": "精舍"
+      "name": "洞府"
     },
     {
       "level": 3,
-      "name": "楼阁"
-    },
-    {
-      "level": 4,
-      "name": "仙府"
+      "name": "灵脉福地"
     }
   ]
 }

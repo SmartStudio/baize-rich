@@ -1,5 +1,5 @@
 // Parameter sweep: one config number, several values, simulate() per seed, spread across seeds.
-//   npm run sweep -- --param rules.bountyCultivation --values 1,2,3 [--seeds 1,2,3,4] [--games 500] [--difficulty normal] [--json]
+//   npm run sweep -- --param breakthrough.pillBonus --values 1,2,3 [--seeds 1,2,3,4] [--games 500] [--difficulty normal] [--json]
 import { HERO_IDS } from '../core/heroes';
 import type { GameData, HeroId } from '../core/types';
 import { cloneData, defaultData } from '../core/data';
@@ -19,11 +19,14 @@ const heroName = Object.fromEntries(defaultData.heroes.map((h) => [h.id, h.name]
 
 const METRICS: Metric[] = [
   ...HERO_IDS.map((h): Metric => ({ key: `win.${h}`, label: `${heroName[h]}胜率`, get: (r) => r.heroWinRate[h], fmt: pct })),
-  { key: 'seat1Win', label: '1号位胜率', get: (r) => r.seatWinRate[0], fmt: pct },
+  { key: 'seatSpread', label: '座位胜率差', get: (r) => Math.max(...r.seatWinRate) - Math.min(...r.seatWinRate), fmt: pct },
   { key: 'avgRounds', label: '平均轮数', get: (r) => r.avgRounds, fmt: fixed2 },
-  { key: 'cultivationEnd', label: '修为飞升结束', get: (r) => r.cultivationEndRate, fmt: pct },
+  { key: 'ascend', label: '化神结束', get: (r) => r.ascendRate, fmt: pct },
   { key: 'breakthroughs', label: '人均突破', get: (r) => r.perPlayer.breakthroughs, fmt: fixed2 },
-  { key: 'leaderAtR10Wins', label: `R${LEADER_CHECK_ROUND}领先者胜`, get: (r) => r.leaderAtR10Wins, fmt: pct },
+  { key: 'fails', label: '人均走火', get: (r) => r.perPlayer.breakthroughFails, fmt: fixed2 },
+  { key: 'duels', label: '每局斗法', get: (r) => r.interaction.duels, fmt: fixed2 },
+  { key: 'stolen', label: '被夺丹回合', get: (r) => r.interaction.pillStolenTurnRate, fmt: pct },
+  { key: 'leaderWins', label: `R${LEADER_CHECK_ROUND}领先者胜`, get: (r) => r.leaderWins, fmt: pct },
   { key: 'idleShare', label: '无事回合占比', get: (r) => r.perPlayer.idleTurns / r.perPlayer.turns, fmt: pct },
 ];
 

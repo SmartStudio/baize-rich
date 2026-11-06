@@ -27,8 +27,8 @@ export class SetupScene extends Phaser.Scene {
     this.seed = urlSeed();
     this.seats = (data.seats ?? quickSeats(HERO_IDS[0], 'normal')).map((s) => ({ ...s }));
     txt(this, 640, 64, '高级设置', { size: 36, bold: true, color: HEX.gold, origin: [0.5, 0.5] });
-    const { winCultivation, rounds } = defaultData.config;
-    txt(this, 640, 110, `把多个席位设为「玩家」即可多人同屏轮流操作 · 率先修至 ${winCultivation} 点修为飞升，否则第 ${rounds} 轮结束时修为最高者胜`, { size: 15, origin: [0.5, 0.5], color: HEX.dim });
+    const { rounds } = defaultData.config;
+    txt(this, 640, 110, `把多个席位设为「玩家」即可多人同屏轮流操作 · 率先渡劫化神者胜，否则第 ${rounds} 轮结束时境界最高者胜`, { size: 15, origin: [0.5, 0.5], color: HEX.dim });
     this.seats.forEach((_, i) => this.buildRow(i));
     const seedText = txt(this, 640, 600, '', { size: 13, color: HEX.dim, origin: [0.5, 0.5] });
     const refreshSeed = () => seedText.setText(`随机种子 ${this.seed}（点击更换）`);

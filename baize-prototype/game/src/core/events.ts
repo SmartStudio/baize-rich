@@ -1,40 +1,63 @@
 // Structured event log. Every state change the UI might want to show (or a
 // developer might want to debug) is emitted as a GameEvent with a Chinese
 // `text` line for the 战报 panel plus machine-readable fields.
-import type { GameState, MiniGameId, MiniGameTier, NodeId } from './types';
+import type { GameState, MiniGameTier, NodeId } from './types';
 
 export type GameEventType =
   | 'gameStart' | 'roundStart' | 'roundEnd' | 'turnStart' | 'turnEnd'
   | 'roll' | 'step' | 'teleport' | 'fork' | 'toll'
   | 'salary' | 'buy' | 'rent' | 'rentFree' | 'upgrade'
-  | 'stones' | 'pills' | 'cult' | 'card' | 'cast' | 'block'
-  | 'event' | 'bind' | 'status'
+  | 'stones' | 'herbs' | 'pills' | 'cult' | 'card' | 'cast' | 'block'
+  | 'event' | 'bind' | 'status' | 'beast'
   | 'breakthrough' | 'manifest'
   | 'bankrupt' | 'win' | 'gameEnd' | 'info'
   | 'duel' | 'skill' | 'roadblock' | 'roadblockHit' | 'roadblockGone'
   | 'miniGame';
 
-/** 炼丹房结果；reward 是净得失。 */
+/** 第一炉的火候结果；pills 是这一次停留炼出的丹药总数。 */
 export interface MiniGameResult {
-  game: MiniGameId;
   tier: MiniGameTier;
-  reward: { pills: number; stones: number };
+  brewed: number;
+  pills: number;
 }
 
 /** 斗法结果（index 0 = 攻方, 1 = 守方）。 */
 export interface DuelResult {
   attacker: number;
   defender: number;
-  bets: [number, number];
   rolls: [number, number];
-  /** 英雄加成（剑修攻 / 体修守） */
+  /** 境界差、神识、剑气、铜皮铁骨、宝光之和 */
   bonus: [number, number];
   totals: [number, number];
   winner: number;
   loser: number;
-  /** 败者交给胜者的灵石 */
-  amount: number;
+  /** 输家被夺走的丹药 / 灵石；元婴遁生效时均为 0 */
+  pills: number;
+  stones: number;
+  escaped: boolean;
 }
+
+/** 闭关突破的完整检定（GDD §5.3）。 */
+export interface BreakthroughResult {
+  from: number;
+  dice: [number, number];
+  stake: number;
+  bonuses: { pills: number; site: number; mind: number; guidance: number; calm: number };
+  total: number;
+  target: number;
+  success: boolean;
+  /** 失败时修为条掉的点数 */
+  cultLost: number;
+}
+
+/** 修为变化：gained 是实际计入修为条的点数，wasted 是溢出作废的。 */
+export interface CultChange {
+  source: CultSource;
+  gained: number;
+  wasted: number;
+}
+
+export type CultSource = 'breath' | 'sit' | 'spring' | 'eye' | 'pill' | 'altar' | 'event' | 'manifest';
 
 export interface GameEvent {
   seq: number;
@@ -47,6 +70,8 @@ export interface GameEvent {
   amount?: number;
   dice?: [number, number];
   duel?: DuelResult;
+  breakthrough?: BreakthroughResult;
+  cult?: CultChange;
   miniGame?: MiniGameResult;
   /** Deep copy of the state right after this event (only when Game option snapshots=true). */
   snap?: GameState;

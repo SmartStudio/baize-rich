@@ -5,17 +5,20 @@
 // answers with one of the option ids via `game.answer(id)`. Every decision in
 // the game, from "roll the dice" to "use 金光符?", goes through this one door,
 // which is what lets the same engine drive the UI, the AI and the headless sim.
-import type { MiniGameId, MiniGameTier, NodeId } from './types';
+import type { MiniGameTier, NodeId } from './types';
 
 export type PreRollAct =
   | { t: 'roll' }
   | { t: 'cast'; card: string }
-  | { t: 'skill' };
+  | { t: 'skill' }
+  | { t: 'closure' };
 
 export type ActionAct =
   | { t: 'upgrade'; node: NodeId }
+  | { t: 'eat' }
   | { t: 'cast'; card: string }
   | { t: 'skill' }
+  | { t: 'closure' }
   | { t: 'end' };
 
 export type Target =
@@ -23,19 +26,30 @@ export type Target =
   | { t: 'node'; node: NodeId }
   | { t: 'cancel' };
 
-/** What kind of attack a guard reaction (金光符) is being asked about. */
-export type ThreatKind = 'drain' | 'bind';
+/** What a guard reaction (金光符) is being asked about. */
+export type ThreatKind = 'duel' | 'drain';
 
-export type NodePurpose = 'array';
+/** 坊市: what to buy on this visit. */
+export type MarketBuy = { item: 'pill' | 'card'; n: number } | { item: 'none' };
+
+/** 白泽现世的四份机缘。 */
+export type ManifestGift = 'chart' | 'stones' | 'pills' | 'guide';
+
+/** Final move after the roll: steps, whether 神行符 is spent, the 御器 offset used. */
+export interface AdjustValue {
+  steps: number;
+  card: boolean;
+  steer: -1 | 0 | 1;
+}
 
 /** Value type carried by the options of each choice kind. */
 export interface ChoiceValueMap {
   preRoll: PreRollAct;
   action: ActionAct;
-  /** 御骰符 / 灵兽引路: pick the movement value directly. */
+  /** 御骰符: pick the movement value directly. */
   rollValue: number;
-  /** Final movement total after 神行符. */
-  adjust: number;
+  /** After the roll: 御器 ±1 and / or 神行符 +1..+3. */
+  adjust: AdjustValue;
   /** At a fork: the next node to step to. */
   fork: NodeId;
   /** At the altar with steps left: stop, or pay toll and leave through this neighbour. */
@@ -45,21 +59,25 @@ export interface ChoiceValueMap {
   buy: boolean;
   /** 避劫符 when paying rent. */
   rentReact: boolean;
-  /** 金光符 when attacked. */
+  /** 金光符 when challenged or drained. */
   guardReact: boolean;
-  altar: 'break' | 'calm' | 'leave';
-  /** 坊市拍卖: buy 1 修为. */
-  auction: boolean;
-  /** 坊市: number of spell cards to buy. */
-  market: number;
+  /** 闭关突破: pills staked (each +breakthrough.pillBonus). */
+  stake: number;
+  /** 清心符 before the breakthrough roll. */
+  calm: boolean;
+  /** 丹房: how many pills to brew. */
+  brew: number;
+  market: MarketBuy;
+  /** 古修洞府: which of the two drawn 机缘 to keep (event id). */
+  fortunePick: string;
+  manifestPick: ManifestGift;
+  /** 秘境裂隙: the 秘境 to move to. */
   node: NodeId;
   target: Target;
   /** 斗法：挑战哪位玩家（null = 不斗法）。 */
   duel: number | null;
-  /** 斗法：押注几颗灵丹（每颗 +1 点，胜负都消耗）。 */
-  duelBet: number;
-  /** 炼丹房结果档位（option.id 即 tier），真人由界面小游戏产出。 */
-  miniGame: { game: MiniGameId; tier: MiniGameTier };
+  /** 火候结果档位（option.id 即 tier），真人由界面小游戏产出。 */
+  miniGame: { tier: MiniGameTier };
 }
 
 export type ChoiceKind = keyof ChoiceValueMap;
@@ -73,27 +91,22 @@ export interface ChoiceOption<V> {
   hint?: string;
 }
 
+export type ChoicePurpose = 'rift' | 'drain' | 'bind' | 'sworddash' | 'swap' | 'roadblock' | 'daze';
+
 export interface ChoiceContext {
   /** Free-form extra info for UI/AI (e.g. rent amount, remaining steps, purpose). */
   rent?: number;
   remaining?: number;
   node?: NodeId;
   price?: number;
-  card?: string;
   threat?: ThreatKind;
   attacker?: number;
-  purpose?: NodePurpose | 'drain' | 'bind' | 'sworddash' | 'swap' | 'roadblock' | 'daze';
-  /** 小游戏：玩法 */
-  game?: MiniGameId;
+  purpose?: ChoicePurpose;
   dice?: [number, number];
   base?: number;
-  cost?: number;
-  /** 斗法：守方座位 */
-  defender?: number;
-  /** 斗法：本局赌注（败者将交出的灵石，按当前双方灵石计） */
-  stake?: number;
-  /** 斗法押注阶段：对手已押的灵丹（守方决定时可见） */
-  bet?: number;
+  /** 闭关突破：不押丹时的检定加成与目标值 */
+  bonus?: number;
+  target?: number;
 }
 
 export interface PendingChoiceOf<K extends ChoiceKind> {

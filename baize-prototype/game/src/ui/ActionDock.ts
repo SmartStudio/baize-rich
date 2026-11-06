@@ -134,10 +134,8 @@ export class ActionDock {
       const c = s.add.container(bx, top);
       const img = addImg(s, 0, 0, hasFrame(s, `card_${spell.id}`) ? `card_${spell.id}` : `card_${spell.cat}`).setOrigin(0, 0).setScale(CARD_SCALE);
       const name = txt(s, cw / 2, ch * 0.68, spell.name, { size: FS.xs, color: HEX.ink, origin: [0.5, 0.5], bold: true });
-      const cost = s.add.circle(cw - 5, 5, 6, 0xe0663a).setStrokeStyle(1, COLORS.outline);
-      const costT = txt(s, cw - 5, 5, `${spell.cost}`, { size: FS.xs, origin: [0.5, 0.5], bold: true });
       const glow = s.add.rectangle(-2, -2, cw + 4, ch + 4).setOrigin(0, 0).setStrokeStyle(2, can ? COLORS.gold : COLORS.outline);
-      c.add([img, name, cost, costT, glow]);
+      c.add([img, name, glow]);
       if (!can) c.setAlpha(0.75);
       img.setInteractive({ useHandCursor: true });
       img.on('pointerover', () => { c.y = top - 4; });
@@ -154,7 +152,7 @@ export class ActionDock {
     const cat = g.data.spells.categories[spell.cat];
     const can = this.castable.has(card);
     return {
-      title: `${spell.name} · ${cat.name} · ${spell.cost} 灵丹`,
+      title: `${spell.name} · ${cat.name}`,
       body: `时机：${timingName(spell.timing)}\n${spell.desc}${can ? '' : '\n（现在不能施放）'}`,
       action: can ? { label: `施放 ${spell.name}`, onClick: () => this.cardClick?.(card) } : undefined,
     };
@@ -181,5 +179,5 @@ export class ActionDock {
 }
 
 function timingName(t: string): string {
-  return ({ action: '行动阶段', reaction: '被攻击 / 被收购时', rent: '付租时', start: '回合开始', preroll: '掷骰前' } as Record<string, string>)[t] ?? t;
+  return ({ action: '行动阶段', reaction: '被斗法 / 被夺丹时', rent: '付租时', preroll: '掷骰前', adjust: '掷骰后', closure: '闭关突破时' } as Record<string, string>)[t] ?? t;
 }

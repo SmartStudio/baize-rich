@@ -5,7 +5,7 @@
 //   A node whose next and prev hold the same nodes is two-way (the 神道 and the altar):
 //   walks never turn back on it, so the node a walker came from fixes its heading.
 //   The altar is the single node 'ALTAR'; its `rect` is only for drawing.
-import type { BoardData, MiniGameId, NodeId, RegionId, RoadId, TileType } from './types';
+import type { BoardData, NodeId, RegionId, RoadId, TileType } from './types';
 
 export interface BoardNode {
   id: NodeId;
@@ -18,8 +18,6 @@ export interface BoardNode {
   road?: RoadId;
   /** 灵田所属街道（BoardData.streets 的键） */
   street?: string;
-  /** 小游戏格的玩法 */
-  game?: MiniGameId;
   outer: boolean;
   next: NodeId[];
   prev: NodeId[];
@@ -40,7 +38,7 @@ export class Board {
     for (const t of data.nodes) {
       this.nodes.set(t.id, {
         id: t.id, type: t.type, pos: t.pos, name: t.name ?? data.tileTypes[t.type].name,
-        region: t.region, price: t.price, road: t.road, street: t.street, game: t.game, outer: t.outer ?? false, next: t.next, prev: [],
+        region: t.region, price: t.price, road: t.road, street: t.street, outer: t.outer ?? false, next: t.next, prev: [],
       });
       if (t.type === 'land') this.lands.push(t.id);
       if (t.type === 'land' && t.street) {

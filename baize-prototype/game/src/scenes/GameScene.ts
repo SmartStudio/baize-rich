@@ -6,9 +6,9 @@ import { AIController, DIFFICULTY_LABEL, PERSONALITY_LABEL } from '../ai/ai';
 import type { PendingChoice } from '../core/choices';
 import { defaultData } from '../core/data';
 import { Game } from '../core/engine';
-import type { GameEvent, GameEventType, MiniGameResult } from '../core/events';
+import type { GameEvent, GameEventType } from '../core/events';
 import { toRecord, type GameRecord } from '../core/record';
-import { cultivation, nominalRent, realmName, totalAssets } from '../core/rules';
+import { nominalRent, realmName, totalAssets } from '../core/rules';
 import { ALTAR } from '../core/board';
 import type { GameState, NodeId } from '../core/types';
 import { BoardCamera } from '../ui/BoardCamera';
@@ -69,7 +69,7 @@ const CUTSCENES: Partial<Record<GameEventType, (g: Game, e: GameEvent) => Banner
   manifest: (_g, e) => ({ title: '白泽现世', sub: e.text, icon: 'baize', color: 0xe6e4f0, dim: true }),
   duel: (g, e) => ({ title: '斗法', sub: e.text, icon: portrait(g, e), color: PLAYER_COLORS[e.player!] }),
   bankrupt: (g, e) => ({ title: '破产重整', sub: e.text, icon: portrait(g, e), color: COLORS.bad }),
-  win: (g, e) => ({ title: g.state.endReason === 'cultivation' ? '渡劫飞升' : '夺得魁首', sub: e.text, icon: portrait(g, e), color: COLORS.gold, dim: true }),
+  win: (g, e) => ({ title: g.state.endReason === 'ascend' ? '渡劫化神' : '夺得魁首', sub: e.text, icon: portrait(g, e), color: COLORS.gold, dim: true }),
 };
 
 /** Smaller beats get a non-blocking ribbon under the top bar. */
@@ -79,10 +79,8 @@ const RIBBONS: Partial<Record<GameEventType, (g: Game, e: GameEvent) => { title:
 /** Sub-menu answer meaning "re-open narrowed to this tile". */
 const NARROW = '@node:';
 
-/** Rebuild a mini-game overlay spec from its result event, for watching someone else play. */
-function miniSpec(mg: MiniGameResult): MiniGameSpec {
-  return { game: mg.game as 'alchemy' };
-}
+/** The mini-game overlay spec used when watching someone else's 火候. */
+const HEAT_SPEC: MiniGameSpec = { game: 'alchemy' };
 
 function portrait(g: Game, e: GameEvent): string {
   return `por_${g.state.players[e.player ?? 0].hero}`;
@@ -91,8 +89,9 @@ function portrait(g: Game, e: GameEvent): string {
 /** Resource deltas between two snapshots that float up from the token as "+200 灵石". */
 const DELTAS: { label: string; color: [string, string]; of: (g: Game, st: GameState, seat: number) => number }[] = [
   { label: '灵石', color: [HEX.good, HEX.bad], of: (_g, st, i) => st.players[i].stones },
-  { label: '灵丹', color: ['#F0A060', HEX.bad], of: (_g, st, i) => st.players[i].pills },
-  { label: '修为', color: [HEX.gold, HEX.bad], of: (g, st, i) => cultivation(st, g.data, i) },
+  { label: '丹药', color: ['#F0A060', HEX.bad], of: (_g, st, i) => st.players[i].pills },
+  { label: '灵草', color: [HEX.good, HEX.bad], of: (_g, st, i) => st.players[i].herbs },
+  { label: '修为', color: [HEX.gold, HEX.bad], of: (_g, st, i) => st.players[i].cult },
 ];
 
 export class GameScene extends Phaser.Scene {
@@ -265,7 +264,7 @@ export class GameScene extends Phaser.Scene {
     const st = this.engine.state;
     for (const e of this.engine.log.slice(-3)) if (e.text) this.logPanel.log(e.text);
     this.logPanel.log(`—— 已恢复上局：第 ${st.round} 轮 ——`);
-    if (st.manifested && st.round === this.engine.data.config.baizeManifestRound) this.boardView.showBaize(true);
+    if (st.manifested && st.round === this.engine.data.config.manifest.round) this.boardView.showBaize(true);
   }
 
   private async drain(): Promise<void> {
@@ -303,7 +302,7 @@ export class GameScene extends Phaser.Scene {
         await this.cutscene(e);
         break;
       case 'roundStart':
-        if (e.snap && e.snap.round !== this.engine.data.config.baizeManifestRound) this.boardView.showBaize(false);
+        if (e.snap && e.snap.round !== this.engine.data.config.manifest.round) this.boardView.showBaize(false);
         if (e.snap) this.roundRibbon(e.snap);
         await this.wait(this.ms(ROUND_WAIT));
         break;
@@ -317,7 +316,7 @@ export class GameScene extends Phaser.Scene {
           await this.wait(this.ms(pace.slow));
         } else {
           const p = (e.snap ?? this.engine.state).players[seat];
-          await playMiniGame(this.hud, miniSpec(e.miniGame!), { auto: e.miniGame!.tier, speed: this.speed, who: p.name });
+          await playMiniGame(this.hud, HEAT_SPEC, { auto: e.miniGame!.tier, speed: this.speed, who: p.name });
         }
         break;
       default:
@@ -351,9 +350,9 @@ export class GameScene extends Phaser.Scene {
 
   private roundRibbon(st: GameState): void {
     const cfg = this.engine.data.config;
-    const left = cfg.baizeManifestRound - st.round;
-    const sub = st.round === cfg.rounds ? '最终轮！修为最高者将夺得魁首'
-      : left > 0 ? `白泽现世还有 ${left} 轮` : `修为先到 ${cfg.winCultivation} 即胜`;
+    const left = cfg.manifest.round - st.round;
+    const sub = st.round === cfg.rounds ? '最终轮！境界最高者将夺得魁首'
+      : left > 0 ? `白泽现世还有 ${left} 轮` : '先渡劫化神者即胜';
     this.fx.ribbon(`第 ${st.round} / ${cfg.rounds} 轮`, sub, COLORS.gold, STAGE.cy, this.ms(1400));
   }
 
@@ -374,7 +373,7 @@ export class GameScene extends Phaser.Scene {
     }, this.ms(PACE.human.turnStart));
   }
 
-  /** Float each seat's 灵石 / 灵丹 / 修为 change since the last snapshot over its token. */
+  /** Float each seat's 灵石 / 丹药 / 灵草 / 修为 change since the last snapshot over its token. */
   private popDeltas(snap: GameState): void {
     const prev = this.lastSnap;
     this.lastSnap = snap;
@@ -418,10 +417,9 @@ export class GameScene extends Phaser.Scene {
       state: structuredClone(st),
       ranking: g.ranking(),
       rows: st.players.map((_, i) => {
-        const c = cultivation(st, g.data, i);
         const s = this.session.seats[i];
         return {
-          cult: c, realm: realmName(g.data, c), assets: totalAssets(st, g.board, g.data, i),
+          cult: st.players[i].cult, realm: realmName(g.data, st.players[i].realm), assets: totalAssets(st, g.board, g.data, i),
           label: s.human ? '玩家' : `AI·${PERSONALITY_LABEL[s.personality]}`,
         };
       }),

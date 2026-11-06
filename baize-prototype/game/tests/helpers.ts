@@ -2,6 +2,7 @@ import type { PendingChoice } from '../src/core/choices';
 import { Game } from '../src/core/engine';
 import type { GameData } from '../src/core/types';
 import { cloneData, defaultData } from '../src/core/data';
+import { nextFloat } from '../src/core/rng';
 import ringBoard from './fixtures/ring-board.json';
 
 /**
@@ -53,4 +54,12 @@ export function script(
 /** Makes every land empty and places all players far away from the test area. */
 export function placeAll(g: Game, node = 'R0'): void {
   for (const p of g.state.players) p.pos = node;
+}
+
+/** An rng state whose next d6 rolls are exactly `rolls`. */
+export function rngFor(rolls: number[]): number {
+  for (let s = 1; ; s++) {
+    const h = { rng: s };
+    if (rolls.every((r) => 1 + Math.floor(nextFloat(h) * 6) === r)) return s;
+  }
 }

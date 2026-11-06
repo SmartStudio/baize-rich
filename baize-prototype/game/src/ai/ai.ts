@@ -6,9 +6,12 @@ import type { ActionAct, Controller, PendingChoice, PendingChoiceOf, PreRollAct 
 import type { Game } from '../core/engine';
 import { Rng } from '../core/rng';
 import {
-  breakthroughCost, breakthroughsAvailable, buyPrice, canBreakthrough, countOwned, cultivation, nominalRent, rentFor, upgradeCost,
+  duelBonus, duelWinChance, landLevel, nominalRent, rentFor, upgradeCost, winRealm,
 } from '../core/rules';
 import type { MiniGameTier, NodeId } from '../core/types';
+import {
+  VALUE, barRoom, closureChance, fortuneValue, giftValue, lootValue, nearlyFull, stakeFor, tileValue, type View,
+} from './evaluate';
 import { DICE_DIST, predictWalk, type Prediction, type WalkPolicy } from './predict';
 
 const mainLine: WalkPolicy['fork'] = (_node, _remaining, options) => options[0];
@@ -29,33 +32,29 @@ interface Persona {
   attack: number;
   /** Use 避劫符 if rent ≥ this fraction of current stones. */
   evadeRatio: number;
+  /** Attempt 闭关 away from the altar once the chance reaches this. */
+  closeAt: number;
+  /** Stake pills until the breakthrough chance reaches this. */
+  stakeAt: number;
+  /** Pills never eaten (kept for staking and as duel loot buffer). */
+  keepPills: number;
 }
 
 const PERSONAS: Record<Personality, Persona> = {
-  steady: { buyReserve: 300, upgradeReserve: 400, attack: 1, evadeRatio: 0.15 },
-  aggressive: { buyReserve: 150, upgradeReserve: 250, attack: 1.5, evadeRatio: 0.25 },
-  miser: { buyReserve: 600, upgradeReserve: 600, attack: 0.6, evadeRatio: 0.1 },
+  steady: { buyReserve: 300, upgradeReserve: 400, attack: 1, evadeRatio: 0.15, closeAt: 0.55, stakeAt: 0.72, keepPills: 2 },
+  aggressive: { buyReserve: 150, upgradeReserve: 250, attack: 1.5, evadeRatio: 0.25, closeAt: 0.45, stakeAt: 0.6, keepPills: 1 },
+  miser: { buyReserve: 600, upgradeReserve: 600, attack: 0.6, evadeRatio: 0.1, closeAt: 0.6, stakeAt: 0.8, keepPills: 2 },
 };
 
-/** Rough stone-equivalents used when comparing heterogeneous gains. */
-const VALUE = { pill: 50, cult: 400 };
-
-/** 炼丹房: how often the AI hits each tier (it plays the timing game by chance). */
+/** 丹房火候: how often the AI hits each tier (it plays the timing game by chance). */
 const ALCHEMY_ODDS: Record<Difficulty, Record<MiniGameTier, number>> = {
   easy: { perfect: 0.15, ok: 0.5, fail: 0.35 },
   normal: { perfect: 0.3, ok: 0.5, fail: 0.2 },
   hard: { perfect: 0.45, ok: 0.45, fail: 0.1 },
 };
 
-/** P(attacker wins) when the attacker's total is offset by `off` over the defender's (ties go to the defender). */
-export function duelWinChance(off: number): number {
-  let n = 0;
-  for (let a = 1; a <= 6; a++) for (let d = 1; d <= 6; d++) if (a + off > d) n++;
-  return n / 36;
-}
-
 /** Minimum duel EV (stones) worth a challenge, by difficulty. */
-const DUEL_BAR: Record<Difficulty, number> = { easy: 150, normal: 30, hard: 0 };
+const DUEL_BAR: Record<Difficulty, number> = { easy: 150, normal: 20, hard: 0 };
 
 export interface AIOptions {
   difficulty?: Difficulty;
@@ -82,73 +81,29 @@ export class AIController implements Controller {
   private get me() { return this.game.state.players[this.seat]; }
   private get board() { return this.game.board; }
   private get data() { return this.game.data; }
-  private cult(seat = this.seat) { return cultivation(this.st, this.data, seat); }
+  private get view(): View { return { st: this.st, board: this.board, data: this.data, seat: this.seat }; }
+  private get roundsLeft() { return this.data.config.rounds - this.st.round; }
 
   private wantsAltar(): boolean {
-    return canBreakthrough(this.st, this.data, this.seat);
-  }
-
-  /** 灵丹 to keep for the next breakthrough. */
-  private pillReserve(): number {
-    return breakthroughsAvailable(this.me) > 0 ? breakthroughCost(this.st, this.data, this.seat) : 0;
-  }
-
-  private sparePills(): number {
-    return this.me.pills - this.pillReserve();
+    return nearlyFull(this.view);
   }
 
   private policy(): WalkPolicy {
     return {
       fork: (node, _remaining, options) => this.forkRule(node, options, 1),
       altar: () => 'stop',
-      canPayToll: this.me.pills >= this.data.config.altarToll && !this.wantsAltar(),
+      canPayToll: false,
     };
   }
 
   /** Value (in stones) of ending a move on `node` for this AI. */
   landingScore(node: NodeId, passStart = 0): number {
-    const st = this.st;
-    const p = this.me;
-    const n = this.board.node(node);
-    let s = passStart * this.data.config.salaryPass;
-    switch (n.type) {
-      case 'land': {
-        const t = st.tiles[node];
-        if (t.owner === null) {
-          const price = buyPrice(this.data, p, n.price!);
-          if (p.stones - price >= this.persona.buyReserve) s += 0.3 * price;
-        } else if (t.owner === this.seat) s += 10;
-        else {
-          const r = rentFor(st, this.board, this.data, node, this.seat).amount;
-          s -= r;
-          if (r >= p.stones) s -= 400;
-        }
-        break;
-      }
-      case 'start': s += this.data.config.salaryLand; break;
-      case 'trial': s += 60; break;
-      case 'spring': s += 60; break;
-      case 'furnace': s += 2 * VALUE.pill; break;
-      case 'market': s += p.hand.length < this.data.config.handLimit && p.stones > 500 ? 40 : 0; break;
-      case 'array': s += 80; break;
-      case 'shrine': s += VALUE.pill; break;
-      case 'altar': s += this.wantsAltar() ? 500 : 40; break;
-      case 'minigame': s += n.game === 'alchemy' ? this.alchemyPills() * VALUE.pill : 0; break;
-      default: break;
-    }
-    return s;
+    return passStart * this.data.config.salaryPass + tileValue(this.view, node);
   }
 
   /** Landing plus duels on the way. */
   private moveValue(pr: Prediction): number {
     return this.landingScore(pr.node, pr.passStart) + this.meetValue(pr.path);
-  }
-
-  /** Expected 灵丹 from one visit to a 炼丹房. */
-  private alchemyPills(): number {
-    const odds = ALCHEMY_ODDS[this.difficulty];
-    const r = this.data.config.rules.miniGameRewards;
-    return odds.perfect * r.perfect + odds.ok * r.ok + odds.fail * r.fail;
   }
 
   private scoreMove(steps: number, dir: 1 | -1, from?: NodeId): number {
@@ -161,48 +116,37 @@ export class AIController implements Controller {
     if (this.difficulty === 'easy' || this.st.turn.duelDone) return 0;
     let best = 0;
     for (const o of this.st.players) {
-      if (o.seat === this.seat || !path.slice(1).includes(o.pos) || !this.game.duelEligible(o.seat)) continue;
+      if (o.seat === this.seat || !path.slice(1).includes(o.pos)) continue;
       best = Math.max(best, this.challengeValue(o.seat));
     }
     return best;
   }
 
+  /** Standing score used to find the player to hold back. */
+  private standing(seat: number): number {
+    const p = this.st.players[seat];
+    return p.realm * 20 + p.cult;
+  }
+
+  private leaderOpponent(): number | null {
+    let best = -1;
+    let seat: number | null = null;
+    for (const o of this.st.players) {
+      if (o.seat === this.seat) continue;
+      if (this.standing(o.seat) > best) { best = this.standing(o.seat); seat = o.seat; }
+    }
+    return seat;
+  }
+
   // ------------------------------------------------------------- duels ---
 
-  private duelBonus(seat: number, role: 'atk' | 'def'): number {
-    const r = this.data.config.rules;
-    const h = this.st.players[seat].hero;
-    return role === 'atk' ? (h === 'sword' ? r.swordDuelAttack : 0) : (h === 'body' ? r.bodyDuelDefense : 0);
-  }
-
-  /** Guess how many pills a player will bet (they bet when the stakes are worth more than the pills). */
-  private guessBet(seat: number, stakeSum: number): number {
-    const max = Math.min(this.data.config.rules.duelMaxPills, this.st.players[seat].pills);
-    return stakeSum >= 250 ? max : stakeSum >= 120 ? Math.min(1, max) : 0;
-  }
-
-  /** Expected value (stones) for this AI of a duel, given both bets. */
-  private duelEV(attacker: number, defender: number, betA: number, betD: number): number {
-    const off = this.duelBonus(attacker, 'atk') + betA - this.duelBonus(defender, 'def') - betD;
-    const pAtk = duelWinChance(off);
-    const meAtk = attacker === this.seat;
-    const opp = meAtk ? defender : attacker;
-    const pWin = meAtk ? pAtk : 1 - pAtk;
-    const myBet = meAtk ? betA : betD;
-    return pWin * this.game.duelStake(opp) * this.persona.attack - (1 - pWin) * this.game.duelStake(this.seat) - myBet * VALUE.pill;
-  }
-
-  private maxBet(): number {
-    return Math.max(0, Math.min(this.data.config.rules.duelMaxPills, this.sparePills()));
-  }
-
-  /** EV of challenging `target` now, with the best own bet against the guessed reply. */
+  /** EV of challenging `target` now: loot won against own loot at risk. */
   challengeValue(target: number): number {
-    const stakeSum = this.game.duelStake(target) + this.game.duelStake(this.seat);
-    const theirs = this.guessBet(target, stakeSum);
-    let best = -Infinity;
-    for (let b = 0; b <= this.maxBet(); b++) best = Math.max(best, this.duelEV(this.seat, target, b, theirs));
-    return best + (target === this.leaderOpponent() ? 30 : 0);
+    const [a, d] = duelBonus(this.st, this.data, this.seat, target);
+    const p = duelWinChance(a - d);
+    const gain = lootValue(this.st, this.data, target) * this.persona.attack;
+    const risk = lootValue(this.st, this.data, this.seat);
+    return p * gain - (1 - p) * risk + (target === this.leaderOpponent() ? 30 : 0);
   }
 
   private duelChoice(c: PendingChoiceOf<'duel'>): string {
@@ -216,51 +160,38 @@ export class AIController implements Controller {
     return bestId;
   }
 
-  private duelBet(c: PendingChoiceOf<'duelBet'>): string | undefined {
-    if (this.difficulty === 'easy') return 'b0';
+  /** 金光符 when the expected loss is worth a card. */
+  private guardChoice(c: PendingChoiceOf<'guardReact'>): string {
+    if (c.ctx.threat === 'drain') return 'goldlight';
     const atk = c.ctx.attacker!;
-    const def = c.ctx.defender!;
-    const stakeSum = this.game.duelStake(atk) + this.game.duelStake(def);
-    const opts = c.options.filter((o) => o.value <= this.maxBet());
-    if (opts.length === 0) return 'b0';
-    if (atk === this.seat) {
-      const theirs = this.guessBet(def, stakeSum);
-      return this.bestBy(opts, (o) => this.duelEV(atk, def, o.value, theirs));
-    }
-    const theirs = c.ctx.bet ?? 0;
-    return this.bestBy(opts, (o) => this.duelEV(atk, def, theirs, o.value));
+    const [a, d] = duelBonus(this.st, this.data, atk, this.seat);
+    const loss = duelWinChance(a - d) * lootValue(this.st, this.data, this.seat);
+    return loss >= VALUE.card ? 'goldlight' : 'no';
   }
 
   // ------------------------------------------------------------ skills ---
 
   /** Best target for the hero's active skill and its estimated gain over not using it. */
   private bestSkill(): { id: string; value: number } | null {
-    const g = this.game;
-    const st = this.st;
-    const targets = g.skillTargets(this.seat);
+    const targets = this.game.skillTargets(this.seat);
     let best: { id: string; value: number } | null = null;
-    const consider = (id: string, value: number) => { if (!best || value > best.value) best = { id, value }; };
-    switch (g.heroOf(this.seat).skill.id) {
-      case 'sworddash': {
-        const base = this.expectedRoll(1);
-        for (const s of targets as number[]) consider(`p${s}`, this.challengeValue(s) + this.landingScore(st.players[s].pos) - base);
-        break;
-      }
-      case 'swap': {
-        const base = this.expectedRoll(1);
-        for (const s of targets as number[]) consider(`p${s}`, this.expectedRoll(1, [0], st.players[s].pos) - base);
-        break;
-      }
-      case 'daze': {
-        const leader = this.leaderOpponent();
-        for (const s of targets as number[]) consider(`p${s}`, 40 + (s === leader ? 40 : 0) + this.cult(s) * 5);
-        break;
-      }
-      case 'roadblock':
-        for (const n of targets as NodeId[]) consider(`node:${n}`, this.roadblockValue(n));
-        break;
+    for (const t of targets) {
+      const id = typeof t === 'number' ? `p${t}` : `node:${t}`;
+      const value = this.skillValue(t);
+      if (!best || value > best.value) best = { id, value };
     }
     return best;
+  }
+
+  private skillValue(t: number | NodeId): number {
+    const st = this.st;
+    switch (this.game.heroOf(this.seat).skill.id) {
+      case 'sworddash': return this.challengeValue(t as number) + this.landingScore(st.players[t as number].pos) - this.expectedRoll(1);
+      case 'swap': return this.expectedRoll(1, [0], st.players[t as number].pos) - this.expectedRoll(1);
+      case 'daze': return 40 + (t === this.leaderOpponent() ? 40 : 0) + this.standing(t as number) * 2;
+      case 'roadblock': return this.roadblockValue(t as NodeId);
+      default: return 0;
+    }
   }
 
   /** Expected gain of a 镇山 mountain on `node`: the next opponent to move is stopped there. */
@@ -272,8 +203,7 @@ export class AIController implements Controller {
       if (st.players[seat].bound) continue;
       let pPass = 0;
       for (const { total, p } of DICE_DIST) {
-        const pr = predictWalk(this.board, st, seat, total, 1, passive);
-        if (pr.path.slice(1).includes(node)) pPass += p;
+        if (predictWalk(this.board, st, seat, total, 1, passive).path.slice(1).includes(node)) pPass += p;
       }
       const t = st.tiles[node];
       let v = 30;
@@ -295,7 +225,7 @@ export class AIController implements Controller {
     return e;
   }
 
-  // Fork rule (normal): breakthrough ready → toward the altar; heavy rent in the next 6
+  // Fork rule (normal): bar about to fill → toward the altar; heavy rent in the next 6
   // main-line cells → toward the altar; else stay on the main line.
   private forkRule(node: NodeId, options: NodeId[], dir: 1 | -1): NodeId {
     const detour = this.board.altarward(options);
@@ -312,15 +242,16 @@ export class AIController implements Controller {
     return options[0];
   }
 
-  private leaderOpponent(): number | null {
-    let best = -1;
-    let seat: number | null = null;
-    for (const o of this.st.players) {
-      if (o.seat === this.seat) continue;
-      const c = this.cult(o.seat);
-      if (c > best) { best = c; seat = o.seat; }
+  private hardFork(node: NodeId, remaining: number, options: NodeId[]): NodeId {
+    const walk = (fork: WalkPolicy['fork']) => this.moveValue(predictWalk(this.board, this.st, this.seat, remaining, 1, { ...this.policy(), fork }, node));
+    const altarward = this.board.altarward(options);
+    let best = options[0];
+    let bestScore = walk(mainLine);
+    for (const alt of options.slice(1)) {
+      const score = walk((n, _r, o) => (n === node ? alt : o[0])) + (this.wantsAltar() && alt === altarward ? 200 : 0);
+      if (score > bestScore) { best = alt; bestScore = score; }
     }
-    return seat;
+    return best;
   }
 
   // ------------------------------------------------------------ decide ---
@@ -336,63 +267,23 @@ export class AIController implements Controller {
       case 'preRoll': return this.preRoll(c);
       case 'action': return this.action(c);
       case 'rollValue': return this.bestBy(c.options, (o) => this.scoreMove(o.value, 1));
-      case 'adjust': return this.bestBy(c.options, (o) => this.scoreMove(o.value, this.st.turn.reverse ? -1 : 1));
-      case 'fork': {
-        const remaining = c.ctx.remaining ?? 1;
-        const node = c.ctx.node!;
-        const options = c.options.map((o) => o.value);
-        if (this.difficulty === 'hard') {
-          // one-step look-ahead: compare the landing value of the main line against each detour
-          const stay = this.moveValue(predictWalk(this.board, this.st, this.seat, remaining, 1, { ...this.policy(), fork: mainLine }, node));
-          const altarward = this.board.altarward(options);
-          let best = options[0];
-          let bestScore = stay;
-          for (const alt of options.slice(1)) {
-            const pr = predictWalk(this.board, this.st, this.seat, remaining, 1, { ...this.policy(), fork: (n, _r, o) => (n === node ? alt : o[0]) }, node);
-            const score = this.moveValue(pr) + (this.wantsAltar() && alt === altarward ? 200 : 0);
-            if (score > bestScore) { best = alt; bestScore = score; }
-          }
-          return best;
-        }
-        return this.forkRule(node, options, this.st.turn.reverse ? -1 : 1);
-      }
-      case 'altarPass': {
-        if (this.wantsAltar()) return 'stop';
-        const remaining = c.ctx.remaining ?? 0;
-        if (remaining >= 3 && this.me.pills >= 3) {
-          return this.bestBy(c.options.filter((o) => o.value !== 'stop'), (o) => this.exitScore(o.value as NodeId, remaining));
-        }
-        return 'stop';
-      }
+      case 'adjust': return this.bestBy(c.options, (o) => this.scoreMove(o.value.steps, this.st.turn.reverse ? -1 : 1) - (o.value.card ? VALUE.card : 0));
+      case 'fork': return this.fork(c);
+      case 'altarPass': return this.altarPass(c);
       case 'exitRoad': return this.bestBy(c.options, (o) => this.exitScore(o.value, c.ctx.remaining ?? 7));
       case 'buy': return this.buy(c);
-      case 'rentReact': {
-        const rent = c.ctx.rent ?? 0;
-        const use = rent >= this.me.stones || (rent >= 150 && rent >= this.me.stones * this.persona.evadeRatio);
-        return use ? 'evade' : 'pay';
-      }
-      case 'guardReact': return this.me.pills >= 2 ? 'goldlight' : 'no';
-      case 'altar': {
-        if (c.options.some((o) => o.value === 'break')) return 'break';
-        return this.me.pills < 2 ? 'calm' : 'leave';
-      }
-      case 'auction': return this.me.stones - 300 >= Math.min(300, this.persona.buyReserve) ? 'yes' : 'no';
-      case 'market': {
-        const reserve = this.persona.buyReserve;
-        const roomy = this.me.hand.length <= 3;
-        const want = this.me.stones >= reserve + 1200 && roomy ? 2 : this.me.stones >= reserve + 400 ? 1 : 0;
-        const opt = c.options.find((o) => o.value === want) ?? c.options.find((o) => o.value === 1) ?? c.options[c.options.length - 1];
-        return this.me.stones >= reserve + 400 ? opt.id : 'no';
-      }
-      case 'node': return this.arrayTarget(c);
+      case 'rentReact': return this.rentReact(c.ctx.rent ?? 0);
+      case 'guardReact': return this.guardChoice(c);
+      case 'stake': return `s${stakeFor(this.view, this.stakeTarget())}`;
+      case 'calm': return 'calm';
+      case 'brew': return c.options[0].id;
+      case 'miniGame': return this.heat();
+      case 'market': return this.market(c);
+      case 'fortunePick': return this.bestBy(c.options, (o) => fortuneValue(this.view, this.eventEffect(o.value)));
+      case 'manifestPick': return this.bestBy(c.options, (o) => giftValue(this.view, o.value));
+      case 'node': return this.bestBy(c.options, (o) => tileValue(this.view, o.value));
       case 'target': return this.targetChoice(c);
       case 'duel': return this.duelChoice(c);
-      case 'duelBet': return this.duelBet(c);
-      case 'miniGame': {
-        const odds = ALCHEMY_ODDS[this.difficulty];
-        const x = this.rng.float();
-        return x < odds.perfect ? 'perfect' : x < odds.perfect + odds.ok ? 'ok' : 'fail';
-      }
     }
   }
 
@@ -410,47 +301,96 @@ export class AIController implements Controller {
     return this.moveValue(predictWalk(this.board, this.st, this.seat, remaining, 1, { ...this.policy(), exit, fork: mainLine }, ALTAR));
   }
 
+  private fork(c: PendingChoiceOf<'fork'>): string | undefined {
+    const node = c.ctx.node!;
+    const options = c.options.map((o) => o.value);
+    const pick = this.difficulty === 'hard'
+      ? this.hardFork(node, c.ctx.remaining ?? 1, options)
+      : this.forkRule(node, options, this.st.turn.reverse ? -1 : 1);
+    return c.options.find((o) => o.value === pick)?.id;
+  }
+
+  /** Stop at the altar unless leaving is worth more than the toll pill. */
+  private altarPass(c: PendingChoiceOf<'altarPass'>): string | undefined {
+    if (this.wantsAltar()) return 'stop';
+    const remaining = c.ctx.remaining ?? 0;
+    const stay = tileValue(this.view, ALTAR);
+    const leave = c.options.filter((o) => o.value !== 'stop');
+    const id = this.bestBy(leave, (o) => this.exitScore(o.value as NodeId, remaining));
+    const best = leave.find((o) => o.id === id);
+    if (!best) return 'stop';
+    const toll = this.data.config.altarToll * VALUE.pill;
+    return this.exitScore(best.value as NodeId, remaining) - toll > stay ? best.id : 'stop';
+  }
+
+  private rentReact(rent: number): string {
+    const use = rent >= this.me.stones || (rent >= 150 && rent >= this.me.stones * this.persona.evadeRatio);
+    return use ? 'evade' : 'pay';
+  }
+
+  private heat(): MiniGameTier {
+    const odds = ALCHEMY_ODDS[this.difficulty];
+    const x = this.rng.float();
+    return x < odds.perfect ? 'perfect' : x < odds.perfect + odds.ok ? 'ok' : 'fail';
+  }
+
+  private eventEffect(id: string) {
+    return this.data.events.events.find((e) => e.id === id)!.effect;
+  }
+
+  // -------------------------------------------------------- breakthrough ---
+
+  /** The last breakthrough decides the game: stake for near certainty. */
+  private stakeTarget(): number {
+    return this.me.realm + 1 >= winRealm(this.data) ? 0.95 : this.persona.stakeAt;
+  }
+
+  /** Close here now, or walk on toward a better site (the altar). */
+  private shouldClose(): boolean {
+    if (this.me.pos === ALTAR || this.roundsLeft <= 1) return true;
+    const chance = closureChance(this.view, this.me.pos, stakeFor(this.view, this.stakeTarget()));
+    if (this.difficulty === 'easy') return chance >= 0.4;
+    return chance >= this.persona.closeAt || this.board.distance(this.me.pos, ALTAR) > 10;
+  }
+
   // ---------------------------------------------------------- pre-roll ---
 
   private preRoll(c: PendingChoiceOf<'preRoll'>): string {
     const has = (pred: (v: PreRollAct) => boolean) => c.options.find((o) => pred(o.value));
+    const close = has((v) => v.t === 'closure');
+    if (close && this.shouldClose()) return close.id;
     if (this.difficulty === 'easy') return 'roll';
-    const spare = this.sparePills();
     const base = this.expectedRoll(1);
     const skill = has((v) => v.t === 'skill');
     if (skill) {
       const sk = this.bestSkill();
       if (sk && sk.value > (this.difficulty === 'hard' ? 40 : 80)) return skill.id;
     }
-    const swift = has((v) => v.t === 'cast' && v.card === 'swiftstep');
-    if (swift && spare >= 1 && this.expectedRoll(1, [1, 2, 3]) - base > 120) return swift.id;
     const dice = has((v) => v.t === 'cast' && v.card === 'dice');
-    if (dice) {
-      const r = this.data.config.rules;
-      let best = -Infinity;
-      for (let v = r.diceCardMin; v <= r.diceCardMax; v++) best = Math.max(best, this.scoreMove(v, 1));
-      if (best - base > (this.difficulty === 'hard' ? 80 : 120)) return dice.id;
-    }
+    if (dice && this.bestFixedRoll() - base > (this.difficulty === 'hard' ? 80 : 120)) return dice.id;
     const back = has((v) => v.t === 'cast' && v.card === 'reverse');
-    if (back && spare >= 1 && this.expectedRoll(-1) - base > 150) return back.id;
+    if (back && this.expectedRoll(-1) - base > 150) return back.id;
     return 'roll';
+  }
+
+  private bestFixedRoll(): number {
+    const r = this.data.config.rules;
+    let best = -Infinity;
+    for (let v = r.diceCardMin; v <= r.diceCardMax; v++) best = Math.max(best, this.scoreMove(v, 1));
+    return best;
   }
 
   // ------------------------------------------------------------ action ---
 
   private action(c: PendingChoiceOf<'action'>): string {
     const find = (pred: (v: ActionAct) => boolean) => c.options.find((o) => pred(o.value));
-    const spare = this.sparePills();
-    const ups = c.options.filter((o) => o.value.t === 'upgrade');
-    const bestUp = this.bestUpgrade(ups.map((o) => (o.value as { node: NodeId }).node));
+    const close = find((v) => v.t === 'closure');
+    if (close && this.shouldClose()) return close.id;
+    const bestUp = this.bestUpgrade(c.options.filter((o) => o.value.t === 'upgrade').map((o) => (o.value as { node: NodeId }).node));
     if (bestUp) return `upgrade:${bestUp}`;
-    if (this.difficulty !== 'easy') {
-      const leader = this.leaderOpponent();
-      const bind = find((v) => v.t === 'cast' && v.card === 'bind');
-      if (bind && spare >= 2 && leader !== null && this.cult(leader) >= 5 && this.cult(leader) >= this.cult()) return bind.id;
-      const drain = find((v) => v.t === 'cast' && v.card === 'drain');
-      if (drain && spare >= 1 && leader !== null && this.st.players[leader].pills >= 3) return drain.id;
-    }
+    if (find((v) => v.t === 'eat') && this.shouldEat()) return 'eat';
+    const cast = this.castChoice(find);
+    if (cast) return cast;
     const skill = find((v) => v.t === 'skill');
     if (skill && (this.difficulty !== 'easy' || this.rng.float() < 0.5)) {
       const sk = this.bestSkill();
@@ -459,18 +399,44 @@ export class AIController implements Controller {
     return 'end';
   }
 
+  /** Eat only spare pills, and only when the bar has room for the whole gain. */
+  private shouldEat(): boolean {
+    const keep = this.me.realm + 1 >= winRealm(this.data) ? 3 : this.persona.keepPills;
+    return this.me.pills > keep && barRoom(this.view) >= this.data.config.cultivation.pill;
+  }
+
+  private castChoice(find: (pred: (v: ActionAct) => boolean) => { id: string } | undefined): string | undefined {
+    if (this.difficulty === 'easy') return undefined;
+    const leader = this.leaderOpponent();
+    if (leader === null) return undefined;
+    const bind = find((v) => v.t === 'cast' && v.card === 'bind');
+    if (bind && this.standing(leader) >= this.standing(this.seat) && nearlyFull({ ...this.view, seat: leader })) return bind.id;
+    const drain = find((v) => v.t === 'cast' && v.card === 'drain');
+    if (drain && this.st.players.some((o) => o.seat !== this.seat && o.pills >= 2)) return drain.id;
+    return undefined;
+  }
+
+  /** Static value of raising `node` to the next level. */
+  private upgradeValue(node: NodeId): number {
+    const st = this.st;
+    const t = st.tiles[node];
+    const price = this.board.node(node).price!;
+    const [from, to] = [landLevel(this.data, t.level), landLevel(this.data, t.level + 1)];
+    const rounds = this.roundsLeft;
+    let s = (nominalRent(this.data, price, t.level + 1) - nominalRent(this.data, price, t.level)) * Math.min(rounds, 4) * 0.4;
+    s += (to.herbs - from.herbs) * VALUE.herb * rounds;
+    s += (to.sit - from.sit) * VALUE.cult * 0.5;
+    if (from.closureBonus === null && to.closureBonus !== null) s += 250;
+    return s;
+  }
+
   private bestUpgrade(nodes: NodeId[]): NodeId | null {
     let best: { node: NodeId; score: number } | null = null;
     for (const id of nodes) {
-      const t = this.st.tiles[id];
-      const price = this.board.node(id).price!;
-      const lv = t.level + 1;
-      const c = upgradeCost(this.data, price, lv);
-      if (this.me.stones < c.stones + this.persona.upgradeReserve) continue;
-      if (c.pills > 0 && this.me.pills - c.pills < this.pillReserve()) continue;
-      let score = nominalRent(this.data, price, lv) - nominalRent(this.data, price, t.level);
-      if (this.data.config.cultivationOnBuild[String(lv)] && !this.me.milestones.includes(`${id}:${lv}`)) score += VALUE.cult / 2;
-      if (!best || score > best.score) best = { node: id, score };
+      const cost = upgradeCost(this.data, this.board.node(id).price!, this.st.tiles[id].level + 1);
+      if (this.me.stones < cost + this.persona.upgradeReserve) continue;
+      const score = this.upgradeValue(id) - cost * 0.5;
+      if (score > 0 && (!best || score > best.score)) best = { node: id, score };
     }
     return best?.node ?? null;
   }
@@ -482,7 +448,6 @@ export class AIController implements Controller {
     if (this.difficulty === 'easy') return this.rng.float() < 0.5 && after >= 0 ? 'yes' : 'no';
     let reserve = this.persona.buyReserve;
     if (this.difficulty === 'hard') {
-      // look-ahead: keep enough to survive the worst likely rent next roll
       let worst = 0;
       for (const { total, p } of DICE_DIST) {
         if (p < 3 / 36) continue;
@@ -494,31 +459,33 @@ export class AIController implements Controller {
     return after >= reserve ? 'yes' : 'no';
   }
 
-  private arrayTarget(c: PendingChoiceOf<'node'>): string | undefined {
-    return this.bestBy(c.options, (o) => {
-      const n = this.board.node(o.value);
-      if (this.st.tiles[o.value].owner === this.seat) return 0;
-      const price = buyPrice(this.data, this.me, n.price!);
-      if (this.me.stones - price < this.persona.buyReserve * 0.5) return -1;
-      return n.price! + 150 * countOwned(this.st, this.board, this.seat);
-    });
+  /** 坊市: top pills up to a staking reserve, then a card if the hand is thin. */
+  private market(c: PendingChoiceOf<'market'>): string {
+    const m = this.data.config.market;
+    const want = Math.max(0, this.persona.keepPills + 1 - this.me.pills);
+    for (let k = Math.min(want, m.pillMax); k > 0; k--) {
+      if (this.me.stones - k * m.pillPrice >= this.persona.buyReserve) return `pill${k}`;
+    }
+    const card = c.options.find((o) => o.id === 'card1');
+    if (card && this.me.hand.length < 2 && this.me.stones - m.cardPrice >= this.persona.buyReserve + 300) return card.id;
+    return 'none';
   }
 
   private targetChoice(c: PendingChoiceOf<'target'>): string | undefined {
-    const purpose = c.ctx.purpose;
     const real = c.options.filter((o) => o.value.t !== 'cancel');
     if (real.length === 0) return 'cancel';
-    if (purpose === 'bind') {
-      const leader = this.leaderOpponent();
-      return real.find((x) => x.value.t === 'player' && x.value.seat === leader)?.id ?? real[0].id;
+    switch (c.ctx.purpose) {
+      case 'bind': {
+        const leader = this.leaderOpponent();
+        return real.find((x) => x.value.t === 'player' && x.value.seat === leader)?.id ?? real[0].id;
+      }
+      case 'drain':
+        return this.bestBy(real, (o) => (o.value.t === 'player' ? this.st.players[o.value.seat].pills * 10 + this.standing(o.value.seat) : 0));
+      case 'sworddash': case 'swap': case 'daze': case 'roadblock':
+        return this.bestSkill()?.id ?? 'cancel';
+      default:
+        return real[0].id;
     }
-    if (purpose === 'sworddash' || purpose === 'swap' || purpose === 'daze' || purpose === 'roadblock') {
-      return this.bestSkill()?.id ?? 'cancel';
-    }
-    if (purpose === 'drain') {
-      return this.bestBy(real, (o) => (o.value.t === 'player' ? this.st.players[o.value.seat].pills + this.cult(o.value.seat) * 0.1 : 0));
-    }
-    return real[0].id;
   }
 }
 

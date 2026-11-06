@@ -26,9 +26,9 @@ export class TopBar {
     tip.attach(x, y, w, h, () => ({
       title: '胜负',
       body: [
-        `修为先达到 ${cfg.winCultivation} 的玩家立即获胜（渡劫飞升）。`,
-        `无人达到时，第 ${cfg.rounds} 轮结束后修为最高者获胜；平局比总资产（灵石 + 洞府造价 + 灵丹 × ${cfg.pillValueInStones}）。`,
-        `不会淘汰：付不起时破产重整，灵田归还，领 ${cfg.bankrupt.resetStones} 灵石，修为 −${cfg.bankrupt.cultivationLoss}。`,
+        '先突破到化神的玩家立即获胜（渡劫化神）。',
+        `无人化神时，第 ${cfg.rounds} 轮结束后比境界，再比修为条，再比总资产（灵石 + 灵田造价 + 丹药 × ${cfg.assetValue.pill} + 灵草 × ${cfg.assetValue.herb}）。`,
+        `不会淘汰：付不起时破产重整，灵田归还，领 ${cfg.bankrupt.resetStones} 灵石，修为条清空。`,
         '一轮 = 每位玩家各行动一个回合。点击左侧修士查看详情。',
         '',
         this.statusDetail(),
@@ -41,7 +41,7 @@ export class TopBar {
     const cfg = this.game.data.config;
     const r = Math.max(1, state.round);
     this.round.setText(`第 ${r}/${cfg.rounds} 轮${r === cfg.rounds ? ' 终' : ''}`);
-    const m = cfg.baizeManifestRound;
+    const m = cfg.manifest.round;
     if (state.manifested && state.round === m) this.baize.setText('现世').setColor(HEX.gold);
     else if (state.manifested) this.baize.setText('已现').setColor(HEX.dim);
     else this.baize.setText(`${m - r}轮后`).setColor(HEX.parchment);
@@ -53,9 +53,9 @@ export class TopBar {
     if (!st) return '';
     const cfg = this.game.data.config;
     const r = Math.max(1, st.round);
-    const m = cfg.baizeManifestRound;
+    const m = cfg.manifest.round;
     const baize = st.manifested
-      ? (st.round === m ? '白泽现世：灵雨普降，本轮租金减半。' : '白泽已现世。')
+      ? (st.round === m ? '白泽现世：落后者先挑一份机缘。' : '白泽已现世。')
       : `白泽将于第 ${m} 轮现世（还有 ${m - r} 轮）。`;
     return baize;
   }

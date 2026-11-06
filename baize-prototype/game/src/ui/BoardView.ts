@@ -82,8 +82,7 @@ export class BoardView {
       const foot = y + u(48);
       if (n.type === 'land') this.mountLand(id, n.region, x, y, w, h, foot);
       else {
-        const obj = n.type === 'minigame' ? `obj_minigame_${n.game}` : `obj_${n.type}`;
-        addImg(s, x + w / 2, foot, obj).setOrigin(0.5, 1).setDepth(foot).setScale(SPRITE.prop);
+        addImg(s, x + w / 2, foot, `obj_${n.type}`).setOrigin(0.5, 1).setDepth(foot).setScale(SPRITE.prop);
       }
       const cell = this.world.cellRect(id);
       this.addZone(id, cell.x, cell.y, cell.w, cell.h);

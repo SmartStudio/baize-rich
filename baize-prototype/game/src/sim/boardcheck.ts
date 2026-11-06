@@ -6,8 +6,7 @@ import { ALTAR, Board, REGION_IDS } from '../core/board';
 import type { BoardData, NodeId, TileType } from '../core/types';
 
 const GLYPH: Record<TileType, string> = {
-  start: 'S', land: '.', gate: 'G', trial: 'T', spring: '~', market: '$', furnace: '%', cliff: 'X', array: 'A', shrine: '+', altar: '@',
-  shop: '&', minigame: '?', hospital: 'H',
+  start: 'S', land: '.', gate: 'G', secret: '?', spring: '~', market: '$', alchemy: '%', beast: 'X', ruins: 'R', eye: '+', altar: '@',
 };
 
 type State = { node: NodeId; from: NodeId | null };
@@ -42,12 +41,8 @@ export function checkBoard(data: BoardData): string[] {
   if (problems.length) return problems; // the Board class cannot be built
 
   const count = (t: TileType) => data.nodes.filter((n) => n.type === t).length;
-  if (count('start') !== 1) problems.push(`expected 1 start, found ${count('start')}`);
-  if (count('cliff') !== 1) problems.push(`expected 1 cliff, found ${count('cliff')}`);
-  if (count('altar') !== 1) problems.push(`expected 1 altar, found ${count('altar')}`);
-  if (count('hospital') !== 1) problems.push(`expected 1 hospital, found ${count('hospital')}`);
-  for (const n of data.nodes) {
-    if (n.type === 'minigame' && (!n.game || !data.games?.[n.game])) problems.push(`minigame ${n.id} needs a game listed in games`);
+  for (const t of ['start', 'beast', 'ruins', 'eye', 'altar'] as TileType[]) {
+    if (count(t) !== 1) problems.push(`expected 1 ${t}, found ${count(t)}`);
   }
   const altar = data.nodes.find((n) => n.id === ALTAR);
   if (!altar || altar.type !== 'altar' || !altar.rect) problems.push(`node ${ALTAR} must be the altar with a rect`);
@@ -148,8 +143,7 @@ export function checkBoard(data: BoardData): string[] {
     const has = (t: TileType) => mine.filter((id) => b.node(id).type === t).length;
     const forks = mine.filter((id) => b.node(id).next.length > 1).length;
     if (forks < 2) problems.push(`${r}: ${forks} forks (need ≥2)`);
-    for (const t of ['spring', 'furnace', 'trial'] as TileType[]) if (has(t) < 1) problems.push(`${r}: no ${t}`);
-    if (has('market') + has('shop') < 1) problems.push(`${r}: no market or shop`);
+    for (const t of ['spring', 'alchemy', 'secret', 'market'] as TileType[]) if (has(t) < 1) problems.push(`${r}: no ${t}`);
     const st = Object.entries(streets).filter(([, s]) => s.region === r);
     if (st.length < 3) problems.push(`${r}: ${st.length} streets (need 3)`);
     for (const [sid] of st) {

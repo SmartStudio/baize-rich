@@ -1,13 +1,14 @@
 {
   "events": [
-    { "id": "e_elder",    "name": "偶遇前辈",   "good": true,  "desc": "前辈赠你盘缠，+200 灵石",           "effect": { "stones": 200 } },
-    { "id": "e_beast",    "name": "灵兽引路",   "good": true,  "desc": "下次移动点数 1–6 任选",            "effect": { "chooseRoll": true } },
-    { "id": "e_chest",    "name": "秘境宝箱",   "good": true,  "desc": "抽 2 张符箓",                       "effect": { "draw": 2 } },
-    { "id": "e_insight",  "name": "顿悟",       "good": true,  "desc": "+1 灵丹",                           "effect": { "pills": 1 } },
-    { "id": "e_rain",     "name": "天降甘霖",   "good": true,  "desc": "所有玩家 +1 灵丹",                  "effect": { "allPills": 1 } },
-    { "id": "e_auction",  "name": "坊市拍卖",   "good": true,  "desc": "可花 300 灵石换 1 点修为",          "effect": { "buyCultivation": 300 } },
-    { "id": "e_illusion", "name": "误入幻阵",   "good": false, "desc": "沿原方向后退 3 格并结算落点",        "effect": { "moveBack": 3 } },
-    { "id": "e_heartdemon","name": "心魔侵扰",  "good": false, "desc": "失去 1 灵丹",                       "effect": { "pills": -1 } },
-    { "id": "e_robber",   "name": "劫修拦路",   "good": false, "desc": "失去 100 灵石",                     "effect": { "stones": -100 } }
+    { "id": "insight",   "name": "顿悟",     "count": 2, "good": true,  "desc": "+2 修为",                  "effect": { "cult": 2 } },
+    { "id": "legacy",    "name": "古修遗泽", "count": 2, "good": true,  "desc": "+2 灵草",                  "effect": { "herbs": 2 } },
+    { "id": "remnant",   "name": "残丹",     "count": 2, "good": true,  "desc": "+1 丹药",                  "effect": { "pills": 1 } },
+    { "id": "talisman",  "name": "拾得符箓", "count": 2, "good": true,  "desc": "抽 1 张符箓",              "effect": { "draw": 1 } },
+    { "id": "vein",      "name": "灵石矿脉", "count": 2, "good": true,  "desc": "+200 灵石",                "effect": { "stones": 200 } },
+    { "id": "mentor",    "name": "前辈指点", "count": 1, "good": true,  "desc": "下一次突破 +2",            "effect": { "guidance": 1 } },
+    { "id": "beasts",    "name": "妖兽袭击", "count": 2, "good": false, "desc": "失 150 灵石；元婴可免",    "effect": { "stones": -150, "immuneRealm": 3 } },
+    { "id": "heartdemon","name": "心魔侵扰", "count": 1, "good": false, "desc": "修为 −2",                  "effect": { "cult": -2 } },
+    { "id": "leak",      "name": "宝光外泄", "count": 1, "good": false, "desc": "本轮你算作身怀宝光",       "effect": { "glow": true } },
+    { "id": "rift",      "name": "秘境裂隙", "count": 1, "good": true,  "desc": "立即移动到任意秘境格并再抽 1 张", "effect": { "rift": true } }
   ]
 }

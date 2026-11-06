@@ -34,31 +34,26 @@ if (json) {
   console.log(JSON.stringify(r, null, 2));
 } else {
   // Every seat plays exactly one hero per game, so counts are rate × games; recovering them keeps the text identical to the pre-library output.
-  const count = (rate: number) => Math.round(rate * games);
-  const pct = (n: number, d: number) => `${((100 * n) / d).toFixed(1)}%`;
+  const pct = (x: number) => `${(100 * x).toFixed(1)}%`;
   const pp = r.perPlayer;
-  console.log(`\n白泽秘境大富翁 · AI 自对弈  games=${games} seed=${seed} difficulty=${difficulty}  (${ms} ms, ${(ms / games).toFixed(1)} ms/game)`);
-  console.log('—'.repeat(60));
-  console.log('各英雄胜率 (目标 22–28%)');
-  for (const h of HERO_IDS) {
-    const w = count(r.heroWinRate[h]);
-    console.log(`  ${heroName[h]} (${h})`.padEnd(18) + `${pct(w, games)}  (${w}/${games})`);
-  }
-  console.log(`先手(1号位)胜率: ${pct(count(r.seatWinRate[0]), games)}  (公平值 25%，各席位: ${r.seatWinRate.map((s) => pct(count(s), games)).join(' / ')})`);
-  const cfg = defaultData.config;
-  console.log(`平均轮数: ${r.avgRounds.toFixed(2)}  (上限 ${cfg.rounds} 轮)`);
-  const byCult = count(r.cultivationEndRate);
-  console.log(`结束方式: 修为 ${cfg.winCultivation} 飞升 ${pct(byCult, games)} / 第 ${cfg.rounds} 轮封顶 ${pct(games - byCult, games)}`);
-  console.log(`平均每人突破次数: ${pp.breakthroughs.toFixed(2)}  (目标 1–2)`);
-  console.log(`平均每人进入神道次数: ${pp.roadEntries.toFixed(2)}`);
-  console.log(`平均每人最终修为: ${pp.finalCult.toFixed(2)}`);
-  console.log(`平均每人破产重整: ${pp.bankruptcies.toFixed(2)}`);
-  console.log(`第 ${LEADER_CHECK_ROUND} 轮领先者最终获胜: ${pct(r.leaderAtR10Wins, 1)}  (n=${r.gamesReachingR10} 局到达第 ${LEADER_CHECK_ROUND} 轮)`);
-  console.log(`平均每人无事可做回合: ${pp.idleTurns.toFixed(2)}  (占其回合 ${pct(pp.idleTurns, pp.turns)})`);
   const ix = r.interaction;
+  const cfg = defaultData.config;
+  const seatSpread = Math.max(...r.seatWinRate) - Math.min(...r.seatWinRate);
+  console.log(`\n凡人问道 · AI 自对弈  games=${games} seed=${seed} difficulty=${difficulty}  (${ms} ms, ${(ms / games).toFixed(1)} ms/game)`);
   console.log('—'.repeat(60));
-  console.log('玩家互动（每局）');
-  console.log(`  斗法 ${ix.duels.toFixed(2)} · 山岳拦人 ${ix.roadblockHits.toFixed(2)} · 小游戏 ${ix.miniGames.toFixed(2)}`);
-  console.log(`  技能使用: ${HERO_IDS.map((h) => `${heroName[h]} ${ix.skillUsesByHero[h].toFixed(2)}`).join(' / ')}`);
-  console.log(`  回合占比: 有互动 ${pct(ix.interactionTurnRate, 1)} · 付租 ${pct(ix.rentTurnRate, 1)} · 斗法 ${pct(ix.duelTurnRate, 1)} · 用符 ${pct(ix.castTurnRate, 1)}`);
+  console.log('§12 调参目标');
+  console.log(`  平均轮数 ${r.avgRounds.toFixed(2)}  (目标 10–12，上限 ${cfg.rounds})`);
+  console.log(`  化神结束 ${pct(r.ascendRate)}  (目标 50–70%)`);
+  console.log(`  修士胜率 ${HERO_IDS.map((h) => `${heroName[h]} ${pct(r.heroWinRate[h])}`).join(' / ')}  (目标 22–28%)`);
+  console.log(`  座位胜率 ${r.seatWinRate.map(pct).join(' / ')}，差 ${pct(seatSpread)}  (目标 < 3%)`);
+  console.log(`  每人突破 ${pp.breakthroughs.toFixed(2)} 次，走火入魔 ${pp.breakthroughFails.toFixed(2)} 次  (目标 2.5–3.5 / 约 1)`);
+  console.log(`  每局斗法 ${ix.duels.toFixed(2)}  (目标 ≥ 6)；被夺丹药回合 ${pct(ix.pillStolenTurnRate)}  (目标 ≥ 5%)`);
+  console.log(`  第 ${LEADER_CHECK_ROUND} 轮领先者获胜 ${pct(r.leaderWins)}  (目标 ≤ 65%，n=${r.gamesReachingCheck})`);
+  console.log('—'.repeat(60));
+  console.log('诊断（每人平均）');
+  console.log(`  最终境界 ${pp.finalRealm.toFixed(2)} · 炼丹 ${pp.pillsMade.toFixed(2)} · 服丹 ${pp.pillsEaten.toFixed(2)} · 被夺 ${pp.pillsLost.toFixed(2)} · 溢出修为 ${pp.cultWasted.toFixed(2)}`);
+  console.log(`  进神道 ${pp.roadEntries.toFixed(2)} · 破产 ${pp.bankruptcies.toFixed(2)} · 无事可做回合 ${pct(pp.idleTurns / Math.max(1, pp.turns))}`);
+  console.log(`  每局 山岳拦人 ${ix.roadblockHits.toFixed(2)} · 火候小游戏 ${ix.miniGames.toFixed(2)}`);
+  console.log(`  技能使用 ${HERO_IDS.map((h) => `${heroName[h]} ${ix.skillUsesByHero[h].toFixed(2)}`).join(' / ')}`);
+  console.log(`  回合占比 有互动 ${pct(ix.interactionTurnRate)} · 付租 ${pct(ix.rentTurnRate)} · 斗法 ${pct(ix.duelTurnRate)} · 用符 ${pct(ix.castTurnRate)}`);
 }

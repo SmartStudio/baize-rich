@@ -2,7 +2,7 @@
 // Hovering the 修为 line explains it; clicking a chip pins a popover with everything else.
 import Phaser from 'phaser';
 import type { Game } from '../core/engine';
-import { breakthroughCost, breakthroughsAvailable, cultivation, realmName } from '../core/rules';
+import { barFull, barSize, isGlowing, realmName, winRealm } from '../core/rules';
 import type { GameState } from '../core/types';
 import { addImg } from './assets';
 import { LEFT, type Rect } from './layout';
@@ -63,13 +63,13 @@ export class PlayerCards {
     this.state = state;
     state.players.forEach((p, i) => {
       const v = this.views[i];
-      const c = cultivation(state, g.data, i);
+      const bar = barSize(g.data, p);
+      const ready = barFull(g.data, p);
       const active = state.current === i && !state.over;
       v.frame.setStrokeStyle(active ? 3 : 2, active ? PLAYER_COLORS[i] : COLORS.outline).setFillStyle(active ? COLORS.panelLight : COLORS.panel, FLOAT_ALPHA);
       v.marker.setVisible(active);
-      v.cultBar.width = Math.max(0, Math.min(1, c / g.data.config.winCultivation)) * BAR_W;
-      const bt = breakthroughsAvailable(p);
-      v.cult.setText(`修为 ${c}/${g.data.config.winCultivation}${bt > 0 ? ' · 可突破' : ''}`).setColor(bt > 0 ? HEX.gold : HEX.parchment);
+      v.cultBar.width = bar > 0 ? Math.min(1, p.cult / bar) * BAR_W : BAR_W;
+      v.cult.setText(`${realmName(g.data, p.realm)} ${p.cult}/${bar}${ready ? ' · 可闭关' : ''}`).setColor(ready ? HEX.gold : HEX.parchment);
       v.stones.setText(`${p.stones}`);
       this.tags[i] = this.statusTags(state, i);
     });
@@ -87,15 +87,14 @@ export class PlayerCards {
     const cfg = g.data.config;
     const st = this.state;
     const p = st.players[i];
-    const c = cultivation(st, g.data, i);
     const lines = [
-      `${this.labels[i]} · 修为 ${c}/${cfg.winCultivation}`,
-      `灵石 ${p.stones} · 灵丹 ${p.pills} · 符箓 ${p.hand.length}/${cfg.handLimit}`,
+      `${this.labels[i]} · 修为 ${p.cult}/${barSize(g.data, p)} · 心境 ${p.mind}`,
+      `灵石 ${p.stones} · 丹药 ${p.pills} · 灵草 ${p.herbs} · 符箓 ${p.hand.length}/${cfg.handLimit}`,
       this.cultTip(i).body.split('\n')[1],
       '',
       this.statusTip(i).body,
     ];
-    return { title: `${p.name} · ${realmName(g.data, c)}`, body: lines.join('\n') };
+    return { title: `${p.name} · ${realmName(g.data, p.realm)}`, body: lines.join('\n') };
   }
 
   private statusTags(state: GameState, i: number): StatusTag[] {
@@ -104,13 +103,14 @@ export class PlayerCards {
     const p = state.players[i];
     const tags: StatusTag[] = [];
     if (p.bound) tags.push({ label: '定身', desc: '中了定身符：下回合不能移动，原地结算。' });
-    if (p.chooseRoll) tags.push({ label: '灵兽引路', desc: '下次移动的点数可在 1–6 中任选。' });
+    if (isGlowing(state, g.data, i)) tags.push({ label: '宝光', desc: `身怀 ${cfg.duel.glowAt} 颗以上丹药：斗法输了会被夺 ${cfg.duel.glowSteal} 颗。` });
+    if (p.guidance > 0) tags.push({ label: '指点', desc: `下次闭关突破 +${cfg.breakthrough.guidanceBonus}。` });
     if (p.dazed) tags.push({ label: '迷魂', desc: '中了迷魂丹：下一次掷骰移动的步数减半（向下取整，至少 1）。' });
     const hero = g.data.heroes.find((h) => h.id === p.hero)!;
     const wait = p.skillReadyTurn - p.turnsTaken;
     tags.push({
       label: wait > 0 ? `技能 冷却 ${wait}` : '技能 就绪',
-      desc: `【${hero.skill.name}】${hero.skill.desc}。不花灵丹，用后冷却 ${cfg.rules.skillCooldownTurns} 个自己的回合（按 K 或在「出符」菜单发动）。\n被动【${hero.passive.name}】${hero.passive.desc}。`,
+      desc: `【${hero.skill.name}】${hero.skill.desc}。不花资源，用后冷却 ${cfg.rules.skillCooldownTurns} 个自己的回合（按 K 或在「出符」菜单发动）。\n被动【${hero.passive.name}】${hero.passive.desc}。`,
     });
     return tags;
   }
@@ -122,22 +122,16 @@ export class PlayerCards {
   private cultTip(i: number): TipContent {
     const g = this.game;
     const cfg = g.data.config;
-    const st = this.state;
-    const p = st.players[i];
-    const c = cultivation(st, g.data, i);
-    const bt = breakthroughsAvailable(p);
-    const next = cfg.breakthroughThresholds.find((t) => t > p.peakCult);
-    const b = g.data.board.buildings;
+    const p = this.state.players[i];
+    const realm = cfg.realms[p.realm];
+    const top = p.realm >= winRealm(g.data);
     const lines = [
-      `修为先达到 ${cfg.winCultivation} 立即获胜；否则第 ${cfg.rounds} 轮结束时修为最高者获胜。`,
-      bt > 0
-        ? `突破机会 ${bt} 次：停在中央白泽灵台选「突破」（本次 ${breakthroughCost(st, g.data, i)} 灵丹）。`
-        : next !== undefined ? `修为（历史最高）达到 ${next} 时获得下一次突破机会。` : '突破机会已全部获得。',
+      '先突破到化神者获胜；否则秘境关闭时比境界。',
+      top ? '已化神。' : `修为条满 ${realm.bar} 后，在白泽灵台或自家洞府闭关：2D6 + 加成 ≥ ${realm.target} 即突破。`,
       '',
-      '修为来源：',
-      `· 洞府首次建成${Object.keys(cfg.cultivationOnBuild).map((lv) => `${b[Number(lv)].name} +${cfg.cultivationOnBuild[lv]}`).join(' / ')}`,
-      '破产重整会失去修为。',
+      '修为来源：每回合吐纳 +1、洞府打坐、灵泉、阵眼、服丹。条满后多余的修为会溢出。',
+      '突破失败：修为条减半，心境 +1（下次突破更稳）。',
     ];
-    return { title: `修为 ${c} / ${cfg.winCultivation} · ${realmName(g.data, c)}`, body: lines.join('\n') };
+    return { title: `${realmName(g.data, p.realm)} · 修为 ${p.cult}/${realm.bar}`, body: lines.join('\n') };
   }
 }

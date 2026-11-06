@@ -8,7 +8,7 @@ import { newGame, placeAll, script } from './helpers';
 //
 //   A0 → A1 → A2 → A3 → A4 → A5 → A0
 //              ↘ B1 → B2 ↗
-// The cliff and the altar the engine requires sit off the loop.
+// The 妖兽谷 and the altar the engine requires sit off the loop.
 function loopWithShortcut() {
   const data = cloneData();
   const land = (id: string, next: string[]): BoardNodeData => ({ id, type: 'land', pos: [0, 0], region: 'wood', name: id, price: 100, next });
@@ -16,12 +16,12 @@ function loopWithShortcut() {
     { id: 'A0', type: 'start', pos: [0, 0], next: ['A1'] },
     land('A1', ['A2']),
     { id: 'A2', type: 'gate', pos: [0, 0], next: ['A3', 'B1'] },
-    { id: 'A3', type: 'furnace', pos: [0, 0], next: ['A4'] },
+    { id: 'A3', type: 'market', pos: [0, 0], next: ['A4'] },
     land('A4', ['A5']),
     land('A5', ['A0']),
     land('B1', ['B2']),
     land('B2', ['A5']),
-    { id: 'C0', type: 'cliff', pos: [0, 0], next: ['ALTAR'] },
+    { id: 'C0', type: 'beast', pos: [0, 0], next: ['ALTAR'] },
     { id: 'ALTAR', type: 'altar', pos: [0, 0], next: ['C0'] },
   ];
   const g = newGame(1, data);

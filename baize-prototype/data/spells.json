@@ -4,15 +4,16 @@
     "attack": { "name": "攻伐", "color": "red" },
     "guard":  { "name": "护体", "color": "blue" },
     "move":   { "name": "身法", "color": "green" },
-    "wealth": { "name": "财运", "color": "gold" }
+    "mind":   { "name": "心法", "color": "gold" }
   },
   "cards": [
-    { "id": "drain",     "name": "夺灵符", "cat": "attack", "cost": 1, "timing": "action",   "desc": "从一名对手处夺取 1 灵丹" },
-    { "id": "bind",      "name": "定身符", "cat": "attack", "cost": 2, "timing": "action",   "desc": "指定对手下回合不能移动" },
-    { "id": "goldlight", "name": "金光符", "cat": "guard",  "cost": 1, "timing": "reaction", "desc": "抵挡 1 次攻伐符" },
-    { "id": "evade",     "name": "避劫符", "cat": "guard",  "cost": 2, "timing": "rent",     "desc": "免付本次租金" },
-    { "id": "swiftstep", "name": "神行符", "cat": "move",   "cost": 1, "timing": "preroll",  "desc": "本次点数 +1 至 +3，自选" },
-    { "id": "reverse",   "name": "回首符", "cat": "move",   "cost": 1, "timing": "preroll",  "desc": "本回合反向移动，沿来路倒走" },
-    { "id": "dice",      "name": "御骰符", "cat": "move",   "cost": 0, "timing": "preroll",  "desc": "本次不掷骰，自选 2–12 点移动" }
+    { "id": "swiftstep", "name": "神行符", "cat": "move",   "timing": "adjust",   "desc": "掷骰后点数 +1 至 +3，自选" },
+    { "id": "dice",      "name": "御骰符", "cat": "move",   "timing": "preroll",  "desc": "不掷骰，自选 2–12 点" },
+    { "id": "reverse",   "name": "回首符", "cat": "move",   "timing": "preroll",  "desc": "本回合沿来路倒走" },
+    { "id": "bind",      "name": "定身符", "cat": "attack", "timing": "action",   "desc": "指定一名对手，其下回合不能移动" },
+    { "id": "drain",     "name": "夺灵符", "cat": "attack", "timing": "action",   "desc": "从一名对手处夺 1 颗丹药" },
+    { "id": "evade",     "name": "避劫符", "cat": "guard",  "timing": "rent",     "desc": "免付本次租金" },
+    { "id": "goldlight", "name": "金光符", "cat": "guard",  "timing": "reaction", "desc": "被斗法或被夺灵时，抵挡这一次" },
+    { "id": "calm",      "name": "清心符", "cat": "mind",   "timing": "closure",  "desc": "本次突破 +2" }
   ]
 }

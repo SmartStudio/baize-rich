@@ -16,9 +16,9 @@ interface FrameSpec { name: string; w: number; h: number; draw: Draw }
 const REGION_FILL: Record<string, string> = { wood: '#2F6B3A', fire: '#8A3424', water: '#2C5E86', earth: '#5B3D78' };
 const REGION_LIGHT: Record<string, string> = { wood: '#4FA35A', fire: '#E0663A', water: '#5FB7E0', earth: '#8E5BC2' };
 const TYPE_FILL: Record<string, [string, string]> = {
-  start: ['#6E5A2A', '宗'], gate: ['#57506E', '门'], trial: ['#4C5A66', '碑'], spring: ['#2E6E7A', '泉'],
-  market: ['#7A5A2E', '市'], furnace: ['#7A3A2E', '炉'], cliff: ['#3A3448', '崖'], array: ['#3E3A7A', '阵'],
-  shrine: ['#6E6A88', '祠'],
+  start: ['#6E5A2A', '宗'], gate: ['#57506E', '门'], secret: ['#4C5A66', '秘'], spring: ['#2E6E7A', '泉'],
+  market: ['#7A5A2E', '市'], alchemy: ['#7A3A2E', '丹'], beast: ['#3A3448', '兽'], ruins: ['#3E3A7A', '府'],
+  eye: ['#6E6A88', '眼'], furnace: ['#7A3A2E', '炉'],
 };
 const HERO_FILL: Record<string, [string, string]> = {
   body: ['#F2B93B', '体'], magic: ['#E6E4F0', '法'], sword: ['#D9434B', '剑'], alch: ['#3A6FD8', '丹'],
