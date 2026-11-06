@@ -42,7 +42,7 @@ export interface Fact {
   tone?: Tone;
 }
 
-export type ModalLayout = 'list' | 'cards' | 'tiles';
+export type ModalLayout = 'list' | 'cards' | 'tiles' | 'stepper';
 
 export interface ModalSpec {
   title: string;

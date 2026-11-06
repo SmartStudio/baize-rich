@@ -8,6 +8,7 @@
 import Phaser from 'phaser';
 import { frameRef } from './assets';
 import { buildCards } from './choices/CardSheet';
+import { buildStepper } from './choices/StepperSheet';
 import { EDGE, modalFrame, placeX, type Sheet, type SheetBuilder } from './choices/panel';
 import { optionKey, type ModalLayout, type ModalOption, type ModalSpec } from './choices/spec';
 import { buildTiles } from './choices/TileSheet';
@@ -21,6 +22,7 @@ const LAYOUTS: Record<ModalLayout, SheetBuilder> = {
   list: buildList,
   tiles: buildTiles,
   cards: buildCards,
+  stepper: buildStepper,
 };
 
 export class ChoiceModal {
@@ -69,9 +71,11 @@ export class ChoiceModal {
       if (this.focus) this.close(this.focus);
       return true;
     }
-    if ((key === 'ArrowLeft' || key === 'ArrowRight') && this.sheet?.highlight && this.focus) {
-      const i = this.pickable.indexOf(this.focus) + (key === 'ArrowLeft' ? -1 : 1);
-      this.setFocus(this.pickable[Phaser.Math.Clamp(i, 0, this.pickable.length - 1)]);
+    const arrow = ARROWS[key];
+    if (arrow && this.sheet?.highlight && this.focus) {
+      const order = this.sheet.steps ?? this.pickable;
+      const i = order.indexOf(this.focus) + arrow;
+      this.setFocus(order[Phaser.Math.Clamp(i, 0, order.length - 1)]);
       return true;
     }
     const picked = spec.options.find((o, i) => optionKey(o, i) === key);
@@ -84,6 +88,9 @@ export class ChoiceModal {
     if (id) this.sheet?.highlight?.(id);
   }
 }
+
+/** ←→ move the focus; − and + say the same on a stepper. */
+const ARROWS: Record<string, -1 | 1> = { ArrowLeft: -1, ArrowRight: 1, '-': -1, '+': 1, '=': 1 };
 
 const PREVIEW_BOX = 132;
 const PRIMARY = { fill: COLORS.gold, text: HEX.ink, hint: '#5A4A2A' };

@@ -59,14 +59,17 @@ describe('押丹 screen', () => {
 });
 
 describe('炼丹 screen', () => {
-  it('lists brew counts ascending, keyed by the count, with herbs before → after; Esc brews nothing', () => {
+  it('offers 炼满 as the one-tap default, fewer on the stepper, herbs before → after; Esc brews nothing', () => {
     const g = newGame();
     const p = g.state.players[3];
-    p.herbs = 5;
+    p.herbs = 9;
     const { spec } = screenFor(g, g.testSettle(3, nodeOfType(g, 'alchemy')), 'brew');
-    expect(keys(spec)).toEqual(['0', '1', '2']);
-    expect(spec.options.map((o) => o.hint)).toEqual(['灵草 5 → 5', '灵草 5 → 3', '灵草 5 → 1']);
-    expect(spec.options[2].big).toBe('+2 丹药');
+    expect(spec.layout).toBe('stepper');
+    expect(spec.options.map((o) => o.label)).toEqual(['不炼', '炼 1 炉', '炼 2 炉', '炼 3 炉', '炼满 4 炉']);
+    expect(spec.defaultId).toBe('b4');
+    expect(keys(spec)).toEqual(['0', '1', '2', '3', '4']);
+    expect(spec.options.map((o) => o.hint)).toEqual(['灵草 9 → 9', '灵草 9 → 7', '灵草 9 → 5', '灵草 9 → 3', '灵草 9 → 1']);
+    expect(spec.options[4].big).toBe('+4 丹药');
     expect(spec.cancelId).toBe('b0');
   });
 });

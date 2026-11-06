@@ -1,10 +1,12 @@
 // 炼丹 (丹房 / 随身药炉) and 坊市: tiles that show what goes in and what comes out before the pick.
 import type { ModalOption, Presenter } from './spec';
 
+/** One tap brews the most; − / + take fewer, Esc brews none. */
 export const brew: Presenter<'brew'> = (c, { game }) => {
   const per = game.data.config.alchemy.herbsPerPill;
   const p = game.state.players[c.player];
   const byCount = [...c.options].sort((a, b) => a.value - b.value);
+  const most = byCount.at(-1)!.value;
   return {
     title: c.title,
     headline: `${per} 灵草 → 1 颗丹药`,
@@ -13,16 +15,14 @@ export const brew: Presenter<'brew'> = (c, { game }) => {
     options: byCount.map((o): ModalOption => ({
       id: o.id,
       key: o.value <= 9 ? String(o.value) : '',
-      label: o.value === 0 ? '不炼' : `炼 ${o.value} 炉`,
-      icon: 'ic_pill',
-      count: o.value,
+      label: o.value === 0 ? '不炼' : o.value === most ? `炼满 ${o.value} 炉` : `炼 ${o.value} 炉`,
       big: o.value === 0 ? '—' : `+${o.value} 丹药`,
       tone: o.value === 0 ? 'dim' : 'good',
       hint: `灵草 ${p.herbs} → ${p.herbs - o.value * per}`,
     })),
     defaultId: c.defaultId,
     cancelId: c.cancelId,
-    layout: 'tiles',
+    layout: 'stepper',
   };
 };
 

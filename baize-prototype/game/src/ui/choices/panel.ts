@@ -11,6 +11,8 @@ export const EDGE = 8;
 export interface Sheet {
   layer: Phaser.GameObjects.Container;
   highlight?: (id: string) => void;
+  /** What ←→ step through, when not every pickable option (a stepper leaves its cancel out). */
+  steps?: string[];
 }
 
 /** `pick` answers with an option; `hover` moves the focus to it. */
