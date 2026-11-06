@@ -209,17 +209,7 @@ async function tourShots(page, errors) {
   await shot(page, '07-midgame-later.png');
   const info2 = await page.evaluate(() => { const g = window.__baize; return { round: g.state.round, over: g.state.over }; });
   console.log('auto game after 40 s:', JSON.stringify(info2));
-  await page.evaluate(() => {
-    const game = window.__baize;
-    const scene = window.__phaser.scene.getScene('Game');
-    game.state.over = true;
-    game.state.winner = game.ranking()[0];
-    game.state.endReason = 'roundCap';
-    scene.scene.start('Result', scene.resultData());
-  });
-  await waitScene(page, 'Result');
-  await sleep(500);
-  await shot(page, '07b-result.png');
+  await showResult(page, '07b-result.png');
 
   // 4) human soak test: 1 human + 3 AI, keep confirming defaults with Space / Enter
   await startQuickGame(page, `${BASE}?seed=11`);
@@ -234,6 +224,22 @@ async function tourShots(page, errors) {
   await shot(page, '08-human-soak.png');
   const info3 = await page.evaluate(() => { const g = window.__baize; return { round: g.state.round, over: g.state.over, answers: g.history.length }; });
   console.log('human soak after 45 s:', JSON.stringify(info3));
+  await showResult(page, '08b-result-human.png');
+}
+
+// End the running game by the round cap where it stands and shoot the result screen.
+async function showResult(page, file) {
+  await page.evaluate(() => {
+    const game = window.__baize;
+    const scene = window.__phaser.scene.getScene('Game');
+    game.state.over = true;
+    game.state.winner = game.ranking()[0];
+    game.state.endReason = 'roundCap';
+    scene.scene.start('Result', scene.resultData());
+  });
+  await waitScene(page, 'Result');
+  await sleep(500);
+  await shot(page, file);
 }
 
 async function waitForServer(url, tries = 50) {
