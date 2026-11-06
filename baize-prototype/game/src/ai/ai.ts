@@ -6,7 +6,7 @@ import type { ActionAct, Controller, PendingChoice, PendingChoiceOf, PreRollAct 
 import type { Game } from '../core/engine';
 import { Rng } from '../core/rng';
 import {
-  closureSite, duelBonus, duelWinChance, hasTrait, landLevel, nominalRent, rentFor, upgradeCost, winRealm,
+  closureSite, duelBonus, duelWinChance, hasTrait, landLevel, nominalRent, passToll, rentFor, upgradeCost, winRealm,
 } from '../core/rules';
 import type { MiniGameTier, NodeId } from '../core/types';
 import {
@@ -61,6 +61,8 @@ const ALTAR_EDGE = 0.15;
 
 /** Opponents stop on any one owned land about once per 60 rounds (measured by AI self-play), which bounds what a rent rise is worth. */
 const RENT_STOPS_PER_ROUND = 1 / 60;
+/** Opponents walk past any one owned land about once per 4 rounds (measured by AI self-play), each paying the 过路费. */
+const TOLL_PASSES_PER_ROUND = 1 / 4;
 
 /** Minimum duel EV (stones) worth a challenge, by difficulty. */
 const DUEL_BAR: Record<Difficulty, number> = { easy: 150, normal: 20, hard: 0 };
@@ -110,9 +112,13 @@ export class AIController implements Controller {
     return passStart * this.data.config.salaryPass + tileValue(this.view, node);
   }
 
-  /** Landing plus duels on the way. */
+  /** Landing plus duels on the way, less the 过路费 for every cell walked past. */
   private moveValue(pr: Prediction): number {
-    return this.landingScore(pr.node, pr.passStart) + this.meetValue(pr.path);
+    return this.landingScore(pr.node, pr.passStart) + this.meetValue(pr.path) - this.tollsOn(pr.path);
+  }
+
+  private tollsOn(path: NodeId[]): number {
+    return path.slice(1, -1).reduce((a, id) => a + passToll(this.st, this.board, this.data, id, this.seat), 0);
   }
 
   private scoreMove(steps: number, dir: 1 | -1, from?: NodeId): number {
@@ -466,12 +472,21 @@ export class AIController implements Controller {
     return undefined;
   }
 
-  /** Static value of a land at `level` for the rest of the game: rent, herbs, 打坐 and the closure site. */
+  /**
+   * Static value of a land at `level` for the rest of the game: rent, herbs, 打坐 and the closure site.
+   * The 过路费 stays out: priced in, it buys 洞府 for income that never moved a seat's win rate in self-play,
+   * and those stones stop buying the land that becomes closure sites.
+   */
   private levelValue(price: number, level: number): number {
     const lv = landLevel(this.data, level);
     const rounds = this.roundsLeft;
     const site = lv.closureBonus === null ? 0 : 250 + lv.closureBonus * VALUE.pill / this.data.config.breakthrough.pillBonus;
     return nominalRent(this.data, price, level) * RENT_STOPS_PER_ROUND * rounds + lv.herbs * VALUE.herb * rounds + lv.sit * VALUE.cult * 0.5 + site;
+  }
+
+  /** Rent and 过路费 a freshly bought land brings in per round, at measured footfall. */
+  private boughtIncome(price: number): number {
+    return nominalRent(this.data, price, 0) * (RENT_STOPS_PER_ROUND + TOLL_PASSES_PER_ROUND * this.data.config.tollRate);
   }
 
   private bestUpgrade(nodes: NodeId[]): NodeId | null {
@@ -502,7 +517,7 @@ export class AIController implements Controller {
       }
       reserve = Math.max(reserve * 0.7, worst * 1.2);
     }
-    return after >= reserve ? 'yes' : 'no';
+    return after + this.boughtIncome(price) * this.roundsLeft >= reserve ? 'yes' : 'no';
   }
 
   /** 坊市: top pills up to a staking reserve, then a card if the hand is thin. */

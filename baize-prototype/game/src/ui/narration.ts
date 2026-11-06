@@ -96,6 +96,8 @@ export const EVENT_NARRATION = {
   buy: (game, event) => `${eventPlayer(game, event)}以 ${event.amount} 灵石买下「${nodeName(game, event)}」。`,
   rent: raw,
   rentFree: raw,
+  passToll: silent,
+  tollSum: raw,
   upgrade: raw,
   stones: raw,
   herbs: raw,

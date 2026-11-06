@@ -56,6 +56,8 @@ export interface ConfigData {
   salaryLand: number;
   altarToll: number;
   rentRate: number;
+  /** 过路费：走过（不停下）别人的灵田，付该格租金的这个比例。 */
+  tollRate: number;
   realms: RealmData[];
   landLevels: LandLevelData[];
   cultivation: {
@@ -263,6 +265,8 @@ export interface GameData {
 export interface PlayerStats {
   rentCollected: number;
   rentPaid: number;
+  tollCollected: number;
+  tollPaid: number;
   /** 闭关突破次数（成功 + 失败） */
   breakthroughs: number;
   /** 走火入魔次数 */

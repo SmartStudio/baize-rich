@@ -14,7 +14,7 @@ import { runHeadless } from './headless';
 export const LEADER_CHECK_ROUND = 8;
 
 /** Events that mean the active player touched another player this turn. */
-const INTERACTION_EVENTS: GameEventType[] = ['rent', 'duel', 'roadblockHit', 'skill'];
+const INTERACTION_EVENTS: GameEventType[] = ['rent', 'passToll', 'duel', 'roadblockHit', 'skill'];
 
 export interface SimOptions {
   games: number;
@@ -60,6 +60,8 @@ export interface InteractionStats {
   skillUsesByHero: Record<HeroId, number>;
   /** Fractions of completed turns. */
   rentTurnRate: number;
+  /** Turns whose walk paid at least one 过路费. */
+  tollTurnRate: number;
   duelTurnRate: number;
   castTurnRate: number;
   interactionTurnRate: number;
@@ -70,9 +72,10 @@ export interface InteractionStats {
 /** Land economy, per game unless noted. */
 export interface LandEconomyStats {
   rentPaid: number;
+  tollPaid: number;
   /** Stones spent buying and upgrading land. */
   landSpend: number;
-  /** Rent collected per stone put into land. */
+  /** Rent and 过路费 collected per stone put into land. */
   payback: number;
   /** Lands owned when the game ends, all players together. */
   ownedLands: number;
@@ -115,8 +118,8 @@ interface Tally {
   players: number;
   ix: { duels: number; roadblockHits: number; miniGames: number };
   skillUses: Record<string, number>;
-  turnHits: { rent: number; duel: number; cast: number; any: number; stolen: number };
-  econ: { rentPaid: number; landSpend: number; ownedLands: number };
+  turnHits: { rent: number; toll: number; duel: number; cast: number; any: number; stolen: number };
+  econ: { rentPaid: number; tollPaid: number; landSpend: number; ownedLands: number };
   spine: Record<string, SpineTally>;
 }
 
@@ -148,8 +151,8 @@ function newTally(): Tally {
     },
     ix: { duels: 0, roadblockHits: 0, miniGames: 0 },
     skillUses: {},
-    turnHits: { rent: 0, duel: 0, cast: 0, any: 0, stolen: 0 },
-    econ: { rentPaid: 0, landSpend: 0, ownedLands: 0 },
+    turnHits: { rent: 0, toll: 0, duel: 0, cast: 0, any: 0, stolen: 0 },
+    econ: { rentPaid: 0, tollPaid: 0, landSpend: 0, ownedLands: 0 },
     spine: {},
   };
 }
@@ -161,6 +164,7 @@ function closeTurn(t: Tally, turn: TurnWatch, game: Game): void {
   if (turn.idle) t.totals.idleTurns++;
   const seen = turn.seen;
   if (seen.has('rent')) t.turnHits.rent++;
+  if (seen.has('passToll')) t.turnHits.toll++;
   if (seen.has('duel')) t.turnHits.duel++;
   if (seen.has('cast')) t.turnHits.cast++;
   if (INTERACTION_EVENTS.some((x) => seen.has(x))) t.turnHits.any++;
@@ -183,6 +187,7 @@ function playOne(t: Tally, g: number, opts: SimOptions, data: GameData): Game {
       if (e.type === 'duel') t.ix.duels++;
       else if (e.type === 'roadblockHit') t.ix.roadblockHits++;
       else if (e.type === 'rent') t.econ.rentPaid += e.amount ?? 0;
+      else if (e.type === 'passToll') t.econ.tollPaid += e.amount ?? 0;
       else if (e.type === 'buy' || e.type === 'upgrade') t.econ.landSpend += e.amount ?? 0;
       if (e.type === 'turnStart') turn = { seat: e.player!, idle: true, seen: new Set(), lost: pillsLost(game) };
       else if (e.type === 'turnEnd' && turn) { closeTurn(t, turn, game); turn = null; }
@@ -247,6 +252,7 @@ function report(t: Tally, { games, seed, difficulty }: SimOptions): SimReport {
       miniGames: t.ix.miniGames / games,
       skillUsesByHero: perHero(t.skillUses),
       rentTurnRate: t.turnHits.rent / turns,
+      tollTurnRate: t.turnHits.toll / turns,
       duelTurnRate: t.turnHits.duel / turns,
       castTurnRate: t.turnHits.cast / turns,
       interactionTurnRate: t.turnHits.any / turns,
@@ -254,8 +260,9 @@ function report(t: Tally, { games, seed, difficulty }: SimOptions): SimReport {
     },
     economy: {
       rentPaid: t.econ.rentPaid / games,
+      tollPaid: t.econ.tollPaid / games,
       landSpend: t.econ.landSpend / games,
-      payback: t.econ.landSpend ? t.econ.rentPaid / t.econ.landSpend : 0,
+      payback: t.econ.landSpend ? (t.econ.rentPaid + t.econ.tollPaid) / t.econ.landSpend : 0,
       ownedLands: t.econ.ownedLands / games,
     },
     heroSpine: Object.fromEntries(HERO_IDS.map((h) => [h, heroSpine(spineOf(t, h), t.plays[h] ?? 1, t.skillUses[h] ?? 0)])) as Record<HeroId, HeroSpineStats>,

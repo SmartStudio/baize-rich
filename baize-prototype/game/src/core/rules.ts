@@ -81,6 +81,11 @@ export function rentFor(state: GameState, board: Board, data: GameData, node: No
   return { amount: nominalRent(data, n.price!, t.level) };
 }
 
+/** 过路费 for walking over `node` without stopping: a share of its rent, 0 where no rent is owed. */
+export function passToll(state: GameState, board: Board, data: GameData, node: NodeId, payer: number): number {
+  return Math.floor(rentFor(state, board, data, node, payer).amount * data.config.tollRate);
+}
+
 export function countOwned(state: GameState, board: Board, seat: number): number {
   return board.lands.filter((id) => state.tiles[id].owner === seat).length;
 }

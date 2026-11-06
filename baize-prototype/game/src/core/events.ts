@@ -6,7 +6,7 @@ import type { GameState, MiniGameTier, NodeId } from './types';
 export type GameEventType =
   | 'gameStart' | 'roundStart' | 'roundEnd' | 'turnStart' | 'turnEnd'
   | 'roll' | 'step' | 'teleport' | 'fork' | 'toll'
-  | 'salary' | 'buy' | 'rent' | 'rentFree' | 'upgrade'
+  | 'salary' | 'buy' | 'rent' | 'rentFree' | 'passToll' | 'tollSum' | 'upgrade'
   | 'stones' | 'herbs' | 'pills' | 'cult' | 'card' | 'cast' | 'block'
   | 'event' | 'bind' | 'status' | 'beast'
   | 'breakthrough' | 'manifest'
@@ -79,7 +79,7 @@ export interface GameEvent {
   type: GameEventType;
   text: string;
   player?: number;
-  /** rent: the owner who was paid. */
+  /** rent / passToll: the owner who was paid. */
   payee?: number;
   node?: NodeId;
   from?: NodeId;

@@ -27,6 +27,7 @@ const METRICS: Metric[] = [
   { key: 'duels', label: '每局斗法', get: (r) => r.interaction.duels, fmt: fixed2 },
   { key: 'stolen', label: '被夺丹回合', get: (r) => r.interaction.pillStolenTurnRate, fmt: pct },
   { key: 'leaderWins', label: `R${LEADER_CHECK_ROUND}领先者胜`, get: (r) => r.leaderWins, fmt: pct },
+  { key: 'payback', label: '灵田回本', get: (r) => r.economy.payback, fmt: pct },
   { key: 'idleShare', label: '无事回合占比', get: (r) => r.perPlayer.idleTurns / r.perPlayer.turns, fmt: pct },
 ];
 

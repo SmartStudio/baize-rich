@@ -118,8 +118,42 @@ describe('AI land', () => {
     expect(levelAfterAction({ herbs: 1, rentMult: 30 })).toBe(1);
   });
 
+  /** Seat 0's answer to a 2 rolled with 御器 ±1 from R21: 1 lands on the 丹房 R22, 3 on the 灵眼 R24 past R23. */
+  function stepsPastRivalLand(tollRate: number): string {
+    const data = ringData();
+    data.config.tollRate = tollRate;
+    const g = ringGame(1, data);
+    g.state.players.forEach((p) => { p.pos = 'R8'; });
+    const p = g.state.players[0];
+    Object.assign(p, { pos: 'R21', realm: 1, cult: 0, herbs: 2 });
+    g.state.tiles.R23 = { owner: 1, level: 3 }; // rent 240, toll 120
+    const c = { seq: 1, player: 0, kind: 'adjust', title: '', options: g.adjustOptions(0, 2), defaultId: 'n2', ctx: { base: 2 } } as PendingChoice;
+    return new AIController(g, 0, { seed: 1 }).decide(c);
+  }
+
+  it('walks to the 灵眼 for free, but brews at the nearer 丹房 when the way passes a rival 福地', () => {
+    expect(stepsPastRivalLand(0)).toBe('n3');
+    expect(stepsPastRivalLand(0.5)).toBe('n1');
+  });
+
+  /** Whether seat 0 buys R9 (price 260) with 20 stones less than its reserve would leave. */
+  function buysJustUnderReserve(tollRate: number): boolean {
+    const data = ringData();
+    data.config.tollRate = tollRate;
+    const g = ringGame(1, data);
+    g.state.round = 1;
+    g.state.players[0].stones = 260 + 300 - 20;
+    g.runFlow(g.testSettle(0, 'R9'), aiAnswers(g, 0, []));
+    return g.state.tiles.R9.owner === 0;
+  }
+
+  it('buys land a little under its reserve once rivals walking past will pay 过路费', () => {
+    expect(buysJustUnderReserve(0)).toBe(false);
+    expect(buysJustUnderReserve(0.5)).toBe(true);
+  });
+
   it('a seat that never buys land almost never wins', () => {
-    expect(landLever(-1, 200, 3)).toBeLessThan(0.1);
+    expect(landLever({ kind: 'cap', cap: -1 }, 200, 3)).toBeLessThan(0.1);
   });
 });
 
