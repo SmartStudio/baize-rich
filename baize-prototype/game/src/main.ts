@@ -3,7 +3,6 @@ import { BootScene } from './scenes/BootScene';
 import { GameScene } from './scenes/GameScene';
 import { HeroSelectScene } from './scenes/HeroSelectScene';
 import { HudScene } from './scenes/HudScene';
-import { PreviewScene } from './scenes/PreviewScene';
 import { ResultScene } from './scenes/ResultScene';
 import { SetupScene } from './scenes/SetupScene';
 import { TitleScene } from './scenes/TitleScene';
@@ -19,7 +18,7 @@ const game = new Phaser.Game({
   pixelArt: true,
   roundPixels: true,
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
-  scene: [BootScene, TitleScene, HeroSelectScene, SetupScene, VersusScene, GameScene, HudScene, ResultScene, PreviewScene],
+  scene: [BootScene, TitleScene, HeroSelectScene, SetupScene, VersusScene, GameScene, HudScene, ResultScene],
 });
 
 (window as unknown as { __phaser: Phaser.Game }).__phaser = game;

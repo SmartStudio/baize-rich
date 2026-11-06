@@ -6,7 +6,7 @@
 
 | 路径 | 内容 |
 |---|---|
-| `assets/atlas.png` + `atlas.json` | Phaser 纹理图集（JSON Hash 格式，1× 像素，85 帧），由 `tools/art/pack.py` 从 `sprites/` 重建 |
+| `assets/atlas.png` + `atlas.json` | Phaser 纹理图集（JSON Hash 格式，1× 像素，56 帧），由 `tools/art/pack.py` 从 `sprites/` 重建 |
 | `assets/sprites/*.png` | 每一帧的 1× 单图，文件名即帧名 |
 | `assets/sprites_x4/*.png` | 4 倍最近邻放大的预览图，给美术和策划看 |
 | `assets/mockups/` | 主界面效果图（1280×720 与 1080p）、地图路线图、3 个弹窗样稿 |
@@ -25,30 +25,22 @@
 
 这些帧由 `tools/art/pack.py` 生成：`pixelize.py` 先把源图抠底、缩小、减色，`pack.py` 再按菱形左右顶点那一行把地块对齐到锚点。
 
-## 2. 图集帧名与摆放约定
+## 2. 其他图集帧
 
-坐标都相对于棋盘原点（游戏画面中棋盘左上角在 x=352, y=80），每格 64px。
-
-| 帧名 | 尺寸 | 锚点与摆放 |
+| 帧名 | 尺寸 | 用途与摆放 |
 |---|---|---|
-| `tile_land_wood` / `_fire` / `_water` / `_earth` | 64×64 | 格子左上角 |
-| `tile_start` `tile_gate` `tile_trial` `tile_spring` `tile_market` `tile_furnace` `tile_cliff` `tile_array` `tile_shrine` | 64×64 | 格子左上角 |
-| `owner_p1`–`owner_p4` | 64×10 | 画在格子 y+54，表示归属 |
-| `obj_start` … `obj_shrine` | 不定 | 底部居中，放在 (格 x+32, 格 y+48) |
-| `decor_wood` / `_fire` / `_water` / `_earth` | 不定 | 无建筑的灵田装饰，底部居中，放在 (x+32, y+46) |
-| `bld_1`–`bld_4` | 30–52px | 洞府等级（草庐、精舍、楼阁、仙府），底部居中，放在 (x+34, y+50) |
-| `flag_p1`–`flag_p4` | 12×18 | 底部居中，放在 (x+9, y+24) |
-| `centre_bg` | 448×448 | 棋盘原点 +(64,64)，画在神道和灵台之下 |
-| `altar` | 192×252 | 棋盘原点 +(192,132)，上方溢出 60px |
-| `baize` | 100×104 | 白泽单独形象（立绘、弹窗用） |
-| `tok_body` `tok_magic` `tok_sword` `tok_alch` | 约 35×64 | 修士棋子（HD 像素，`tools/art`），底部居中，放在 (x+32, y+48) |
+| `decor_wood` / `_fire` / `_water` / `_earth` | 不定 | 棋盘外地面上的散布装饰，底部居中 |
+| `centre_bg` | 448×448 | 标题画面的底图 |
+| `baize` | 100×104 | 白泽单独形象（白泽现世横幅、突破过场） |
+| `obj_furnace` | 40×40 | 炼丹小游戏里的丹炉，3× 显示 |
+| `tok_body` `tok_magic` `tok_sword` `tok_alch` | 约 35×64 | 修士棋子（HD 像素，`tools/art`），底部居中，脚底落在菱形中心，1× 显示 |
 | `por_body` … `por_alch` | 64×64 | 大头像，只按 1×/2×/3× 整数倍显示 |
 | `por_body_s` … `por_alch_s` | 40×40 | 小头像（玩家卡、行动栏、高级设置），1× 显示 |
-| `ic_stone` `ic_pill` `ic_cult` `ic_baize` | 16×16 | 灵石、灵丹、修为、白泽图标 |
+| `ic_stone` `ic_herb` `ic_pill` `ic_cult` `ic_mind` | 16×16 | 灵石、灵草、丹药、修为、心境（HD 像素，`tools/art`） |
+| `ic_baize` `ic_demon` | 16×16 | 白泽、心魔图标 |
 | `die_1`–`die_6` | 24×24 | 正面骰子，4px 点数，2× 显示 |
 | `card_attack` `card_guard` `card_move` `card_wealth` | 88×120 | 符箓卡底（含插画，不含文字）；卡名约在 y=80，费用写在右上角 |
-| `card_divine` `card_heaven` | 80×108 | 神通卡、天赐卡空白底框 |
-| `div_<id>` / `hv_<id>` | 24×24 | 神通与天赐图标，id 见 `data/blessings.json`；放大 2 倍贴在卡底 (16,24) |
+| `card_divine` `card_heaven` | 80×108 | 机缘卡、白泽现世卡的空白底框 |
 
 ## 3. 正式美术需要补的内容（首版）
 

@@ -22,9 +22,7 @@ export class BootScene extends Phaser.Scene {
     const { missing } = ensureFrames(this);
     if (missing.length) console.info(`[baize] ${missing.length} art frames missing from atlas → placeholders`);
     const q = urlParams();
-    if (q.get('preview') === 'minigame') {
-      this.scene.start('Preview');
-    } else if (q.get('auto') === '1') {
+    if (q.get('auto') === '1') {
       const session = newSession(
         urlSeed(),
         HERO_IDS.map((hero, i) => ({ human: false, hero, difficulty: 'normal' as const, personality: SEAT_PERSONAS[i] })),

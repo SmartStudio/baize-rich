@@ -1,5 +1,4 @@
-// Hand-authored pixel placeholders for the v0.6 frames (shop / mini-game / hospital tiles, special
-// buildings, spirits, item cards). Each sprite is rows of palette keys; `paintPixels` draws every key
+// Hand-authored pixel pictures for the item-card placeholders. Each picture is rows of palette keys; `paintPixels` draws every key
 // as an s×s block and adds the dark 1-cell outline the atlas art uses, so the maps stay readable.
 
 /** Shared palette, picked from the atlas art. '.' is transparent. */
@@ -21,11 +20,6 @@ export interface PixelSprite {
   rows: string[];
   /** Screen pixels per map cell. */
   scale: number;
-}
-
-/** Frame size of a sprite: its map plus a one-cell outline border. */
-export function pixelSize(sp: PixelSprite): { w: number; h: number } {
-  return { w: (sp.rows[0].length + 2) * sp.scale, h: (sp.rows.length + 2) * sp.scale };
 }
 
 /** Paint a sprite bottom-centred in a w×h canvas, outlining every opaque cell's empty neighbours. */
@@ -50,158 +44,6 @@ export function paintPixels(ctx: CanvasRenderingContext2D, w: number, h: number,
 }
 
 /** Board objects, buildings, spirits and the dice cup, keyed by frame name. */
-export const PIXEL_FRAMES: Record<string, PixelSprite> = {
-  obj_shop: { scale: 2, rows: [
-    '.........yy.........',
-    '......yyyyyyyy......',
-    '...RRRRRRRRRRRRRR...',
-    '.RRrrrrrrrrrrrrrrRR.',
-    'RRRRRRRRRRRRRRRRRRRR',
-    '.yyyyyyyyyyyyyyyyyy.',
-    '..NNvvvvvvvvvvvvNN..',
-    '..NNvyyvvbbvvrrvNN..',
-    '..NNyYyyvbBvvrRvNN..',
-    '..NNvvvvvvvvvvvvNN..',
-    '.nnnnnnnnnnnnnnnnnn.',
-    '.NNNNNNNyyyyNNNNNNN.',
-    '.NNNNNNNyYYyNNNNNNN.',
-    '.NNNNNNNNNNNNNNNNNN.',
-    'ssssssssssssssssssss',
-  ] },
-  obj_minigame_alchemy: { scale: 2, rows: [
-    '........NN........',
-    '.......GlG........',
-    '.......oooo.......',
-    '......oYoooo......',
-    '......oooooo......',
-    '.......oooo.......',
-    '.......yyyy.......',
-    '.....oooooooo.....',
-    '....oYYooooooo....',
-    '...oYoooooooooo...',
-    '...oooooooooooO...',
-    '...OooooooooooO...',
-    '....OOooooooOO....',
-    '..SSSSSSSSSSSSSS..',
-    '...SsssyoYosssS...',
-    '...SSSSSSSSSSSS...',
-    '...S..........S...',
-    '..SS..........SS..',
-  ] },
-  obj_minigame_dice: { scale: 2, rows: [
-    '.....PPPPP..........',
-    '....PpppppP.........',
-    '....PpYpppP.........',
-    '....PpYpppP.....WWW.',
-    '...PPpppppPP...WWWWW',
-    '...PyyyyyyyP...WrWWW',
-    '...PPPPPPPPP...WWWrW',
-    '...............mmmmm',
-    'RRRRRRRRRRRRRRRRRRRR',
-    'ryyyyyyyyyyyyyyyyyyr',
-    'rRRRRRRRRRRRRRRRRRRr',
-    '.N................N.',
-    '.N................N.',
-    'NN................NN',
-  ] },
-  obj_hospital: { scale: 2, rows: [
-    '........SSSS........',
-    '.....SSSssssSSS.....',
-    '..SSSssssssssssSSS..',
-    'SSSSSSSSSSSSSSSSSSSS',
-    '.wwwwwwwwwwwwwwwwww.',
-    '.wGGGGwwwwwwwwwwwww.',
-    '.wGWWGwwwwwNNNNwwww.',
-    '.wWWWWwwwwwNnnNwwww.',
-    '.wGWWGwwwwwNnnNwwww.',
-    '.wGGGGwwwwwNnnNwwww.',
-    '.wwGGwwwwwwNnnNwwww.',
-    '.wwwwwwwwwwNnnNwwww.',
-    'ssssssssssssssssssss',
-  ] },
-  bld_garden: { scale: 2, rows: [
-    '....l.....l.........',
-    '...lgl...lgl...ooo..',
-    '..gGlGg.gGlGg.oYooo.',
-    '..gGgGg.gGgGg.OOOOO.',
-    '..gGgGg.gGgGg...n...',
-    '.NNNNNNNNNNNNNNNNNN.',
-    '.NnNnNnNnNnNnNnNnNn.',
-    '.NNNNNNNNNNNNNNNNNN.',
-    'n.n.n.n.n.n.n.n.n.n.',
-    'nnnnnnnnnnnnnnnnnnnn',
-  ] },
-  bld_bazaar: { scale: 2, rows: [
-    'yy..................',
-    'Nrrrr...............',
-    'NrYrr...............',
-    'Nrrr................',
-    'N.rwrwrwrwrwrwrwrwr.',
-    'NrwrwrwrwrwrwrwrwrwR',
-    'NRRRRRRRRRRRRRRRRRR.',
-    'N.N..y...b...r...N..',
-    'N.N.yYy.bBb.rRr..N..',
-    'N.NnnnnnnnnnnnnnN...',
-    'N.NNNNNNyyNNNNNNNN..',
-    'N.NNNNNNNNNNNNNNNN..',
-    'ssssssssssssssssssss',
-  ] },
-  bld_portal: { scale: 2, rows: [
-    '.c................c.',
-    'cbc..............cbc',
-    '.S................S.',
-    '.S.....bbbbbb.....S.',
-    '.S...bbccccccbb...S.',
-    '.S..bc........cb..S.',
-    '.S..bc..cWWc..cb..S.',
-    '.S...bbccccccbb...S.',
-    'SSSSSSSbbbbbbSSSSSSS',
-    'SssssssssssssssssssS',
-    'SSSSSSSSSSSSSSSSSSSS',
-  ] },
-  spirit_fox: { scale: 2, rows: [
-    '.y...y........',
-    '.yy.yy........',
-    '.yWWWy........',
-    '.WkWkW...YY...',
-    '.WWWWW..YyY...',
-    '..WrW...yYy...',
-    '..WWWW..yyy...',
-    '.WWWWWW.yy....',
-    '.WWyWWWWyy....',
-    '.WWWWWWWy.....',
-    '..WWWWWW......',
-    '..W.W..W.W....',
-  ] },
-  spirit_heart: { scale: 2, rows: [
-    '.....pppp.....',
-    '...ppPPPPpp...',
-    '..pPPvvvvPPp..',
-    '.pPvvvvvvvvPp.',
-    '.pPvrrvvrrvPp.',
-    '.pPvRvvvvRvPp.',
-    '.pPvvvvvvvvPp.',
-    '.pPvvkkkkvvPp.',
-    '..pPvvvvvvPp..',
-    '..pPPvvvvPPp..',
-    '...pPPppPPp...',
-    '..pp.pPPp.pp..',
-    '.p....pp....p.',
-  ] },
-  mg_cup: { scale: 3, rows: [
-    '......PPPP......',
-    '.....PpppPP.....',
-    '....PpYppppP....',
-    '...PpYpppppppP..',
-    '...PpYpppppppP..',
-    '..PppYppppppppP.',
-    '..PppYppppppppP.',
-    '..PpppppppppppP.',
-    '.PyyyyyyyyyyyyyP',
-    '.PPPPPPPPPPPPPPP',
-  ] },
-};
-
 /** Item card pictures (御骰符 / 路障符 / 爆炎阵 / 回首符), drawn into the card's picture box at 4×. */
 export const ITEM_PICTURES: Record<string, { rows: string[]; sky: string; border: string; label: string }> = {
   dice: { sky: '#F6D88A', border: '#C8952E', label: '御骰', rows: [

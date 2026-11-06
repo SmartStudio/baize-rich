@@ -20,7 +20,7 @@ import { presentChoice } from '../ui/choices/registry';
 import { Cutscene, type BannerSpec } from '../ui/Cutscene';
 import { STAGE, type Rect } from '../ui/layout';
 import { LogPanel } from '../ui/LogPanel';
-import { playMiniGame, type MiniGameSpec } from '../ui/MiniGame';
+import { playMiniGame } from '../ui/MiniGame';
 import { Minimap } from '../ui/Minimap';
 import { aiTurnNarration, heroNameForSeat, narrateEvent, resumeNarration, roundNarration, turnNarration } from '../ui/narration';
 import { PlayerCards } from '../ui/PlayerCards';
@@ -83,9 +83,6 @@ const RIBBONS: Partial<Record<GameEventType, (g: Game, e: GameEvent) => { title:
 
 /** Sub-menu answer meaning "re-open narrowed to this tile". */
 const NARROW = '@node:';
-
-/** The mini-game overlay spec used when watching someone else's 火候. */
-const HEAT_SPEC: MiniGameSpec = { game: 'alchemy' };
 
 function portrait(g: Game, e: GameEvent): string {
   return `por_${g.state.players[e.player ?? 0].hero}`;
@@ -332,7 +329,7 @@ export class GameScene extends Phaser.Scene {
           await this.wait(this.ms(pace.slow));
         } else {
           const p = (e.snap ?? this.engine.state).players[seat];
-          await playMiniGame(this.hud, HEAT_SPEC, { auto: e.miniGame!.tier, speed: this.speed, who: p.name });
+          await playMiniGame(this.hud, { auto: e.miniGame!.tier, speed: this.speed, who: p.name });
         }
         break;
       default:
@@ -456,9 +453,8 @@ export class GameScene extends Phaser.Scene {
 
   /** §18.5 The human plays the alchemy overlay; its tier is the answer. */
   private async playHumanMini(c: Extract<PendingChoice, { kind: 'miniGame' }>): Promise<string> {
-    const spec: MiniGameSpec = { game: 'alchemy' };
     const multiHuman = this.ais.filter((a) => a === null).length > 1;
-    const tier = await playMiniGame(this.hud, spec, { who: multiHuman ? this.engine.state.players[c.player].name : undefined });
+    const tier = await playMiniGame(this.hud, { who: multiHuman ? this.engine.state.players[c.player].name : undefined });
     this.playedMini = true;
     return c.options.some((o) => o.id === tier) ? tier : c.options[0].id;
   }

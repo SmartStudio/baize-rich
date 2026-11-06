@@ -9,7 +9,7 @@ import { COLORS, FS, HEX, txt } from './theme';
 export interface BannerSpec {
   title: string;
   sub: string;
-  /** Frame shown left of the title: a hero portrait, 'demon', 'baize'… */
+  /** Frame shown left of the title: a hero portrait or 'baize' */
   icon: string;
   color: number;
   /** Full-screen dim. Climactic beats set this. Other banners leave the board bright. */

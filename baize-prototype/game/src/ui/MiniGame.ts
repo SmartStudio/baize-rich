@@ -1,23 +1,16 @@
-// 炼丹房 / 灵骰台 overlays, built in screen space on the scene the caller passes (GameScene passes its Hud
-// scene), so the board camera never matters. The engine owns every outcome: for alchemy the human's stop
-// here becomes the `miniGame` answer; for dice the engine has already rolled, and the overlay only stages
-// the roll and its verdict. A human plays at real time whatever the game speed (a faster gauge would make
+// 炼丹房 overlay, built in screen space on the scene the caller passes (GameScene passes its Hud scene), so
+// the board camera never matters. The human's stop here becomes the engine's `miniGame` answer. A human plays at real time whatever the game speed (a faster gauge would make
 // the game harder, not quicker); the AI-watch version (`auto`) runs about 1.2 s at 1× and scales with speed.
 import Phaser from 'phaser';
-import { addImg, setFrame } from './assets';
+import { addImg } from './assets';
 import { H, W } from './layout';
 import { COLORS, FS, HEX, txt } from './theme';
 
 export type MiniGameTier = 'fail' | 'ok' | 'perfect';
-export type DiceSide = 'big' | 'small';
 
-export type MiniGameSpec =
-  | { game: 'alchemy' }
-  /** `win` is the engine's verdict on `roll`: where 大 and 小 split (and what a 7 does) is a rule, so it stays in core. */
-  | { game: 'dice'; stake: number; side: DiceSide; roll: [number, number]; win: boolean };
 
 export interface MiniGameOpts {
-  /** Watch an AI play: no input. Alchemy lands on this tier; dice always shows the spec's `win`. */
+  /** Watch an AI play: no input. The gauge lands on this tier. */
   auto?: MiniGameTier;
   /** Game speed; scales only the watch version. */
   speed?: number;
@@ -34,8 +27,8 @@ const ZONE = { green: 0.3, gold: 0.07 };
 const SWEEP_MS = 650;
 const Y = { note: BOX.y + 34, stand: 404, sum: 448, prompt: 494, result: 494, detail: 530 };
 
-const HUMAN = { in: 220, alchemyLimit: 2600, shakeLimit: 1800, reveal: 260, hold: 1100, out: 200 };
-const WATCH = { in: 150, sweep: 450, shake: 350, reveal: 150, hold: 450, out: 150 };
+const HUMAN = { in: 220, alchemyLimit: 2600, reveal: 260, hold: 1100, out: 200 };
+const WATCH = { in: 150, sweep: 450, reveal: 150, hold: 450, out: 150 };
 
 const ALCHEMY_RESULT: Record<MiniGameTier, { text: string; color: string; pills: number }> = {
   perfect: { text: '极品丹成！', color: HEX.gold, pills: 3 },
@@ -44,16 +37,13 @@ const ALCHEMY_RESULT: Record<MiniGameTier, { text: string; color: string; pills:
 };
 
 /** Play one mini-game overlay and resolve with its tier once it has faded out. */
-export async function playMiniGame(scene: Phaser.Scene, spec: MiniGameSpec, opts: MiniGameOpts = {}): Promise<MiniGameTier> {
+export async function playMiniGame(scene: Phaser.Scene, opts: MiniGameOpts = {}): Promise<MiniGameTier> {
   const watch = opts.auto !== undefined;
   const k = watch ? 1 / (opts.speed || 1) : 1;
-  const title = spec.game === 'alchemy' ? '炼丹房' : '灵骰台';
-  const ui = new Frame(scene, title, spec.game === 'alchemy' ? COLORS.bad : 0x8e5bc2, !watch);
-  const note = spec.game === 'alchemy' ? '看准火候：停在绿区成丹，正中金线出极品' : `押${spec.side === 'big' ? '大' : '小'} · ${spec.stake > 0 ? `${spec.stake} 灵石` : '不下注'}`;
+  const ui = new Frame(scene, '炼丹房', COLORS.bad, !watch);
+  const note = '看准火候：停在绿区成丹，正中金线出极品';
   ui.note.setText(opts.who ? `${opts.who} · ${note}` : note);
-  const tier = spec.game === 'alchemy'
-    ? await alchemy(scene, ui, opts.auto, k)
-    : await dice(scene, ui, spec, watch, k);
+  const tier = await alchemy(scene, ui, opts.auto, k);
   await ui.close((watch ? WATCH.out : HUMAN.out) * k);
   return tier;
 }
@@ -238,49 +228,3 @@ function alchemyFx(s: Phaser.Scene, ui: Frame, furnace: Phaser.GameObjects.Image
   }
 }
 
-// ------------------------------------------------------------------ 灵骰台
-
-async function dice(s: Phaser.Scene, ui: Frame, spec: Extract<MiniGameSpec, { game: 'dice' }>, watch: boolean, k: number): Promise<MiniGameTier> {
-  const tray = s.add.ellipse(W / 2, Y.stand, 240, 48, 0x5a3a24).setStrokeStyle(3, COLORS.outline);
-  const felt = s.add.ellipse(W / 2, Y.stand - 2, 216, 36, 0x7a2430);
-  const dieImgs = [-34, 34].map((dx) => addImg(s, W / 2 + dx, Y.stand + 6, 'die_1').setOrigin(0.5, 1).setScale(2).setAlpha(0));
-  const cup = addImg(s, W / 2, Y.stand + 12, 'mg_cup').setOrigin(0.5, 1).setScale(2.6);
-  const badge = s.add.rectangle(BOX.x + 70, Y.stand - 60, 64, 64, spec.side === 'big' ? 0xb8452a : 0x2c5e86).setStrokeStyle(3, COLORS.gold);
-  const badgeT = txt(s, badge.x, badge.y, spec.side === 'big' ? '大' : '小', { size: FS.hero, bold: true, stroke: HEX.ink, origin: [0.5, 0.5] });
-  const sum = txt(s, W / 2, Y.sum, '', { size: FS.lg, bold: true, color: HEX.parchment, origin: [0.5, 0.5] });
-  ui.add(tray, felt, ...dieImgs, cup, badge, badgeT, sum);
-
-  await ui.enter((watch ? WATCH.in : HUMAN.in) * k);
-  const shake = s.tweens.add({ targets: cup, angle: { from: -9, to: 9 }, duration: 70, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-  const hop = s.tweens.add({ targets: cup, y: cup.y - 8, duration: 105, yoyo: true, repeat: -1 });
-  if (watch) await waitMs(s, WATCH.shake * k);
-  else await ui.waitInput('空格 / 点击 开盅', HUMAN.shakeLimit);
-  shake.remove();
-  hop.remove();
-  cup.setAngle(0);
-
-  const reveal = (watch ? WATCH.reveal : HUMAN.reveal) * k;
-  const [a, b] = spec.roll;
-  dieImgs.forEach((img, i) => setFrame(img, `die_${spec.roll[i]}`));
-  await Promise.all([
-    tweenP(s, { targets: cup, y: cup.y - 110, alpha: 0, duration: reveal, ease: 'Cubic.easeOut' }),
-    tweenP(s, { targets: dieImgs, alpha: 1, scale: { from: 2.6, to: 2 }, duration: reveal, ease: 'Back.easeOut' }),
-  ]);
-  sum.setText(`${a} + ${b} = ${a + b} 点`);
-  const hold = watch ? WATCH.hold * k : HUMAN.hold;
-  if (spec.win) {
-    ui.showResult('猜中了！', HEX.gold);
-    for (let i = 0; i < 6; i++) {
-      const stone = addImg(s, W / 2 + Phaser.Math.Between(-40, 40), Y.stand - 20, 'ic_stone').setScale(2);
-      ui.add(stone);
-      s.tweens.add({ targets: stone, y: stone.y - Phaser.Math.Between(60, 120), x: stone.x + Phaser.Math.Between(-60, 60), alpha: 0, duration: hold * 0.8, delay: i * 50, ease: 'Quad.easeOut' });
-    }
-    s.tweens.add({ targets: badge, scale: 1.2, duration: 140, yoyo: true, repeat: 1 });
-  } else {
-    ui.showResult('没猜中…', HEX.bad);
-    dieImgs.forEach((img) => img.setTint(0x8a86a8));
-    s.tweens.add({ targets: [badge, badgeT], alpha: 0.4, duration: 200 });
-  }
-  await waitMs(s, hold);
-  return spec.win ? 'perfect' : 'fail';
-}

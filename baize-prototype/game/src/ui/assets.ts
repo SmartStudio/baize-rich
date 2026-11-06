@@ -3,10 +3,10 @@
 // Real art arrives as a texture atlas (../assets/atlas.png + atlas.json, Phaser
 // JSON-Hash). Until then — or for any frame the atlas lacks — we generate a
 // coloured placeholder texture under the frame's own name, so game code can
-// always call `addImg(scene, x, y, 'tile_gate')` without caring which exists.
+// always call `addImg(scene, x, y, 'iso_jade')` without caring which exists.
 import Phaser from 'phaser';
 import { paintBlock, type BlockColours } from './isoArt';
-import { ITEM_PICTURES, paintPixels, PIXEL_FRAMES, pixelSize } from './sprites';
+import { ITEM_PICTURES, paintPixels } from './sprites';
 import { FONT } from './theme';
 
 export const ATLAS_KEY = 'atlas';
@@ -104,24 +104,6 @@ function pips(n: number): Draw {
   });
 }
 
-/** Ground tile in the atlas style: sand border, a patterned rug, a dark band along the bottom edge. */
-function rug(border: string, fill: string, mark: string, band: string, pattern: (x: number, y: number) => boolean): Draw {
-  return (ctx, w, h) => {
-    ctx.fillStyle = '#DCC9A0';
-    ctx.fillRect(0, 0, w, h);
-    ctx.fillStyle = border;
-    ctx.fillRect(8, 6, w - 16, h - 18);
-    ctx.fillStyle = fill;
-    ctx.fillRect(10, 8, w - 20, h - 22);
-    ctx.fillStyle = mark;
-    for (let y = 8; y < h - 14; y++) for (let x = 10; x < w - 10; x++) if (pattern(x, y)) ctx.fillRect(x, y, 1, 1);
-    ctx.fillStyle = '#B8A27A';
-    ctx.fillRect(0, h - 12, w, 2);
-    ctx.fillStyle = band;
-    ctx.fillRect(0, h - 10, w, 10);
-  };
-}
-
 /** v0.6 card face for an item: coloured border, 道具 label, its picture in the box, a seal at the foot. */
 function itemCard(id: string): Draw {
   const it = ITEM_PICTURES[id];
@@ -163,14 +145,6 @@ export function frameSpecs(): FrameSpec[] {
   for (const [t, [fill, ch]] of Object.entries(TYPE_FILL)) add(`lm_${t}`, 56, 64, object(t === 'start' ? '#B8902E' : fill, ch, 0.8, 0.8));
   for (let lv = 1; lv <= 3; lv++) add(`iso_bld_${lv}`, 48, 36 + lv * 12, object(['#8A6A44', '#B08A5A', '#D8B060'][lv - 1], ['圃', '府', '脉'][lv - 1], 0.85, 1));
   add('obj_furnace', 40, 40, object('#7A3A2E', '炉'));
-  add('tile_shop', 64, 64, rug('#F2B93B', '#2F6B5A', '#4FA38A', '#1F4A3E', (x, y) => (x + y) % 6 === 0));
-  add('tile_minigame', 64, 64, rug('#8E5BC2', '#4A2A6E', '#F2B93B', '#2A1A3E', (x, y) => (x >> 2) % 2 === (y >> 2) % 2 && (x + y) % 2 === 0));
-  add('tile_hospital', 64, 64, rug('#4FA35A', '#E8F0E0', '#BFD8B0', '#2F6B3A', (x, y) => (x % 10 === 4 && y % 10 < 7) || (y % 10 === 3 && x % 10 < 9)));
-  add('obj_minigame', 40, 40, object('#4A4466', '戏'));
-  for (const [name, sp] of Object.entries(PIXEL_FRAMES)) {
-    const { w, h } = pixelSize(sp);
-    add(name, w, h, (ctx, cw, ch) => paintPixels(ctx, cw, ch, sp));
-  }
   for (const id of Object.keys(ITEM_PICTURES)) add(`card_${id}`, 88, 120, itemCard(id));
   add('centre_bg', 448, 448, (ctx, w, h) => {
     ctx.fillStyle = '#23213A';
@@ -183,7 +157,6 @@ export function frameSpecs(): FrameSpec[] {
     }
   });
   add('baize', 100, 104, both(object('#E6E4F0', '白泽', 0.9, 0.85)));
-  add('demon', 60, 68, both(object('#5A1E5E', '魔', 0.85, 0.85)));
   for (const [hid, [fill, ch]] of Object.entries(HERO_FILL)) {
     add(`tok_${hid}`, 32, 48, (ctx, w, h) => {
       ctx.fillStyle = '#0F0E1A';
