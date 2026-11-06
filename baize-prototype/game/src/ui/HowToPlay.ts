@@ -59,7 +59,7 @@ const ART_BY_PAGE: Record<TutorialCopy['id'], Page['art']> = {
     ...captioned(s, cx + 100, cy - 70, 'bld_3', 1.5, defaultData.board.buildings[3].name),
   ],
   alchemy: (s, cx, cy) => [
-    addImg(s, cx - 70, cy - 70, 'ic_cult').setScale(4),
+    addImg(s, cx - 70, cy - 70, 'ic_herb').setScale(4),
     txt(s, cx, cy - 70, '灵草入炉', { size: 17, color: HEX.gold, origin: [0.5, 0.5] }),
     addImg(s, cx + 85, cy - 70, 'ic_pill').setScale(4),
     ...chip(s, cx, cy + 30, '看准金火 · 收炉成丹'),

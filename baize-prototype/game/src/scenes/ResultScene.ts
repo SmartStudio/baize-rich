@@ -42,7 +42,7 @@ export class ResultScene extends Phaser.Scene {
     });
     txt(this, 640, 574, ending.footer, { size: 14, color: HEX.dim, origin: [0.5, 0.5] });
     new Button(this, 300, 600, { w: 200, h: 56, label: '再来一局', size: 22, fill: 0x8a5a1e }).onClick(() => fadeToScene(this, 'HeroSelect'));
-    new Button(this, 530, 600, { w: 220, h: 56, label: '下载对局记录', size: 20, hint: '可用 npm run replay 复盘' }).onClick(() => downloadRecord(d.record));
+    new Button(this, 530, 600, { w: 220, h: 56, label: '下载对局记录', size: 20 }).onClick(() => downloadRecord(d.record));
     new Button(this, 780, 600, { w: 200, h: 56, label: '返回标题', size: 20 }).onClick(() => fadeToScene(this, 'Title'));
   }
 }

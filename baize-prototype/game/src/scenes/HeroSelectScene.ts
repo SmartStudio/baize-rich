@@ -23,12 +23,13 @@ const cardX = (i: number) => 640 + (i - (HERO_IDS.length - 1) / 2) * (CARD_W + G
 
 interface AbilityCopy {
   title: string;
+  terms?: string;
   body: string;
 }
 
 function heroAbilities(hero: HeroData): AbilityCopy[] {
   return [
-    { title: `技能【${hero.skill.name}】（${skillTerms(hero.skill)}）`, body: hero.skill.desc },
+    { title: `技能【${hero.skill.name}】`, terms: skillTerms(hero.skill), body: hero.skill.desc },
     { title: `被动【${hero.passive.name}】`, body: hero.passive.desc },
   ];
 }
@@ -40,12 +41,21 @@ function stackAbilities(scene: Phaser.Scene, x: number, y: number, lines: Abilit
     const title = txt(scene, x, cursor, line.title, {
       size: COPY_SIZE, bold: true, color: HEX.gold, wrap: COPY_W, lineSpacing: 2,
     });
-    cursor += title.height + 2;
+    placed.push(title);
+    cursor += title.height;
+    if (line.terms) {
+      const terms = txt(scene, x, cursor, line.terms, { size: COPY_SIZE - 2, color: HEX.dim });
+      // Terms stay whole: beside the title when they fit, otherwise on their own row.
+      if (title.width + 6 + terms.width <= COPY_W) terms.setPosition(x + title.width + 6, title.y + (title.height - terms.height) / 2);
+      else cursor += terms.height + 2;
+      placed.push(terms);
+    }
+    cursor += 2;
     const body = txt(scene, x, cursor, line.body, {
       size: COPY_SIZE, color: HEX.parchment, wrap: COPY_W, lineSpacing: 2,
     });
     cursor += body.height + 6;
-    placed.push(title, body);
+    placed.push(body);
   }
   return placed;
 }
