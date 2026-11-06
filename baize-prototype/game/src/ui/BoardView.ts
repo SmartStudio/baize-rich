@@ -1,28 +1,24 @@
-// Board rendering on the iso grid: the ground plane (Ground.ts), a raised block per node with its landmark,
-// buildings by land level, ownership rims, one-way chevrons, diamond hit zones, tokens, and the 白泽现世
-// light on the altar. Everything lives in world coordinates (WorldMap) and draws at 1×; GameScene's camera
-// scrolls and zooms it at integer zoom. Draw order comes from world.DEPTH.
+// Board rendering in the front-tilt view: the ground plane (Ground.ts), a block per node with its landmark,
+// buildings by land level, ownership rims, one-way chevrons, rect hit zones, walking tokens (Token.ts), ambient
+// effects and the 白泽现世 light (Ambient.ts). Everything lives in world coordinates (WorldMap) and draws at 1×;
+// GameScene's camera scrolls and zooms it at integer zoom. Draw order comes from world.DEPTH.
 import Phaser from 'phaser';
 import { ALTAR, type Board } from '../core/board';
 import type { GameState, HeroId, NodeId } from '../core/types';
-import { addImg, ensureCanvas, ISO_ALTAR, ISO_BLOCK, setFrame } from './assets';
+import { addAmbient, Manifest, STAND_DY } from './Ambient';
+import { addImg, ensureCanvas, setFrame } from './assets';
 import { drawGround } from './Ground';
-import { CHEVRON, fillDiamond, paintChevron, ringDiamond, type ChevronDir } from './isoArt';
 import type { Rect } from './layout';
 import { COLORS, FS, HEX, PLAYER_COLORS, PLAYER_HEX, txt } from './theme';
-import { DEPTH, project, TH, TW, WorldMap, type Footprint, type Point } from './world';
+import { Token, TOKEN_BOX } from './Token';
+import { DEPTH, FACE, facingFor, seam, TD, tokenSpots, TW, WorldMap, type Facing, type Point } from './world';
 
-/** Landmarks and buildings stand this far below the diamond centre, on the face's front half. */
-const STAND_DY = 6;
-/** Height of a token's hop between cells, in px. */
-const HOP = 14;
-/** Feet offsets from the diamond centre, one per seat, spread along the diamond's long axis. */
-const FAN: Point[] = [0, 1, 2, 3].map((seat) => ({ x: (seat - 1.5) * 16, y: seat % 2 ? 3 : -3 }));
-/** Token feet on the altar: cells of its front rows (offsets from the footprint's back corner), clear of the statue. */
-const ALTAR_SEATS: [number, number][] = [[1, 2], [2, 1], [0, 2], [2, 0]];
-const TOKEN = { w: 36, h: 64 };
-/** The 白泽 light rises from this far above the altar's diamond centre. */
-const MANIFEST_FEET = 46;
+/** Token feet on the altar: cells of its footprint (offsets from its back-left cell) beside the statue, by arrival. */
+const ALTAR_SEATS: [number, number][] = [[0, 2], [2, 2], [0, 1], [2, 1]];
+/** The altar statue's feet stand this far behind the altar's top-face centre. */
+const STATUE_BACK = TD;
+/** Neighbours on a shared cell step aside or back this fast, at most. */
+const MAKE_ROOM_MS = 140;
 
 /** Face overlay textures: what is drawn on a top face and how. All are white, tinted at use. */
 type Overlay = 'rim' | 'rim2' | 'mark';
@@ -32,35 +28,53 @@ interface LandView {
   rim: Phaser.GameObjects.Image;
 }
 
-/**
- * The altar's statue stands on its top face in the same sprite, so anything painted on the altar's face would
- * cross the statue. Its overlays trace only the two front edges.
- */
-function overlayKey(scene: Phaser.Scene, kind: Overlay, f: Footprint, frontOnly: boolean): string {
-  const w = (f.c1 - f.c0 + 1) * TW;
-  const h = w / 2;
-  const key = `face_${kind}_${w}${frontOnly ? '_front' : ''}`;
-  ensureCanvas(scene, key, w, h, (ctx) => {
+/** A rect ring `thick` px wide, `inset` px inside a w×h face; `open` leaves out the back edge. */
+function ring(ctx: CanvasRenderingContext2D, w: number, h: number, inset: number, thick: number, open: boolean): void {
+  if (!open) ctx.fillRect(inset, inset, w - 2 * inset, thick);
+  ctx.fillRect(inset, h - inset - thick, w - 2 * inset, thick);
+  ctx.fillRect(inset, inset, thick, h - 2 * inset);
+  ctx.fillRect(w - inset - thick, inset, thick, h - 2 * inset);
+}
+
+/** The altar's statue stands on the back of its top face, so the altar's overlays leave that edge open. */
+function overlayKey(scene: Phaser.Scene, kind: Overlay, r: Rect, open: boolean): string {
+  const key = `face_${kind}_${r.w}x${r.h}${open ? '_open' : ''}`;
+  ensureCanvas(scene, key, r.w, r.h, (ctx) => {
     ctx.fillStyle = '#ffffff';
     if (kind === 'rim2') {
-      ringDiamond(ctx, w, 1, 2);
-      ringDiamond(ctx, w, 5, 2);
-    } else ringDiamond(ctx, w, kind === 'mark' ? 0 : 2, 2);
-    if (kind === 'mark' && !frontOnly) {
+      ring(ctx, r.w, r.h, 1, 2, open);
+      ring(ctx, r.w, r.h, 5, 2, open);
+    } else ring(ctx, r.w, r.h, kind === 'mark' ? 0 : 2, 2, open);
+    if (kind === 'mark' && !open) {
       ctx.globalAlpha = 0.3;
-      fillDiamond(ctx, 0, 0, w, 2);
-      ctx.globalAlpha = 1;
+      ctx.fillRect(2, 2, r.w - 4, r.h - 4);
     }
-    if (frontOnly) ctx.clearRect(0, 0, w, h / 2);
+  });
+  return key;
+}
+
+/** A flat arrowhead on a top face, pointing along a grid axis, outlined in ink. */
+function chevronKey(scene: Phaser.Scene, dir: Facing): string {
+  const key = `chev_${dir}`;
+  const across = dir === 'left' || dir === 'right';
+  const [w, h] = across ? [6, 11] : [11, 6];
+  ensureCanvas(scene, key, w, h, (ctx) => {
+    const wedge = (i: number, from: number, to: number): void => {
+      const tip = dir === 'right' || dir === 'down' ? i : 5 - i;
+      if (across) ctx.fillRect(tip, from, 1, to - from + 1);
+      else ctx.fillRect(from, tip, to - from + 1, 1);
+    };
+    ctx.fillStyle = '#0f0e1a';
+    for (let i = 0; i < 6; i++) wedge(i, i, 10 - i);
+    ctx.fillStyle = '#f4e9d0';
+    for (let i = 1; i < 5; i++) wedge(i, i + 1, 9 - i);
   });
   return key;
 }
 
 export class BoardView {
   private lands = new Map<NodeId, LandView>();
-  private tokens: Phaser.GameObjects.Container[] = [];
-  /** The hero figure inside each token container (the part that hops). */
-  private figures: Phaser.GameObjects.Image[] = [];
+  private tokens: Token[] = [];
   private tokenNode: NodeId[] = [];
   private manifest: Manifest;
   private highlights: Phaser.GameObjects.Image[] = [];
@@ -84,71 +98,64 @@ export class BoardView {
     }
     this.drawChevrons();
     const c = this.world.centre(ALTAR);
-    this.manifest = new Manifest(s, c.x, c.y - MANIFEST_FEET, DEPTH.stand(c.y));
+    const statue = { x: c.x, y: c.y - STATUE_BACK };
+    this.manifest = new Manifest(s, statue);
+    addAmbient(s, this.world, board, statue);
+    this.breatheRims();
     this.rock = txt(s, 0, 0, '山', { size: FS.lg, bold: true, color: HEX.gold, stroke: HEX.ink, origin: [0.5, 1] }).setDepth(DEPTH.top).setVisible(false);
     this.currentMark = s.add.image(0, 0, '__DEFAULT').setVisible(false);
     s.tweens.add({ targets: this.currentMark, alpha: 0.45, duration: 520, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-    ensureCanvas(s, 'tok_base', 24, 12, (ctx) => {
-      ctx.fillStyle = '#0f0e1a';
-      fillDiamond(ctx, 0, 0, 24, 0);
-      ctx.fillStyle = '#ffffff';
-      fillDiamond(ctx, 0, 0, 24, 1);
-    });
     heroes.forEach((h, seat) => {
-      const base = s.add.image(0, 0, 'tok_base').setTint(PLAYER_COLORS[seat]);
-      const tok = addImg(s, 0, 0, `tok_${h}`).setOrigin(0.5, 1);
-      this.tokens.push(s.add.container(0, 0, [base, tok]));
-      this.figures.push(tok);
+      this.tokens.push(new Token(s, h, seat, PLAYER_COLORS[seat]));
       this.tokenNode.push(board.startId);
     });
   }
 
-  /** A node's raised block, plus its landmark (special nodes) or its hidden building and rim (land). */
+  /** A node's block, plus its landmark (special nodes) or its hidden building and rim (land). */
   private mountNode(id: NodeId): void {
     const s = this.scene;
     const n = this.board.node(id);
+    const r = this.world.rect(id);
     const f = this.world.footprint(id);
-    const p = this.world.centre(id);
-    addImg(s, p.x, p.y, n.region ? `iso_land_${n.region}` : 'iso_jade').setDisplayOrigin(ISO_BLOCK.cx, ISO_BLOCK.cy).setDepth(DEPTH.block(f.c0, f.r0));
-    const stand = (frame: string): Phaser.GameObjects.Image => addImg(s, p.x, p.y + STAND_DY, frame).setOrigin(0.5, 1).setDepth(DEPTH.stand(p.y));
+    addImg(s, r.x, r.y, n.region ? `ft_land_${n.region}` : 'ft_jade').setOrigin(0, 0).setDepth(DEPTH.block(f.r0));
+    const feet = { x: r.x + r.w / 2, y: r.y + r.h / 2 + STAND_DY };
+    const stand = (frame: string): Phaser.GameObjects.Image => addImg(s, feet.x, feet.y, frame).setOrigin(0.5, 1).setDepth(DEPTH.stand(feet.y));
     if (n.type !== 'land') {
       stand(`lm_${n.type}`);
       return;
     }
-    const rim = s.add.image(p.x, p.y, overlayKey(s, 'rim', f, false)).setDepth(DEPTH.face(p.y)).setVisible(false);
-    this.lands.set(id, { bld: stand('iso_bld_1').setVisible(false), rim });
+    const rim = s.add.image(r.x, r.y, overlayKey(s, 'rim', r, false)).setOrigin(0, 0).setDepth(DEPTH.face(f.r0)).setVisible(false);
+    this.lands.set(id, { bld: stand('bld_1').setVisible(false), rim });
   }
 
+  /** The 3×3 altar frame: its bottom-left corner on the front face's bottom-left. */
   private mountAltar(): void {
-    const f = this.world.footprint(ALTAR);
-    const p = this.world.centre(ALTAR);
-    addImg(this.scene, p.x, p.y, 'iso_altar').setDisplayOrigin(ISO_ALTAR.cx, ISO_ALTAR.cy).setDepth(DEPTH.block((f.c0 + f.c1) / 2, (f.r0 + f.r1) / 2));
+    const r = this.world.rect(ALTAR);
+    addImg(this.scene, r.x, r.y + r.h + FACE, 'ft_altar').setOrigin(0, 1).setDepth(DEPTH.block(this.world.footprint(ALTAR).r0));
   }
 
   /** One flat chevron on the seam between the two ends of every one-way road, pointing along it. */
   private drawChevrons(): void {
-    const s = this.scene;
     for (const e of this.world.edges) {
       if (e.twoWay) continue;
-      const a = this.world.footprint(e.from);
-      const b = this.world.footprint(e.to);
-      const dc = b.c0 + b.c1 - a.c0 - a.c1;
-      const dr = b.r0 + b.r1 - a.r0 - a.r1;
-      const dir: ChevronDir = Math.abs(dc) >= Math.abs(dr) ? (dc > 0 ? 'c+' : 'c-') : (dr > 0 ? 'r+' : 'r-');
-      const key = `chev_${dir}`;
-      ensureCanvas(s, key, CHEVRON.w, CHEVRON.h, (ctx) => paintChevron(ctx, dir, '#f4e9d0', '#0f0e1a'));
-      const pa = this.world.centre(e.from);
-      const pb = this.world.centre(e.to);
-      s.add.image((pa.x + pb.x) / 2, (pa.y + pb.y) / 2, key).setDepth(DEPTH.face(Math.max(pa.y, pb.y)) + 0.05);
+      const dir = facingFor(this.world.centre(e.from), this.world.centre(e.to), 'down');
+      const p = seam(this.world.rect(e.from), this.world.rect(e.to));
+      const img = this.scene.add.image(0, 0, chevronKey(this.scene, dir));
+      img.setPosition(Math.round(p.x - img.width / 2), Math.round(p.y - img.height / 2)).setOrigin(0, 0)
+        .setDepth(DEPTH.face(Math.floor(p.y / TD)) + 0.05);
     }
   }
 
-  /** Hover and click land on the node's top-face diamond. A click lands on release, so a camera drag never counts. */
+  /** Owned rims breathe slowly, so a claimed street reads as alive without flickering. */
+  private breatheRims(): void {
+    const rims = [...this.lands.values()].map((v) => v.rim);
+    this.scene.tweens.add({ targets: rims, alpha: 0.6, duration: 1700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+  }
+
+  /** Hover and click land on the node's hit rect. A click lands on release, so a camera drag never counts. */
   private addZone(id: NodeId): void {
-    const r = this.world.rect(id);
-    const corners = this.world.diamond(id).map((p) => new Phaser.Geom.Point(p.x - r.x, p.y - r.y));
-    const z = this.scene.add.zone(r.x, r.y, r.w, r.h).setOrigin(0, 0)
-      .setInteractive({ hitArea: new Phaser.Geom.Polygon(corners), hitAreaCallback: Phaser.Geom.Polygon.Contains, useHandCursor: false });
+    const r = this.world.hitRect(id);
+    const z = this.scene.add.zone(r.x, r.y, r.w, r.h).setOrigin(0, 0).setInteractive({ useHandCursor: false });
     z.on('pointerover', () => this.hoverFn?.(id));
     z.on('pointerout', () => this.hoverFn?.(null));
     z.on('pointerdown', () => this.pressFn?.(id));
@@ -160,7 +167,7 @@ export class BoardView {
   /** Fires for every node on release. */
   onClick(fn: (n: NodeId) => void): void { this.clickFn = fn; }
 
-  /** Screen-aligned box around the node's top face, in world px. */
+  /** The node's top face, in world px. */
   nodeRect(id: NodeId): Rect {
     return this.world.rect(id);
   }
@@ -168,68 +175,84 @@ export class BoardView {
   /** The point the camera keeps on screen for a seat: its token's body, wherever it is mid-move. */
   tokenFocus(seat: number): Point {
     const t = this.tokens[seat];
-    return { x: t.x, y: t.y - TOKEN.h / 2 };
+    return { x: t.x, y: t.y - TOKEN_BOX.h / 2 };
   }
 
   /** World-space box around a seat's token, for keeping modals off it. */
   tokenRect(seat: number): Rect {
     const t = this.tokens[seat];
-    return { x: t.x - TOKEN.w / 2, y: t.y - TOKEN.h, w: TOKEN.w, h: TOKEN.h };
+    return { x: t.x - TOKEN_BOX.w / 2, y: t.y - TOKEN_BOX.h, w: TOKEN_BOX.w, h: TOKEN_BOX.h };
   }
 
-  /** A seat's feet on a node: its fan spot on a cell, or its own front cell on the altar. */
-  private tokenXY(id: NodeId, seat: number): Point {
+  /** Seats standing on a node, in seat order. */
+  private seatsOn(id: NodeId): number[] {
+    return this.tokenNode.flatMap((n, seat) => (n === id ? [seat] : []));
+  }
+
+  /** A seat's feet on a node: its spot among the tokens sharing that cell, or a cell beside the statue on the altar. */
+  private spot(seat: number, id: NodeId): Point {
+    const here = this.seatsOn(id);
+    const i = here.indexOf(seat);
     if (id === ALTAR) {
       const f = this.world.footprint(ALTAR);
-      const [dc, dr] = ALTAR_SEATS[seat];
-      return project(f.c0 + dc, f.r0 + dr);
+      const [dc, dr] = ALTAR_SEATS[i];
+      return { x: (f.c0 + dc) * TW + TW / 2, y: (f.r0 + dr) * TD + TD / 2 + tokenSpots(1)[0].y };
     }
     const c = this.world.centre(id);
-    return { x: c.x + FAN[seat].x, y: c.y + FAN[seat].y };
+    const o = tokenSpots(here.length)[i];
+    return { x: c.x + o.x, y: c.y + o.y };
+  }
+
+  /** Re-seat the standing tokens on these nodes after someone arrived or left. */
+  private makeRoom(ids: NodeId[], except: number, ms: number): void {
+    for (const id of new Set(ids)) {
+      for (const seat of this.seatsOn(id)) {
+        if (seat === except || this.tokens[seat].moving) continue;
+        if (ms > 0) void this.tokens[seat].glideTo(this.spot(seat, id), ms);
+        else this.tokens[seat].place(this.spot(seat, id));
+      }
+    }
   }
 
   placeToken(seat: number, id: NodeId): void {
-    const { x, y } = this.tokenXY(id, seat);
-    this.tokens[seat].setPosition(x, y).setDepth(DEPTH.token(y, seat));
+    const from = this.tokenNode[seat];
     this.tokenNode[seat] = id;
+    this.tokens[seat].place(this.spot(seat, id));
+    this.makeRoom([from, id], seat, 0);
   }
 
-  /** One cell of travel. `hop` lifts the figure in an arc; slides and teleports glide flat. */
-  moveToken(seat: number, id: NodeId, ms: number, hop = true): Promise<void> {
-    const { x, y } = this.tokenXY(id, seat);
+  /** One cell of travel. `walk` plays the walk cycle facing the step; slides and teleports glide and keep facing. */
+  moveToken(seat: number, id: NodeId, ms: number, walk = true): Promise<void> {
+    const from = this.tokenNode[seat];
     this.tokenNode[seat] = id;
-    const tok = this.tokens[seat];
-    return new Promise((resolve) => {
-      this.scene.tweens.add({
-        targets: tok, x, y, duration: ms, ease: hop ? 'Sine.easeInOut' : 'Linear',
-        onUpdate: () => tok.setDepth(DEPTH.token(tok.y, seat)),
-        onComplete: () => resolve(),
-      });
-      if (hop) this.scene.tweens.add({ targets: this.figures[seat], y: -HOP, duration: ms / 2, yoyo: true, ease: 'Quad.easeOut' });
-    });
+    this.makeRoom([from, id], seat, Math.min(ms, MAKE_ROOM_MS));
+    const to = this.spot(seat, id);
+    return walk ? this.tokens[seat].walkTo(to, ms) : this.tokens[seat].glideTo(to, ms);
   }
 
   syncTokens(state: GameState): void {
     state.players.forEach((p, seat) => {
-      if (this.tokenNode[seat] !== p.pos || !this.scene.tweens.isTweening(this.tokens[seat])) this.placeToken(seat, p.pos);
+      if (this.tokenNode[seat] !== p.pos || !this.tokens[seat].moving) this.placeToken(seat, p.pos);
     });
   }
 
   markCurrent(state: GameState): void {
     const id = state.players[state.current].pos;
     this.paintOverlay(this.currentMark, id, 'mark', 0.1).setTint(PLAYER_COLORS[state.current]).setVisible(!state.over);
+    this.tokens.forEach((t, seat) => t.setCurrent(seat === state.current && !state.over));
   }
 
   /** Put a face overlay image on a node's top face. */
   private paintOverlay(img: Phaser.GameObjects.Image, id: NodeId, kind: Overlay, above: number): Phaser.GameObjects.Image {
-    const p = this.world.centre(id);
-    return img.setTexture(overlayKey(this.scene, kind, this.world.footprint(id), id === ALTAR)).setPosition(p.x, p.y).setDepth(DEPTH.face(p.y) + above);
+    const r = this.world.rect(id);
+    return img.setTexture(overlayKey(this.scene, kind, r, id === ALTAR)).setOrigin(0, 0).setPosition(r.x, r.y)
+      .setDepth(DEPTH.face(this.world.footprint(id).r0) + above);
   }
 
   /** A short gain / loss label that rises from a seat's token. */
   floatText(seat: number, text: string, color: string, delay = 0): void {
     const tok = this.tokens[seat];
-    const t = txt(this.scene, tok.x, tok.y - TOKEN.h, text, { size: FS.md, bold: true, color, stroke: HEX.ink, origin: [0.5, 1] })
+    const t = txt(this.scene, tok.x, tok.y - TOKEN_BOX.h, text, { size: FS.md, bold: true, color, stroke: HEX.ink, origin: [0.5, 1] })
       .setDepth(DEPTH.top + 1).setAlpha(0);
     this.scene.tweens.add({ targets: t, alpha: 1, duration: 120, delay });
     this.scene.tweens.add({ targets: t, y: t.y - 30, duration: 1100, delay, ease: 'Sine.easeOut' });
@@ -241,16 +264,16 @@ export class BoardView {
     for (const [id, v] of this.lands) {
       const { owner, level } = state.tiles[id];
       v.bld.setVisible(owner !== null && level > 0);
-      if (level > 0) setFrame(v.bld, `iso_bld_${level}`);
+      if (level > 0) setFrame(v.bld, `bld_${level}`);
       v.rim.setVisible(owner !== null);
       if (owner === null) continue;
       const street = this.board.streetOf(id);
       const whole = street.length > 0 && street.every((s) => state.tiles[s].owner === owner);
-      this.paintOverlay(v.rim, id, whole ? 'rim2' : 'rim', 0).setTint(PLAYER_COLORS[owner]);
+      v.rim.setTexture(overlayKey(this.scene, whole ? 'rim2' : 'rim', this.world.rect(id), false)).setTint(PLAYER_COLORS[owner]);
     }
     if (state.roadblock) {
       const p = this.world.centre(state.roadblock.node);
-      this.rock.setVisible(true).setPosition(p.x, p.y - TH / 2).setColor(PLAYER_HEX[state.roadblock.seat]);
+      this.rock.setVisible(true).setPosition(p.x, p.y - TD / 2).setColor(PLAYER_HEX[state.roadblock.seat]);
     } else this.rock.setVisible(false);
     this.markCurrent(state);
   }
@@ -268,90 +291,4 @@ export class BoardView {
       return h;
     });
   }
-}
-
-const GOLD_LIGHT = 0xffe7a0;
-
-/**
- * The manifest effect on the altar statue: a pillar of light rising from it, a glow on the statue,
- * halo rings pulsing out from its feet, and sparks drifting up. The beast itself is the altar art.
- */
-class Manifest {
-  private layer: Phaser.GameObjects.Container;
-  private sparks: Phaser.GameObjects.Particles.ParticleEmitter;
-  private loops: Phaser.Tweens.Tween[] = [];
-  private on = false;
-
-  constructor(private scene: Phaser.Scene, x: number, y: number, depth: number) {
-    const s = scene;
-    ensureFxTextures(s);
-    const feet = MANIFEST_FEET;
-    const beam = s.add.image(0, feet, 'fx_beam').setOrigin(0.5, 1).setScale(1.6, 1.5).setTint(GOLD_LIGHT).setBlendMode(Phaser.BlendModes.ADD);
-    const glow = s.add.image(0, 0, 'fx_glow').setScale(1.4).setTint(GOLD_LIGHT).setBlendMode(Phaser.BlendModes.ADD);
-    const halos = [0, 1].map(() => s.add.ellipse(0, feet, 144, 72).setStrokeStyle(3, COLORS.gold).setFillStyle());
-    this.layer = s.add.container(x, y, [beam, ...halos, glow]).setDepth(depth).setVisible(false);
-    this.sparks = s.add.particles(x, y + feet, 'fx_spark', {
-      speedY: { min: -70, max: -30 }, speedX: { min: -12, max: 12 }, lifespan: 1800,
-      scale: { start: 1, end: 0.2 }, alpha: { start: 1, end: 0 }, frequency: 90,
-      tint: [GOLD_LIGHT, 0xffffff], blendMode: 'ADD',
-      emitZone: { type: 'random', source: new Phaser.Geom.Ellipse(0, 0, 120, 60), quantity: 1 },
-      emitting: false,
-    }).setDepth(depth + 0.1);
-    this.layer.setData('parts', { beam, glow, halos });
-  }
-
-  set(on: boolean): void {
-    if (on === this.on) return;
-    this.on = on;
-    const s = this.scene;
-    for (const t of this.loops) t.remove();
-    this.loops = [];
-    if (!on) {
-      this.layer.setVisible(false);
-      this.sparks.stop();
-      return;
-    }
-    const { beam, glow, halos } = this.layer.getData('parts') as { beam: Phaser.GameObjects.Image; glow: Phaser.GameObjects.Image; halos: Phaser.GameObjects.Ellipse[] };
-    this.layer.setVisible(true).setAlpha(0);
-    this.sparks.start();
-    this.loops.push(
-      s.tweens.add({ targets: this.layer, alpha: 1, duration: 700 }),
-      s.tweens.add({ targets: beam, alpha: { from: 0.55, to: 0.9 }, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' }),
-      s.tweens.add({ targets: glow, alpha: { from: 0.35, to: 0.8 }, scale: { from: 1.3, to: 1.55 }, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' }),
-      ...halos.map((h, i) => s.tweens.add({
-        targets: h, scale: { from: 0.5, to: 1.5 }, alpha: { from: 1, to: 0 }, duration: 1600, delay: i * 800, repeat: -1, ease: 'Sine.easeOut',
-      })),
-    );
-  }
-}
-
-/** Soft additive light textures for the manifest effect, drawn once per game. */
-function ensureFxTextures(s: Phaser.Scene): void {
-  ensureCanvas(s, 'fx_beam', 48, 256, (ctx) => {
-    const across = ctx.createLinearGradient(0, 0, 48, 0);
-    across.addColorStop(0, 'rgba(255,255,255,0)');
-    across.addColorStop(0.5, 'rgba(255,255,255,0.9)');
-    across.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = across;
-    ctx.fillRect(0, 0, 48, 256);
-    ctx.globalCompositeOperation = 'destination-in';
-    const up = ctx.createLinearGradient(0, 0, 0, 256);
-    up.addColorStop(0, 'rgba(0,0,0,0)');
-    up.addColorStop(0.6, 'rgba(0,0,0,1)');
-    up.addColorStop(1, 'rgba(0,0,0,0.6)');
-    ctx.fillStyle = up;
-    ctx.fillRect(0, 0, 48, 256);
-  });
-  ensureCanvas(s, 'fx_glow', 96, 96, (ctx) => {
-    const g = ctx.createRadialGradient(48, 48, 0, 48, 48, 48);
-    g.addColorStop(0, 'rgba(255,255,255,0.9)');
-    g.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, 96, 96);
-  });
-  ensureCanvas(s, 'fx_spark', 6, 6, (ctx) => {
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(1, 0, 4, 6);
-    ctx.fillRect(0, 1, 6, 4);
-  });
 }

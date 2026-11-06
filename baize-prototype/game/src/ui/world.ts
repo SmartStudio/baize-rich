@@ -1,8 +1,8 @@
-// Board geometry on a 2:1 isometric grid and camera math, kept free of Phaser so it can be unit-tested.
+// Board geometry for the front-tilt (HD-2D) view and camera math, kept free of Phaser so it can be unit-tested.
 //
-// Grid cell (c,r) of board.json is a diamond TW wide and TH tall; its centre projects to world
-// ((c−r)·TW/2, (c+r)·TH/2), so cell (0,0) is centred on the world origin. A node's footprint is its
-// `pos` cell, or the cells of its `rect` [c0,r0,c1,r1] (inclusive) when it has one.
+// The camera looks at the board from the front and above: the grid stays axis-aligned and rows recede up the
+// screen. Cell (c,r)'s top face covers x ∈ [c·TW, c·TW+TW), y ∈ [r·TD, r·TD+TD), and its front face hangs FACE px
+// below that. A node's footprint is its `pos` cell, or the cells of its `rect` [c0,r0,c1,r1] (inclusive).
 // A view is the world point at the screen centre plus a zoom; screen = (world − centre)·zoom + screen centre.
 import type { BoardData, NodeId } from '../core/types';
 import { H, SAFE, W, type Rect } from './layout';
@@ -33,66 +33,49 @@ export interface Footprint {
   r1: number;
 }
 
-/** Diamond width and height of one grid cell, in world px. */
-export const TW = 96;
-export const TH = 48;
+/** Width and on-screen depth of one cell's top face, in world px. */
+export const TW = 64;
+export const TD = 48;
+/** Height of a block's front face: the path stands this far above the ground. */
+export const FACE = 16;
 /** The camera rests only at these zooms, so every art pixel covers a whole number of screen pixels. */
 export const ZOOMS = [1, 2] as const;
 export type Zoom = (typeof ZOOMS)[number];
 /** Margin kept around a framed rect inside the SAFE area, in screen px. */
 const FRAME_MARGIN = 40;
-/** Landmarks and buildings rise up to this far above the back row's top faces. */
-const HEADROOM = 2 * TH;
+/** Landmarks, buildings and tokens rise up to this far above the back row's top faces. */
+const HEADROOM = TD;
 /** How far past the board the camera may pan, in world px. */
 const PAD = TW / 2;
-/** Ground painted past the board's bounding rect, in world px. Four cells each way contain every clamped view. */
-export const TERRAIN_MARGIN = { x: 4 * TW, y: 4 * TH };
+/** Ground painted past the board's bounds, in world px; enough to fill every clamped view at both zooms. */
+export const TERRAIN_MARGIN = { x: 5 * TW, y: 2 * TD };
 
 /**
- * Draw order. `y` is the centre y of the cell a thing belongs to: rows further front (larger c+r) have larger y,
- * and everything a cell owns stays inside (y, y + TH/2), below the blocks of the row in front.
+ * Draw order. Rows further front draw later: a block of row r draws over the front face of row r − 1.
+ * Whatever stands on a top face sorts by its feet, which stay inside the row, so it lands between its own
+ * block and the next row's.
  */
 export const DEPTH = {
   ground: -1e5,
-  /** Same-row blocks never overlap; c breaks the tie so the order is total. */
-  block: (c: number, r: number): number => project(c, r).y + c * 1e-3,
+  block: (r: number): number => r * TD,
   /** Overlays painted on a top face: ownership rims, marks, chevrons. */
-  face: (y: number): number => y + 0.5,
-  /** Landmarks, buildings and ground props. */
-  stand: (y: number): number => y + 1,
-  /** A token sorts by its feet, a quarter cell forward so it stays above whatever stands on its own cell. */
-  token: (footY: number, seat: number): number => footY + TH / 4 + seat * 0.01,
+  face: (r: number): number => r * TD + 0.25,
+  /** Landmarks, buildings and ground props. Feet sit on whole pixels, so every offset here stays below 1. */
+  stand: (footY: number): number => footY + 0.3,
+  /** A token draws in front of a landmark that shares its foot line; seats break ties. */
+  token: (footY: number, seat: number): number => footY + 0.4 + seat * 0.01,
   /** Labels and markers above the whole board. */
   top: 1e5,
 };
 
-/** World position of a grid point; integer (c,r) is a cell centre, half-integers are its corners. */
-export function project(c: number, r: number): Point {
-  return { x: ((c - r) * TW) / 2, y: ((c + r) * TH) / 2 };
-}
-
-/** Inverse of `project`: the fractional grid point under world point p. */
-export function unproject(p: Point): { c: number; r: number } {
-  const u = p.x / (TW / 2);
-  const v = p.y / (TH / 2);
-  return { c: (v + u) / 2, r: (v - u) / 2 };
-}
-
-/** The grid cell whose diamond holds world point p. */
+/** The grid cell whose top face holds world point p. */
 export function cellAt(p: Point): { c: number; r: number } {
-  const g = unproject(p);
-  return { c: Math.floor(g.c + 0.5), r: Math.floor(g.r + 0.5) };
+  return { c: Math.floor(p.x / TW), r: Math.floor(p.y / TD) };
 }
 
-/** A footprint's diamond corners in world px: top, right, bottom, left. */
-export function diamondOf(f: Footprint): [Point, Point, Point, Point] {
-  return [project(f.c0 - 0.5, f.r0 - 0.5), project(f.c1 + 0.5, f.r0 - 0.5), project(f.c1 + 0.5, f.r1 + 0.5), project(f.c0 - 0.5, f.r1 + 0.5)];
-}
-
-/** Screen-aligned bounding rect of a footprint's diamond. */
-export function footprintRect(f: Footprint): Rect {
-  const [top, right, bottom, left] = diamondOf(f);
-  return { x: left.x, y: top.y, w: right.x - left.x, h: bottom.y - top.y };
+/** A footprint's top face in world px. */
+export function faceRect(f: Footprint): Rect {
+  return { x: f.c0 * TW, y: f.r0 * TD, w: (f.c1 - f.c0 + 1) * TW, h: (f.r1 - f.r0 + 1) * TD };
 }
 
 export function unionRect(rs: Rect[]): Rect {
@@ -107,17 +90,45 @@ export function rectCentre(r: Rect): Point {
   return { x: r.x + r.w / 2, y: r.y + r.h / 2 };
 }
 
+const contains = (r: Rect, p: Point): boolean => p.x >= r.x && p.x < r.x + r.w && p.y >= r.y && p.y < r.y + r.h;
+
+/** Midpoint of the edge two touching rects share (of the gap between them, if they do not touch). */
+export function seam(a: Rect, b: Rect): Point {
+  const mid = (lo0: number, hi0: number, lo1: number, hi1: number): number => (Math.max(lo0, lo1) + Math.min(hi0, hi1)) / 2;
+  return { x: mid(a.x, a.x + a.w, b.x, b.x + b.w), y: mid(a.y, a.y + a.h, b.y, b.y + b.h) };
+}
+
 /** Board bounds plus TERRAIN_MARGIN on every side. The ground texture covers this rect. */
 export function terrainRect(bounds: Rect): Rect {
   const m = TERRAIN_MARGIN;
   return { x: bounds.x - m.x, y: bounds.y - m.y, w: bounds.w + 2 * m.x, h: bounds.h + 2 * m.y };
 }
 
+export type Facing = 'down' | 'up' | 'left' | 'right';
+
+/** Which way a walker faces stepping from `from` to `to`; the larger axis wins, and no motion keeps `prev`. */
+export function facingFor(from: Point, to: Point, prev: Facing): Facing {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  if (dx === 0 && dy === 0) return prev;
+  if (Math.abs(dx) * TD >= Math.abs(dy) * TW) return dx > 0 ? 'right' : 'left';
+  return dy > 0 ? 'down' : 'up';
+}
+
+/**
+ * Feet offsets from a cell's top-face centre for `count` tokens sharing it, in seat order. They stand in front
+ * of the landmark's feet, spread across the cell, alternate seats a step further forward so every head shows.
+ */
+export function tokenSpots(count: number): Point[] {
+  const gap = count <= 2 ? 26 : count === 3 ? 20 : 16;
+  return Array.from({ length: count }, (_, i) => ({ x: Math.round((i - (count - 1) / 2) * gap), y: 14 + (i % 2) * 5 }));
+}
+
 const cellKey = (c: number, r: number): string => `${c},${r}`;
 
 /** Where every node sits on the grid and in world px, the drawable world bounds and the road edges between nodes. */
 export class WorldMap {
-  /** Bounding rect of the grid's diamond (and any node footprint past it), plus HEADROOM above. */
+  /** The top faces of the grid and every footprint, their front faces below and HEADROOM above. */
   readonly bounds: Rect;
   readonly edges: Edge[] = [];
   private readonly feet = new Map<NodeId, Footprint>();
@@ -130,8 +141,8 @@ export class WorldMap {
       for (let c = c0; c <= c1; c++) for (let r = r0; r <= r1; r++) this.byCell.set(cellKey(c, r), n.id);
     }
     const grid = { c0: 0, r0: 0, c1: data.grid.cols - 1, r1: data.grid.rows - 1 };
-    const faces = unionRect([grid, ...this.feet.values()].map(footprintRect));
-    this.bounds = { ...faces, y: faces.y - HEADROOM, h: faces.h + HEADROOM };
+    const faces = unionRect([grid, ...this.feet.values()].map(faceRect));
+    this.bounds = { ...faces, y: faces.y - HEADROOM, h: faces.h + HEADROOM + FACE };
     const next = new Map(data.nodes.map((n) => [n.id, n.next]));
     const seen = new Set<string>();
     for (const n of data.nodes) {
@@ -151,20 +162,22 @@ export class WorldMap {
     return { ...f };
   }
 
-  /** The diamond centre of the node's footprint, in world px. */
+  /** The centre of the node's top face, in world px. */
   centre(id: NodeId): Point {
-    const f = this.footprint(id);
-    return project((f.c0 + f.c1) / 2, (f.r0 + f.r1) / 2);
+    return rectCentre(this.rect(id));
   }
 
-  /** The node's top-face diamond corners: top, right, bottom, left. */
-  diamond(id: NodeId): [Point, Point, Point, Point] {
-    return diamondOf(this.footprint(id));
-  }
-
-  /** Screen-aligned box around the node's top-face diamond, for camera framing and popover anchors. */
+  /** The node's top face, for camera framing and popover anchors. */
   rect(id: NodeId): Rect {
-    return footprintRect(this.footprint(id));
+    return faceRect(this.footprint(id));
+  }
+
+  /** Where the node answers the pointer: its top face, plus its front face when no node stands in front of it. */
+  hitRect(id: NodeId): Rect {
+    const f = this.footprint(id);
+    const r = faceRect(f);
+    for (let c = f.c0; c <= f.c1; c++) if (this.nodeAtCell(c, f.r1 + 1)) return r;
+    return { ...r, h: r.h + FACE };
   }
 
   nodeIds(): NodeId[] {
@@ -175,10 +188,13 @@ export class WorldMap {
     return this.byCell.get(cellKey(c, r)) ?? null;
   }
 
-  /** The node whose top-face diamond holds world point p, if any. */
+  /** The node whose hit rect holds world point p, if any. */
   nodeAt(p: Point): NodeId | null {
     const { c, r } = cellAt(p);
-    return this.nodeAtCell(c, r);
+    const own = this.nodeAtCell(c, r);
+    if (own) return own;
+    const behind = this.nodeAtCell(c, r - 1);
+    return behind && contains(this.hitRect(behind), p) ? behind : null;
   }
 
   /**

@@ -105,15 +105,15 @@ async function choiceShots(page) {
   }
 }
 
-// Point at a node's top face, k of the way from its diamond centre to its left corner, and screenshot its popover.
+// Point at a node's top face, k of the way from its centre to its left edge, and screenshot its popover.
 // Fails the run unless that node is the one hovered and its popover is showing, so hit zones must match the art.
 async function hoverNode(page, errors, id, k, file) {
   const at = await page.evaluate(([id, k]) => {
     const sc = window.__phaser.scene.getScene('Game');
     const w = sc.boardView.world;
     const c = w.centre(id);
-    const left = w.diamond(id)[3];
-    return sc.cam.toScreen({ x: c.x + (left.x - c.x) * k, y: c.y + (left.y - c.y) * k, w: 0, h: 0 });
+    const r = w.rect(id);
+    return sc.cam.toScreen({ x: c.x + (r.x - c.x) * k, y: c.y, w: 0, h: 0 });
   }, [id, k]);
   await page.mouse.move(at.x, at.y);
   await sleep(500);
@@ -124,6 +124,22 @@ async function hoverNode(page, errors, id, k, file) {
   });
   console.log(`hover ${id}:`, JSON.stringify(seen));
   if (seen.hovered !== id || !seen.shown) errors.push(`hover ${id} at ${JSON.stringify(at)}: ${JSON.stringify(seen)}`);
+}
+
+// Zoom the following camera to 2× and shoot the moment a token is mid-step, then zoom back out.
+async function walkCloseUp(page, errors, file) {
+  await page.mouse.move(640, 360);
+  await page.mouse.wheel(0, -120);
+  await sleep(600);
+  const moving = () => window.__phaser.scene.getScene('Game').boardView.tokens.some((t) => t.moving);
+  try {
+    await page.waitForFunction(moving, null, { timeout: 15000, polling: 16 });
+    await shot(page, file);
+  } catch {
+    errors.push(`${file}: no token walked within 15 s`);
+  }
+  await page.mouse.wheel(0, 120);
+  await sleep(400);
 }
 
 // Title → first human turn, an all-AI game and a 45 s human soak.
@@ -165,6 +181,7 @@ async function tourShots(page, errors) {
   await page.goto(`${BASE}?auto=1&seed=7&speed=2`);
   await sleep(15000);
   await shot(page, '06-midgame.png');
+  await walkCloseUp(page, errors, '06b-walk-zoom2.png');
   const info = await page.evaluate(() => {
     const g = window.__baize;
     return g ? { round: g.state.round, over: g.state.over, events: g.log.length } : null;
