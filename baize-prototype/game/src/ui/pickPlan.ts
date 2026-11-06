@@ -172,42 +172,55 @@ function costLine(how: string | undefined, toll: boolean): string | undefined {
 }
 
 /** Every place a move of `steps` from the seat's cell can end, one entry per way through the forks. */
-export function walkFrom(g: Game, seat: number, steps: number): Landing[] {
+function walkFrom(g: Game, seat: number, steps: number): Landing[] {
   const p = g.state.players[seat];
+  const w = new Walker(g, seat);
   const total = p.dazed ? Math.max(1, Math.floor(steps / 2)) : steps;
-  const at = p.pos;
-  const exits = at === ALTAR ? g.board.node(ALTAR).next : g.board.exits(at, g.board.isTwoWay(at) ? p.cameFrom : null, dir(g));
-  return branch(g, seat, at, exits, total, [], p.pills, false);
+  const exits = p.pos === ALTAR ? g.board.node(ALTAR).next : g.board.exits(p.pos, g.board.isTwoWay(p.pos) ? p.cameFrom : null, w.dir);
+  return w.branch(p.pos, exits, total, { route: [], pills: p.pills, toll: false });
 }
 
 /** The walk after stepping from `from` into `to` with `remaining` steps left before that step. */
 function stepInto(g: Game, seat: number, from: NodeId, to: NodeId, remaining: number, toll = false): Landing[] {
-  const pills = g.state.players[seat].pills - (toll ? g.data.config.altarToll : 0);
-  return walk(g, seat, from, to, remaining, [], pills, toll);
+  const w = new Walker(g, seat);
+  return w.walk(from, to, remaining, { route: [], pills: g.state.players[seat].pills - (toll ? w.fee : 0), toll });
 }
 
-function branch(g: Game, seat: number, from: NodeId, exits: NodeId[], remaining: number, route: string[], pills: number, toll: boolean): Landing[] {
-  if (exits.length === 1) return walk(g, seat, from, exits[0], remaining, route, pills, toll);
-  return exits.flatMap((x) => walk(g, seat, from, x, remaining, [...route, x], pills, toll));
+/** One way through the forks so far: the answers it took, the pills it has left, whether it paid the toll. */
+interface Trail {
+  route: string[];
+  pills: number;
+  toll: boolean;
 }
 
-function walk(g: Game, seat: number, from: NodeId, to: NodeId, remaining: number, route: string[], pills: number, toll: boolean): Landing[] {
-  const left = remaining - 1;
-  const rb = g.state.roadblock;
-  if (left === 0 || (rb && rb.node === to && rb.seat !== seat)) return [{ node: to, route, toll }];
-  if (to === ALTAR) return altar(g, seat, left, route, pills, toll);
-  return branch(g, seat, to, g.board.exits(to, from, dir(g)), left, route, pills, toll);
-}
+/** Game.walk for one seat, every branch at once. */
+class Walker {
+  readonly dir: 1 | -1;
+  readonly fee: number;
 
-/** Reaching the altar with steps left: stop there, or pay the toll and leave by any road. */
-function altar(g: Game, seat: number, left: number, route: string[], pills: number, toll: boolean): Landing[] {
-  const fee = g.data.config.altarToll;
-  if (pills < fee) return [{ node: ALTAR, route, toll }];
-  const stop = { node: ALTAR, route: [...route, 'stop'], toll };
-  const roads = g.board.node(ALTAR).next.flatMap((x) => walk(g, seat, ALTAR, x, left, [...route, x], pills - fee, true));
-  return [stop, ...roads];
-}
+  constructor(private g: Game, private seat: number) {
+    this.dir = g.state.turn.reverse ? -1 : 1;
+    this.fee = g.data.config.altarToll;
+  }
 
-function dir(g: Game): 1 | -1 {
-  return g.state.turn.reverse ? -1 : 1;
+  branch(from: NodeId, exits: NodeId[], remaining: number, t: Trail): Landing[] {
+    if (exits.length === 1) return this.walk(from, exits[0], remaining, t);
+    return exits.flatMap((x) => this.walk(from, x, remaining, { ...t, route: [...t.route, x] }));
+  }
+
+  walk(from: NodeId, to: NodeId, remaining: number, t: Trail): Landing[] {
+    const left = remaining - 1;
+    const rb = this.g.state.roadblock;
+    if (left === 0 || (rb && rb.node === to && rb.seat !== this.seat)) return [{ node: to, route: t.route, toll: t.toll }];
+    if (to === ALTAR) return this.altar(left, t);
+    return this.branch(to, this.g.board.exits(to, from, this.dir), left, t);
+  }
+
+  /** Reaching the altar with steps left: stop there, or pay the toll and leave by any road. */
+  private altar(left: number, t: Trail): Landing[] {
+    if (t.pills < this.fee) return [{ node: ALTAR, route: t.route, toll: t.toll }];
+    const stop = { node: ALTAR, route: [...t.route, 'stop'], toll: t.toll };
+    const roads = this.g.board.node(ALTAR).next.flatMap((x) => this.walk(ALTAR, x, left, { route: [...t.route, x], pills: t.pills - this.fee, toll: true }));
+    return [stop, ...roads];
+  }
 }
