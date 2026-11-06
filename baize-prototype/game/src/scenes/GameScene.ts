@@ -8,12 +8,15 @@ import { defaultData } from '../core/data';
 import { Game } from '../core/engine';
 import type { GameEvent, GameEventType } from '../core/events';
 import { toRecord, type GameRecord } from '../core/record';
-import { nominalRent, realmName, totalAssets } from '../core/rules';
+import { realmName, totalAssets } from '../core/rules';
 import { ALTAR } from '../core/board';
 import type { GameState, NodeId } from '../core/types';
 import { BoardCamera } from '../ui/BoardCamera';
 import { BoardView } from '../ui/BoardView';
-import { ChoiceModal, type ModalOption, type ModalSpec } from '../ui/ChoiceModal';
+import { Breakthrough } from '../ui/Breakthrough';
+import { breakthroughView } from '../ui/breakthroughView';
+import { ChoiceModal } from '../ui/ChoiceModal';
+import { presentChoice } from '../ui/choices/registry';
 import { Cutscene, type BannerSpec } from '../ui/Cutscene';
 import { STAGE, type Rect } from '../ui/layout';
 import { LogPanel } from '../ui/LogPanel';
@@ -63,10 +66,11 @@ const ROUND_WAIT = 700;
 const CUTSCENE_MS = 1500;
 const WIN_MS = 2000;
 const SPEEDS = [0.5, 1, 2, 4];
+/** An AI's 闭关 plays the same cutscene, a little quicker than a human's own. */
+const AI_BREAKTHROUGH = 0.7;
 
 /** Big events get a full-width cutscene banner; a null spec means this instance is not big. */
 const CUTSCENES: Partial<Record<GameEventType, (g: Game, e: GameEvent) => BannerSpec | null>> = {
-  breakthrough: (g, e) => ({ title: '破境！', sub: narrateEvent(g, e) ?? '', icon: portrait(g, e), color: COLORS.gold }),
   manifest: (g, e) => ({ title: '白泽现世', sub: narrateEvent(g, e) ?? '', icon: 'baize', color: 0xe6e4f0, dim: true }),
   duel: (g, e) => ({ title: '斗法', sub: narrateEvent(g, e) ?? '', icon: portrait(g, e), color: PLAYER_COLORS[e.player!] }),
   bankrupt: (g, e) => ({ title: '破产重整', sub: narrateEvent(g, e) ?? '', icon: portrait(g, e), color: COLORS.bad }),
@@ -107,6 +111,7 @@ export class GameScene extends Phaser.Scene {
   private modal!: ChoiceModal;
   private logPanel!: LogPanel;
   private fx!: Cutscene;
+  private breakthrough!: Breakthrough;
   /** Last snapshot played back; resource popups are diffs against it. */
   private lastSnap: GameState | null = null;
   private queue: GameEvent[] = [];
@@ -167,6 +172,7 @@ export class GameScene extends Phaser.Scene {
     this.modal = new ChoiceModal(hud);
     this.logPanel = new LogPanel(hud);
     this.fx = new Cutscene(hud);
+    this.breakthrough = new Breakthrough(hud);
     this.lastSnap = null;
     this.minimap = new Minimap(hud, this.boardView.world, this.engine.board.data, (p) => this.cam.panTo(p));
     this.minimap.btnRecentre.onClick(() => this.recentre());
@@ -305,6 +311,10 @@ export class GameScene extends Phaser.Scene {
       case 'manifest':
         this.boardView.showBaize(true);
         await this.cutscene(e);
+        break;
+      case 'breakthrough':
+        this.cam.follow(seat);
+        await this.breakthrough.play(breakthroughView(this.engine, e), (b) => this.ms(b * (this.isHuman(seat) ? 1 : AI_BREAKTHROUGH)));
         break;
       case 'roundStart':
         if (e.snap && e.snap.round !== this.engine.data.config.manifest.round) this.boardView.showBaize(false);
@@ -530,26 +540,13 @@ export class GameScene extends Phaser.Scene {
     }
     this.boardView.setClickable([...this.nodeOptions.keys()]);
     this.frameTargets(c.player);
-    const p = g.state.players[c.player];
-    let desc = c.desc ?? '';
-    if (this.nodeOptions.size > 9) desc += '\n也可直接点击棋盘上高亮的格子';
-    let preview: ModalSpec['preview'];
-    if (c.kind === 'rentReact') desc += `（可用避劫符 ${p.hand.filter((x) => x === 'evade').length} 张）`;
-    if (c.kind === 'guardReact') desc += `（可用金光符 ${p.hand.filter((x) => x === 'goldlight').length} 张）`;
-    if (c.kind === 'buy' && c.ctx.node) {
-      const n = g.board.node(c.ctx.node);
-      const region = n.region!;
-      desc = [desc, `基础租金 ${nominalRent(g.data, n.price!, 0)} 灵石`].join('\n');
-      preview = { tile: `tile_land_${region}`, obj: `decor_${region}` };
-    }
     const multiHuman = this.ais.filter((a) => a === null).length > 1;
-    const title = multiHuman ? `${p.name} · ${c.title}` : c.title;
-    const options: ModalOption[] = c.options.map((o) => ({ id: o.id, label: o.label, hint: o.hint }));
+    const spec = presentChoice(c, { game: g, who: multiHuman ? g.state.players[c.player].name : undefined });
+    const boardHint = this.nodeOptions.size > 9 ? '也可直接点击棋盘上高亮的格子' : '';
     const id = await this.modal.open({
-      title, desc: desc || undefined, options, defaultId: c.defaultId, cancelId: c.cancelId, preview,
+      ...spec,
+      desc: [spec.desc, boardHint].filter(Boolean).join('\n') || undefined,
       placement: this.nodeOptions.size >= 2 ? 'side' : 'center',
-      layout: 'list',
-      numbered: c.kind !== 'rollValue',
       avoid: this.tokenScreenRect(c.player),
     });
     this.boardView.setClickable([]);
