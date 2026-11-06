@@ -1,5 +1,5 @@
-// Board rendering: ground and roads (Ground.ts), tiles, objects, buildings, owner bars/flags, tokens,
-// demon, and the 白泽现世 light on the altar. Everything here lives in world coordinates (WorldMap);
+// Board rendering: ground and roads (Ground.ts), tiles, objects, buildings, ownership wash/rims/flags,
+// tokens, demon, and the 白泽现世 light on the altar. Everything here lives in world coordinates (WorldMap);
 // GameScene's camera scrolls and zooms it. Sprite scales come from SPRITE.
 import Phaser from 'phaser';
 import { ALTAR, type Board } from '../core/board';
@@ -21,16 +21,53 @@ const TOP = 100000;
 const STATUE_DY = -6;
 /** Token feet around the altar statue, relative to the footprint centre. */
 const ALTAR_SEATS = [[-62, -8], [62, -8], [-62, 58], [62, 58]];
+/**
+ * Ownership wash and rim sit above the tile sprite (depth 1) and under props
+ * (depth = foot y) and the current-player mark (depth 3).
+ */
+const OWN_DEPTH = 2;
+/** Rim draws after the wash. Both stay under the current-player mark at depth 3. */
+const RIM_DEPTH = 2.5;
+/** Faint owner wash. Strong enough to read zoomed out, light enough to leave the tile art. */
+const OWN_WASH = 0.16;
+/** Plain ownership rim, in world px. */
+const OWN_BORDER = 3;
+/** Completed street: a thicker owner rim plus an inset second rim. */
+const MONO_OUTER = 5;
+const CHAIN_W = 2;
+/** Inner rim starts clear of the thicker outer rim, so the two lines stay separate. */
+const CHAIN_INSET = 7;
+/**
+ * Seat 0's colour is COLORS.gold, so a gold inner rim would disappear on that seat.
+ * Parchment matches HEX.parchment.
+ */
+const CHAIN_ON_GOLD = 0xf4e9d0;
 
 interface LandView {
   decor: Phaser.GameObjects.Image;
   bld: Phaser.GameObjects.Image;
-  owner: Phaser.GameObjects.Image;
   flag: Phaser.GameObjects.Image;
   /** §17 禁制 marker, in the owner's seat colour. */
   trap: Phaser.GameObjects.Text;
-  /** §18.1 owner-coloured border while the owner holds this land's whole street. */
-  chain: Phaser.GameObjects.Rectangle;
+  /** Tile size in world px. The rim is drawn in this box. */
+  w: number;
+  h: number;
+  /** Owner-colour fill under decor and buildings. Hidden while the land is unowned. */
+  wash: Phaser.GameObjects.Rectangle;
+  /** Owner rim, and the inner street rim when the street is complete. `flashStreet` pulses this. */
+  rim: Phaser.GameObjects.Graphics;
+}
+
+function chainInk(seat: number): number {
+  return PLAYER_COLORS[seat] === COLORS.gold ? CHAIN_ON_GOLD : COLORS.gold;
+}
+
+/** A crisp rectangular frame. Four filled bars, so the thickness stays an integer pixel band. */
+function fillFrame(g: Phaser.GameObjects.Graphics, w: number, h: number, inset: number, thick: number): void {
+  g.fillRect(inset, inset, w - inset * 2, thick);
+  g.fillRect(inset, h - inset - thick, w - inset * 2, thick);
+  g.fillRect(inset, inset + thick, thick, h - 2 * inset - 2 * thick);
+  g.fillRect(w - inset - thick, inset + thick, thick, h - 2 * inset - 2 * thick);
 }
 
 /** Board markers that come and go with state: §18.3 路障 (public) and 爆炎阵 (owner only). */
@@ -67,22 +104,14 @@ export class BoardView {
     for (const id of board.allNodeIds()) {
       const n = board.node(id);
       if (id === ALTAR) continue;
-      const { x, y, w: C } = tileRect(this.world, id);
+      const { x, y, w, h } = tileRect(this.world, id);
       const tileFrame = n.type === 'land' ? `tile_land_${n.region}` : `tile_${n.type}`;
       addImg(s, x, y, tileFrame).setOrigin(0, 0).setDepth(1).setScale(SPRITE.ground);
       const foot = y + u(48);
-      if (n.type === 'land') {
-        const decor = addImg(s, x + C / 2, foot, `decor_${n.region}`).setOrigin(0.5, 1).setDepth(foot).setScale(SPRITE.prop);
-        const bld = addImg(s, x + C / 2, foot, 'bld_1').setOrigin(0.5, 1).setDepth(foot).setVisible(false).setScale(SPRITE.prop);
-        const owner = addImg(s, x, y + u(54), 'owner_p1').setOrigin(0, 0).setDepth(2).setVisible(false).setScale(SPRITE.ground);
-        const flag = addImg(s, x + u(9), y + u(24), 'flag_p1').setOrigin(0.5, 1).setDepth(foot + 1).setVisible(false).setScale(SPRITE.prop);
-        const trap = txt(s, x + C - u(4), y + u(4), '禁', { size: FS.sm, bold: true, stroke: HEX.ink, origin: [1, 0] })
-          .setDepth(TOP + 500).setVisible(false);
-        const chain = s.add.rectangle(x + 2, y + 2, C - 4, C - 4).setOrigin(0, 0).setStrokeStyle(3, COLORS.gold).setDepth(2).setVisible(false);
-        this.lands.set(id, { decor, bld, owner, flag, trap, chain });
-      } else {
+      if (n.type === 'land') this.mountLand(id, n.region, x, y, w, h, foot);
+      else {
         const obj = n.type === 'minigame' ? `obj_minigame_${n.game}` : `obj_${n.type}`;
-        addImg(s, x + C / 2, foot, obj).setOrigin(0.5, 1).setDepth(foot).setScale(SPRITE.prop);
+        addImg(s, x + w / 2, foot, obj).setOrigin(0.5, 1).setDepth(foot).setScale(SPRITE.prop);
       }
       const cell = this.world.cellRect(id);
       this.addZone(id, cell.x, cell.y, cell.w, cell.h);
@@ -197,6 +226,40 @@ export class BoardView {
     this.scene.tweens.add({ targets: t, alpha: 0, duration: 300, delay: delay + 900, onComplete: () => t.destroy() });
   }
 
+  private mountLand(id: NodeId, region: string | undefined, x: number, y: number, w: number, h: number, foot: number): void {
+    const s = this.scene;
+    const decor = addImg(s, x + w / 2, foot, `decor_${region}`).setOrigin(0.5, 1).setDepth(foot).setScale(SPRITE.prop);
+    const bld = addImg(s, x + w / 2, foot, 'bld_1').setOrigin(0.5, 1).setDepth(foot).setVisible(false).setScale(SPRITE.prop);
+    const flag = addImg(s, x + u(9), y + u(24), 'flag_p1').setOrigin(0.5, 1).setDepth(foot + 1).setVisible(false).setScale(SPRITE.prop);
+    const trap = txt(s, x + w - u(4), y + u(4), '禁', { size: FS.sm, bold: true, stroke: HEX.ink, origin: [1, 0] })
+      .setDepth(TOP + 500).setVisible(false);
+    const wash = s.add.rectangle(x, y, w, h, PLAYER_COLORS[0], OWN_WASH).setOrigin(0, 0).setDepth(OWN_DEPTH).setVisible(false);
+    const rim = s.add.graphics().setPosition(x, y).setDepth(RIM_DEPTH).setVisible(false);
+    this.lands.set(id, { decor, bld, flag, trap, w, h, wash, rim });
+  }
+
+  /** Owner wash, rim, and flag. Leaves rim alpha alone while owned, so a street flash can keep pulsing. */
+  private showOwnership(v: LandView, owner: number | null, chained: boolean): void {
+    const owned = owner !== null;
+    v.flag.setVisible(owned);
+    v.wash.setVisible(owned);
+    v.rim.setVisible(owned);
+    if (owner === null) {
+      v.rim.setAlpha(1);
+      return;
+    }
+    const color = PLAYER_COLORS[owner];
+    setFrame(v.flag, `flag_p${owner + 1}`);
+    v.wash.setFillStyle(color, OWN_WASH);
+    const g = v.rim;
+    g.clear();
+    g.fillStyle(color, 1);
+    fillFrame(g, v.w, v.h, 0, chained ? MONO_OUTER : OWN_BORDER);
+    if (!chained) return;
+    g.fillStyle(chainInk(owner), 1);
+    fillFrame(g, v.w, v.h, CHAIN_INSET, CHAIN_W);
+  }
+
   /**
    * Refresh ownership / buildings / spirits / markers / demon from a (snapshot) state.
    * `blastAlpha(seat)` is how visible that seat's hidden 爆炎阵 are on this screen (0 hides them).
@@ -204,22 +267,14 @@ export class BoardView {
   render(state: GameState, blastAlpha: (seat: number) => number = () => 0): void {
     for (const [id, v] of this.lands) {
       const t = state.tiles[id];
-      const owned = t.owner !== null;
-      v.owner.setVisible(owned);
-      v.flag.setVisible(owned);
-      if (owned) {
-        setFrame(v.owner, `owner_p${t.owner! + 1}`);
-        setFrame(v.flag, `flag_p${t.owner! + 1}`);
-      }
+      const owner = t.owner;
+      this.showOwnership(v, owner, owner !== null && ownsStreet(state, this.board, id, owner));
       const bld = t.special ? `bld_${t.special}` : t.level > 0 ? `bld_${t.level}` : null;
       v.decor.setVisible(bld === null);
       v.bld.setVisible(bld !== null);
       if (bld) setFrame(v.bld, bld);
-      v.trap.setVisible(t.trap && owned);
-      if (t.trap && owned) v.trap.setColor(PLAYER_HEX[t.owner!]);
-      const chained = owned && ownsStreet(state, this.board, id, t.owner!);
-      v.chain.setVisible(chained);
-      if (chained) v.chain.setStrokeStyle(3, PLAYER_COLORS[t.owner!]);
+      v.trap.setVisible(t.trap && owner !== null);
+      if (t.trap && owner !== null) v.trap.setColor(PLAYER_HEX[owner]);
     }
     this.renderSpirits(state);
     this.renderMarks([
@@ -348,8 +403,8 @@ export class BoardView {
     for (const id of this.board.streetOf(node)) {
       const v = this.lands.get(id);
       if (!v) continue;
-      v.chain.setVisible(true).setStrokeStyle(3, PLAYER_COLORS[seat]);
-      this.scene.tweens.add({ targets: v.chain, alpha: { from: 1, to: 0.2 }, duration: ms / 6, yoyo: true, repeat: 2 });
+      this.showOwnership(v, seat, true);
+      this.scene.tweens.add({ targets: v.rim, alpha: { from: 1, to: 0.2 }, duration: ms / 6, yoyo: true, repeat: 2 });
     }
   }
 
