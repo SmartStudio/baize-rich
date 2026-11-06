@@ -30,7 +30,7 @@ export const buildStepper: SheetBuilder = (s, spec, pick, hover) => {
   let focus = steps.at(-1)!;
   const minus = new Button(s, bigX, rowY, { w: STEP, h: ROW_H, label: '−', size: FS.lg }).onClick(() => hover(steps[Math.max(0, at(focus.id) - 1)].id));
   const plus = new Button(s, bigX + STEP + 4, rowY, { w: STEP, h: ROW_H, label: '+', size: FS.lg }).onClick(() => hover(steps[Math.min(steps.length - 1, at(focus.id) + 1)].id));
-  layer.add([big.root, minus, plus]);
+  layer.add([big.root, minus.setVisible(steps.length > 1), plus.setVisible(steps.length > 1)]);
   big.bg.on('pointerdown', () => pick(focus.id));
   if (cancel) {
     const w = BIG_W - 2 * STEP - 12;
