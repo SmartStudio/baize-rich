@@ -51,6 +51,39 @@ describe('灵田', () => {
     expect(a.hand).toEqual([]);
   });
 
+  it('walking over a rival land pays half its rent as 过路费; stopping pays the full rent', () => {
+    const g = ringGame();
+    const [a, b, c] = g.state.players;
+    g.state.players.forEach((p) => { p.pos = 'R16'; });
+    a.pos = 'R0';
+    a.hand = ['evade'];
+    g.state.tiles.R1 = { owner: 1, level: 1 }; // rent 30, toll 15
+    g.state.tiles.R2 = { owner: 2, level: 0 }; // rent 11, toll 5
+    g.state.tiles.R3 = { owner: 1, level: 0 }; // rent 12
+    const [a0, b0, c0] = [a.stones, b.stones, c.stones];
+    const seen: PendingChoice[] = [];
+    g.runFlow(g.testMove(0, 3), script({ rentReact: 'pay' }, seen));
+    expect([a.stones, b.stones, c.stones]).toEqual([a0 - 15 - 5 - 12, b0 + 15 + 12, c0 + 5]);
+    expect([a.stats.tollPaid, b.stats.tollCollected, c.stats.tollCollected, a.stats.rentPaid]).toEqual([20, 15, 5, 12]);
+    expect(seen.filter((x) => x.kind === 'rentReact')).toHaveLength(1);
+    expect(g.log.filter((e) => e.type === 'passToll').map((e) => [e.node, e.payee, e.amount])).toEqual([['R1', 1, 15], ['R2', 2, 5]]);
+    expect(g.log.filter((e) => e.type === 'tollSum').map((e) => e.amount)).toEqual([20]);
+  });
+
+  it('own land and unowned land cost nothing to walk over, and a toll never bankrupts', () => {
+    const g = ringGame();
+    const a = g.state.players[0];
+    g.state.players.forEach((p) => { p.pos = 'R16'; });
+    a.pos = 'R0';
+    a.stones = 10;
+    g.state.tiles.R1 = { owner: 0, level: 3 };
+    g.state.tiles.R3 = { owner: 1, level: 3 }; // toll 60
+    g.runFlow(g.testMove(0, 4), script({ fork: 'R5' }));
+    expect(a.stones).toBe(0);
+    expect(a.stats.bankruptcies).toBe(0);
+    expect(g.log.filter((e) => e.type === 'passToll').map((e) => [e.node, e.amount])).toEqual([['R3', 10]]);
+  });
+
   it('upgrading costs price × upgradeCostP and is limited to one per turn', () => {
     const g = ringGame();
     const p = g.state.players[0];

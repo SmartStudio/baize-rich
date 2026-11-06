@@ -55,6 +55,17 @@ export class PlayerCards {
     this.refreshPin();
   }
 
+  /** A short label that rises at the free end of a seat's resource row, e.g. a 过路费 coming in. */
+  floatStones(seat: number, text: string, color: string): void {
+    const { rect, resources } = this.views[seat];
+    const slot = resources[RESOURCE_FRAMES.indexOf('ic_stone')].value;
+    const scene = slot.scene;
+    const t = txt(scene, rect.x + rect.w - 8, slot.y + slot.height / 2, text, { size: FS.sm, bold: true, color, stroke: HEX.ink, origin: [1, 0.5] })
+      .setDepth(slot.depth + 1);
+    scene.tweens.add({ targets: t, y: t.y - 14, duration: 900, ease: 'Sine.easeOut' });
+    scene.tweens.add({ targets: t, alpha: 0, duration: 300, delay: 700, onComplete: () => t.destroy() });
+  }
+
   private buildChip(scene: Phaser.Scene, i: number, hero: string): ChipView {
     const x = LEFT.x;
     const y = LEFT.chipY + i * (LEFT.chipH + LEFT.chipGap);

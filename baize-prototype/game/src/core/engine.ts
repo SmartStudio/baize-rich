@@ -25,7 +25,7 @@ import { skillTerms } from './heroes';
 import { hashSeed, nextFloat } from './rng';
 import {
   barFull, barSize, canClose, chance2d6, closureSite, compareStanding, duelBonus, fixedBonuses, hasAbility, hasTrait, herbYield,
-  insightRoom, isGlowing, maxLevel,
+  insightRoom, isGlowing, maxLevel, passToll,
   realmName, realmOf, rentFor, sitGain, upgradeCost, winRealm,
 } from './rules';
 import type {
@@ -51,6 +51,11 @@ const MAX_SETTLE_DEPTH = 4;
 const TIER_LABEL: Record<MiniGameTier, string> = { perfect: '火候正中', ok: '火候尚可', fail: '火候失手' };
 
 const GIFT_LABEL: Record<ManifestGift, string> = { chart: '白泽图', stones: '灵脉馈赠', pills: '丹霞', guide: '指路' };
+
+interface PaidToll {
+  payee: number;
+  amount: number;
+}
 
 export class Game {
   readonly board: Board;
@@ -221,7 +226,7 @@ export class Game {
       realm: 0, cult: 0, mind: 0, guidance: 0, insight: 0, momentum: false, glowRound: 0, escapeRound: 0,
       hand: [], bound: false, turnsTaken: 0, skillReadyTurn: 0, dazed: false,
       stats: {
-        rentCollected: 0, rentPaid: 0, breakthroughs: 0, breakthroughFails: 0, roadEntries: 0, altarVisits: 0,
+        rentCollected: 0, rentPaid: 0, tollCollected: 0, tollPaid: 0, breakthroughs: 0, breakthroughFails: 0, roadEntries: 0, altarVisits: 0,
         bankruptcies: 0, duels: 0, duelWins: 0, pillsLost: 0, pillsMade: 0, pillsEaten: 0, cultWasted: 0,
         skillUses: 0, miniGames: 0,
       },
@@ -434,7 +439,7 @@ export class Game {
     yield* this.settle(seat, p.pos);
   }
 
-  /** Step-by-step movement along the board graph: forks, altar stop/toll, start salary, roadblock. */
+  /** Step-by-step movement along the board graph: forks, altar stop/toll, start salary, roadblock, 过路费. */
   *walk(seat: number, steps: number, dir: 1 | -1): Flow {
     const p = this.state.players[seat];
     const b = this.board;
@@ -442,6 +447,7 @@ export class Game {
     let node = p.pos;
     let cameFrom = b.isTwoWay(node) ? p.cameFrom : null;
     const path: NodeId[] = [node];
+    const tolls: PaidToll[] = [];
     let forced: NodeId | null = node === ALTAR ? yield* this.askExit(seat, remaining) : null;
     while (remaining > 0) {
       const next = forced ?? (yield* this.nextStep(seat, node, cameFrom, dir, remaining));
@@ -452,12 +458,38 @@ export class Game {
       node = next;
       path.push(next);
       if (this.hitRoadblock(seat, next)) break;
+      if (remaining > 0) this.payPassToll(seat, next, tolls);
       if (next === ALTAR) [remaining, forced] = yield* this.atAltar(seat, remaining);
     }
     p.pos = node;
     p.cameFrom = cameFrom;
     this.state.turn.lastPath = path;
     this.state.turn.lastDir = dir;
+    this.sumTolls(seat, tolls);
+  }
+
+  /** 过路费 for walking on past `node`. Never more than the walker holds, so a toll cannot bankrupt anyone. */
+  private payPassToll(seat: number, node: NodeId, tolls: PaidToll[]): void {
+    const p = this.state.players[seat];
+    const amount = Math.min(p.stones, passToll(this.state, this.board, this.data, node, seat));
+    if (amount <= 0) return;
+    const payee = this.state.tiles[node].owner!;
+    p.stones -= amount;
+    p.stats.tollPaid += amount;
+    this.state.players[payee].stones += amount;
+    this.state.players[payee].stats.tollCollected += amount;
+    tolls.push({ payee, amount });
+    this.emit('passToll', '', { player: seat, payee, node, amount });
+  }
+
+  /** One log line for every 过路费 of a walk. */
+  private sumTolls(seat: number, tolls: PaidToll[]): void {
+    if (tolls.length === 0) return;
+    const total = tolls.reduce((a, t) => a + t.amount, 0);
+    const byPayee = new Map<number, number>();
+    for (const t of tolls) byPayee.set(t.payee, (byPayee.get(t.payee) ?? 0) + t.amount);
+    const to = [...byPayee].map(([payee, n]) => `${this.pn(payee)} ${n}`).join('、');
+    this.emit('tollSum', `${this.pn(seat)} 一路交过路费 ${total} 灵石（${to}）`, { player: seat, amount: total });
   }
 
   private *nextStep(seat: number, node: NodeId, cameFrom: NodeId | null, dir: 1 | -1, remaining: number): Flow<NodeId> {

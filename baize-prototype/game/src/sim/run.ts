@@ -59,7 +59,7 @@ if (json) {
   console.log(`  每局 山岳拦人 ${ix.roadblockHits.toFixed(2)} · 火候小游戏 ${ix.miniGames.toFixed(2)}`);
   console.log(`  技能使用 ${HERO_IDS.map((h) => `${heroName[h]} ${ix.skillUsesByHero[h].toFixed(2)}`).join(' / ')}`);
   console.log(`  回合占比 有互动 ${pct(ix.interactionTurnRate)} · 付租 ${pct(ix.rentTurnRate)} · 斗法 ${pct(ix.duelTurnRate)} · 用符 ${pct(ix.castTurnRate)}`);
-  console.log(`  灵田经济 付租回合 ${pct(ix.rentTurnRate)} (底线 ≥ 2.5%) · 每局租金 ${econ.rentPaid.toFixed(0)} · 买地升级 ${econ.landSpend.toFixed(0)} · 租金回本 ${pct(econ.payback)} · 终局有主 ${econ.ownedLands.toFixed(1)} / ${defaultData.board.nodes.filter((n) => n.type === 'land').length} 块`);
+  console.log(`  灵田经济 付租回合 ${pct(ix.rentTurnRate)} (底线 ≥ 2.5%) · 过路费回合 ${pct(ix.tollTurnRate)} (目标 ≥ 25%) · 每局租金 ${econ.rentPaid.toFixed(0)} + 过路费 ${econ.tollPaid.toFixed(0)} · 买地升级 ${econ.landSpend.toFixed(0)} · 回本 ${pct(econ.payback)} (目标 ≥ 15%) · 终局有主 ${econ.ownedLands.toFixed(1)} / ${defaultData.board.nodes.filter((n) => n.type === 'land').length} 块`);
   console.log('—'.repeat(60));
   console.log('主线诊断（每名修士每局；目标 自家灵田突破 ≥ 30%，终局剩草 ≤ 6）');
   for (const h of HERO_IDS) {

@@ -1,5 +1,5 @@
 {
-  "version": "0.10",
+  "version": "0.11",
   "rounds": 12,
   "startStones": 1200,
   "seatBonusStones": [0, 150, 300, 450],
@@ -11,6 +11,7 @@
   "salaryLand": 400,
   "altarToll": 1,
   "rentRate": 0.1,
+  "tollRate": 0.5,
   "realms": [
     { "name": "练气", "bar": 4, "target": 9, "ability": null },
     { "name": "筑基", "bar": 4, "target": 10, "ability": "steer" },
@@ -21,7 +22,7 @@
   "landLevels": [
     { "upgradeCostP": 0, "rentMult": 1, "herbs": 0, "sit": 1, "closureBonus": null },
     { "upgradeCostP": 0.5, "rentMult": 3, "herbs": 1, "sit": 1, "closureBonus": 0 },
-    { "upgradeCostP": 1, "rentMult": 6, "herbs": 1, "sit": 2, "closureBonus": 0 },
+    { "upgradeCostP": 1.05, "rentMult": 6, "herbs": 1, "sit": 2, "closureBonus": 0 },
     { "upgradeCostP": 2, "rentMult": 10, "herbs": 2, "sit": 2, "closureBonus": 2 }
   ],
   "cultivation": {

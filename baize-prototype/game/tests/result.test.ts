@@ -75,6 +75,15 @@ describe('recap', () => {
     ]);
   });
 
+  it('adds up the 过路费 others paid walking past the seat\'s land into one line', () => {
+    const g = newGame();
+    const [land, other] = g.board.lands;
+    push(g, 2, { type: 'passToll', player: 1, payee: 0, node: land, amount: 15 });
+    push(g, 4, { type: 'passToll', player: 2, payee: 0, node: other, amount: 30 });
+    push(g, 4, { type: 'passToll', player: 0, payee: 2, node: other, amount: 99 });
+    expect(recap(g, 0, true).lines).toContain('第 2 轮起 · 别人路过你的灵田 2 次，共交来 45 灵石过路费。');
+  });
+
   it('pads a quiet game to three lines and says closure was never tried', () => {
     const g = newGame();
     const r = recap(g, 0, true);

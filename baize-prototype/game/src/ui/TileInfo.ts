@@ -1,5 +1,5 @@
 import type { Game } from '../core/engine';
-import { landLevel, maxLevel, nominalRent, rentFor } from '../core/rules';
+import { landLevel, maxLevel, nominalRent, passToll, rentFor } from '../core/rules';
 import type { GameData, GameState, NodeId, TileType } from '../core/types';
 import { homeClosureNote } from './hudReadout';
 import type { TipContent } from './Tooltip';
@@ -50,7 +50,7 @@ function priceLine(g: Game, state: GameState, node: NodeId, price: number): stri
   if (t.owner === null) return `售价 ${price}`;
   const rent = rentFor(state, g.board, g.data, node);
   const now = rent.zeroReason ? `0（${rent.zeroReason}）` : `${rent.amount}`;
-  return `售价 ${price} · 当前租金 ${now}`;
+  return `售价 ${price} · 当前租金 ${now} · 过路费 ${passToll(state, g.board, g.data, node)}`;
 }
 
 function streetLine(g: Game, state: GameState, node: NodeId): string {

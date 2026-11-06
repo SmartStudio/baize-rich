@@ -129,7 +129,7 @@ interface Moment {
 const at = (rounds: number[]): string => `第 ${rounds.join('、')} 轮 · `;
 
 /** Moment finders over the log, one per kind of key moment. A finder returns nothing when its moment never happened. */
-const MOMENTS: ((c: RecapCtx) => Moment[])[] = [ascents, failures, noClosure, rentPaid, rentTaken, duelsWon, manifestPick, bankruptcies];
+const MOMENTS: ((c: RecapCtx) => Moment[])[] = [ascents, failures, noClosure, rentPaid, rentTaken, tollsTaken, duelsWon, manifestPick, bankruptcies];
 
 export function recap(game: Game, seat: number, human: boolean): Recap {
   const ctx: RecapCtx = { game, seat, who: human ? '你' : heroName(game, seat), log: game.log };
@@ -188,6 +188,13 @@ function rentTaken(c: RecapCtx): Moment[] {
   return [{ round: e.round, weight: 3, text: `${at([e.round])}${heroName(c.game, e.player!)}停在${where}，交来 ${e.amount} 灵石租金。` }];
 }
 
+function tollsTaken(c: RecapCtx): Moment[] {
+  const tolls = c.log.filter((e) => e.type === 'passToll' && e.payee === c.seat);
+  if (tolls.length === 0) return [];
+  const total = tolls.reduce((n, e) => n + e.amount!, 0);
+  return [{ round: tolls[0].round, weight: 3, text: `第 ${tolls[0].round} 轮起 · 别人路过${c.who}的灵田 ${tolls.length} 次，共交来 ${total} 灵石过路费。` }];
+}
+
 function duelsWon(c: RecapCtx): Moment[] {
   const wins = c.log.filter((e) => e.type === 'duel' && e.duel!.winner === c.seat);
   if (wins.length === 0) return [];
@@ -222,7 +229,7 @@ function fillers(c: RecapCtx): string[] {
   const p = c.game.state.players[c.seat];
   const bar = c.game.data.config.realms[p.realm].bar;
   return [
-    `买下 ${mine(c, 'buy').length} 块灵田，收租 ${p.stats.rentCollected} 灵石，付租 ${p.stats.rentPaid} 灵石。`,
+    `买下 ${mine(c, 'buy').length} 块灵田。收租 ${p.stats.rentCollected}、过路费 ${p.stats.tollCollected} 灵石，付租 ${p.stats.rentPaid}、过路费 ${p.stats.tollPaid} 灵石。`,
     `炼出 ${p.stats.pillsMade} 颗丹药。`,
     `最终停在${realmName(c.game.data, p.realm)}${bar > 0 ? `，修为 ${p.cult}/${bar}` : ''}。`,
   ];

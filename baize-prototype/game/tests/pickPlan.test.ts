@@ -13,15 +13,16 @@ function routeAsk(g: Game, seat: number): boolean {
   return !!g.pending && g.pending.player === seat && ROUTE_KINDS.includes(g.pending.kind);
 }
 
-/** Answer the cell's option on a copy of the game, then its route, then defaults; where the walk ended and what was left over. */
-function takeCell(g: Game, cell: PickCell): { end: NodeId; left: string[]; defaults: number } {
+/** Answer the cell's option on a copy of the game, then its route, then defaults; where the walk ended, the 过路费 it paid and what was left over. */
+function takeCell(g: Game, cell: PickCell): { end: NodeId; toll: number; left: string[]; defaults: number } {
   const seat = g.pending!.player;
   const copy = Game.replay(g.setup, [...g.history, cell.id], g.data);
   const left = [...cell.route];
   while (left.length && routeAsk(copy, seat)) copy.answer(left.shift()!);
   let defaults = 0;
   for (; routeAsk(copy, seat); defaults++) copy.answer(copy.pending!.defaultId ?? copy.pending!.options[0].id);
-  return { end: copy.state.turn.lastPath.at(-1)!, left, defaults };
+  const toll = copy.log.slice(g.log.length).filter((e) => e.type === 'passToll' && e.player === seat).reduce((a, e) => a + e.amount!, 0);
+  return { end: copy.state.turn.lastPath.at(-1)!, toll, left, defaults };
 }
 
 /** Every cell the engine's walk can end on from this ask, over every answer to it and to the asks after it. */
@@ -70,12 +71,13 @@ describe('board picks', () => {
       expect(new Set(plan.cells.map((x) => x.node))).toEqual(engineEnds(g));
       for (const cell of plan.cells) {
         const r = takeCell(g, cell);
-        expect({ kind: c.kind, id: cell.id, end: r.end, left: r.left, defaults: r.defaults }).toEqual({
-          kind: c.kind, id: cell.id, end: cell.node, left: [], defaults: 0,
+        expect({ kind: c.kind, id: cell.id, end: r.end, toll: r.toll, left: r.left, defaults: r.defaults }).toEqual({
+          kind: c.kind, id: cell.id, end: cell.node, toll: cell.toll, left: [], defaults: 0,
         });
       }
     }
     expect(new Set(whole.map((a) => a.c.kind))).toEqual(new Set(['fork', 'exitRoad', 'adjust', 'altarPass']));
+    expect(whole.some(({ g, c }) => pickPlan(g, c)!.cells.some((x) => x.toll > 0))).toBe(true);
   }, 60000);
 
   it('past nine landings shows where each option goes by its default way, and leaves the later forks to ask', () => {
@@ -128,6 +130,19 @@ describe('board picks', () => {
     const cells = pickPlan(g, c)!.cells;
     expect(cells.find((x) => x.id === 'n4')).toMatchObject({ label: '4 步', sub: undefined, primary: true });
     expect(cells.find((x) => x.id === 'n5')).toMatchObject({ label: '5 步', sub: '神行符 +1' });
+  });
+
+  it('puts the 过路费 a way pays on its cell, capped by the stones in hand', () => {
+    const g = ringGame();
+    g.state.players.forEach((p) => { p.pos = 'R16'; });
+    const p = g.state.players[0];
+    p.pos = 'R0';
+    g.state.tiles.R1 = { owner: 1, level: 1 }; // toll 15
+    g.state.tiles.R2 = { owner: 2, level: 0 }; // toll 5
+    const c = { seq: 1, player: 0, kind: 'adjust', title: '', options: g.adjustOptions(0, 3), defaultId: 'n3', ctx: { base: 3 } } as PendingChoice;
+    expect(pickPlan(g, c)!.cells).toEqual([expect.objectContaining({ node: 'R3', toll: 20, sub: '过路费 20' })]);
+    p.stones = 17;
+    expect(pickPlan(g, c)!.cells).toEqual([expect.objectContaining({ node: 'R3', toll: 17, sub: '过路费 17' })]);
   });
 
   it('keys 御骰符 cells by the value itself, 10 by 0, and leaves 11 and 12 to the mouse', () => {

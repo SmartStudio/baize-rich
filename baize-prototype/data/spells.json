@@ -12,7 +12,7 @@
     { "id": "reverse",   "name": "回首符", "cat": "move",   "timing": "preroll",  "desc": "本回合沿来路倒走" },
     { "id": "bind",      "name": "定身符", "cat": "attack", "timing": "action",   "desc": "指定一名对手，其下回合不能移动" },
     { "id": "drain",     "name": "夺灵符", "cat": "attack", "timing": "action",   "desc": "从一名对手处夺 1 颗丹药" },
-    { "id": "evade",     "name": "避劫符", "cat": "guard",  "timing": "rent",     "desc": "免付本次租金" },
+    { "id": "evade",     "name": "避劫符", "cat": "guard",  "timing": "rent",     "desc": "免付一次停下的租金，过路费照付" },
     { "id": "goldlight", "name": "金光符", "cat": "guard",  "timing": "reaction", "desc": "被斗法或被夺灵时，抵挡这一次" },
     { "id": "calm",      "name": "清心符", "cat": "mind",   "timing": "closure",  "desc": "本次突破 +2" }
   ]
