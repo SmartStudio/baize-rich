@@ -31,6 +31,7 @@ import { downloadRecord, loadCoach, saveAutosave, saveCoach } from '../ui/saves'
 import type { SessionConfig } from '../ui/session';
 import { ActionDock } from '../ui/ActionDock';
 import { COLORS, FS, HEX, PLAYER_COLORS, txt } from '../ui/theme';
+import { HOVER_IDLE_MS, hoverTipOpen } from '../ui/hoverTip';
 import { tileTip } from '../ui/TileInfo';
 import { Tooltip } from '../ui/Tooltip';
 import { TopBar } from '../ui/TopBar';
@@ -135,6 +136,11 @@ export class GameScene extends Phaser.Scene {
   private pressed: NodeId | null = null;
   /** The camera moved since tile popovers were last placed. */
   private camMoving = false;
+  /** The camera has moved since the pointer last moved, so a resting hover must not come back. */
+  private cameraSincePointer = false;
+  private pointerAt = { x: Number.NaN, y: Number.NaN };
+  private pointerIdleMs = 0;
+  private modalWasOpen = false;
   private coach!: Coach;
   private coachBook: CoachBook = emptyBook();
   private coachArmed = true;
@@ -219,6 +225,7 @@ export class GameScene extends Phaser.Scene {
       hud.input.off('pointerup', clearBlock);
     });
     this.boardView.onHover((n) => { this.hovered = n; this.showTile(); });
+    this.input.on('gameout', () => { this.hovered = null; this.showTile(); });
     this.boardView.onPress((n) => {
       if (this.overCoach()) { this.pressed = null; return; }
       this.pressed = this.tip.justClosed(`tile:${n}`) ? null : n;
@@ -239,11 +246,7 @@ export class GameScene extends Phaser.Scene {
 
   update(_time: number, delta: number): void {
     if (!this.alive) return;
-    // Popovers are placed in screen space: hide the hover one while the board slides, re-place both once it stops.
-    const moved = this.cam.update(delta);
-    if (moved && !this.camMoving) this.tip.hide();
-    if (!moved && this.camMoving) this.showTile();
-    this.camMoving = moved;
+    this.trackHover(delta);
     const st = this.shownState;
     this.minimap.update(
       this.cam.visibleRect(),
@@ -609,16 +612,55 @@ export class GameScene extends Phaser.Scene {
     else if (this.mainChoice) this.mainAnswer(ids[0]);
   }
 
-  /** Hovered tile's popover; a pinned tile popover follows the latest state. */
+  /** Hide a resting hover when the camera, a modal, or an idle AI turn says the tip is stale. */
+  private trackHover(delta: number): void {
+    const idleWas = this.pointerIdleMs >= HOVER_IDLE_MS;
+    const sinceWas = this.cameraSincePointer;
+    const movingWas = this.camMoving;
+    this.notePointer(delta);
+    const moved = this.cam.update(delta);
+    if (moved) this.cameraSincePointer = true;
+    this.camMoving = moved;
+    const modal = this.modal.isOpen;
+    const changed = moved !== movingWas || sinceWas !== this.cameraSincePointer
+      || idleWas !== (this.pointerIdleMs >= HOVER_IDLE_MS) || modal !== this.modalWasOpen;
+    this.modalWasOpen = modal;
+    if (changed) this.showTile();
+  }
+
+  private notePointer(delta: number): void {
+    const p = this.input.activePointer;
+    if (p.x === this.pointerAt.x && p.y === this.pointerAt.y) {
+      this.pointerIdleMs += delta;
+      return;
+    }
+    this.pointerAt.x = p.x;
+    this.pointerAt.y = p.y;
+    this.pointerIdleMs = 0;
+    this.cameraSincePointer = false;
+  }
+
+  /** Hovered tile's popover. A pinned tile popover follows the latest state once the camera rests. */
   private showTile(): void {
+    if (!this.shownState) return;
     const pinned = this.tip.pinned;
     if (pinned?.startsWith('tile:')) {
+      if (this.camMoving) return;
       const n = pinned.slice(5) as NodeId;
       this.tip.unpin();
       this.tip.toggle(pinned, this.toScreen(this.boardView.nodeRect(n)), tileTip(this.engine, this.shownState, n));
       return;
     }
-    if (this.hovered === null || this.camMoving) this.tip.hide();
+    const open = this.hovered !== null && hoverTipOpen({
+      overTile: true,
+      pinned: false,
+      cameraMoving: this.camMoving,
+      cameraSincePointer: this.cameraSincePointer,
+      modalOpen: this.modal.isOpen,
+      aiTurn: !this.isHuman(this.shownState.current),
+      pointerIdleMs: this.pointerIdleMs,
+    });
+    if (!open || this.hovered === null) this.tip.hide();
     else this.tip.show(this.toScreen(this.boardView.nodeRect(this.hovered)), tileTip(this.engine, this.shownState, this.hovered));
   }
 
