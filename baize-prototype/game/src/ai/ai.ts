@@ -195,7 +195,12 @@ export class AIController implements Controller {
     return best;
   }
 
+  /** A skill's gain on `t` net of the pills it costs. */
   private skillValue(t: number | NodeId): number {
+    return this.skillGain(t) - this.game.heroOf(this.seat).skill.pillCost * VALUE.pill;
+  }
+
+  private skillGain(t: number | NodeId): number {
     const st = this.st;
     switch (this.game.heroOf(this.seat).skill.id) {
       case 'sworddash': return this.challengeValue(t as number) + this.landingScore(st.players[t as number].pos) - this.expectedRoll(1);
@@ -205,11 +210,11 @@ export class AIController implements Controller {
     }
   }
 
-  /** 迷魂丹 pays off against a rival racing to a closure site; its pill must buy more than a stake would. */
+  /** 迷魂丹 pays off against a rival racing to a closure site. */
   private dazeValue(target: number): number {
     const racing = nearlyFull({ ...this.view, seat: target }) ? 250 : 0;
     const leader = target === this.leaderOpponent() ? 60 : 0;
-    return racing + leader + this.standing(target) * 2 - this.game.heroOf(this.seat).skill.pillCost * VALUE.pill;
+    return racing + leader + this.standing(target) * 2;
   }
 
   /** Expected gain of a 镇山 mountain on `node`: the next opponent to move is stopped there. */
