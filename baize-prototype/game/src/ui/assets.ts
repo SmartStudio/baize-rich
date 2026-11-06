@@ -237,16 +237,6 @@ export function frameSpecs(): FrameSpec[] {
   for (let lv = 1; lv <= 3; lv++) add(`bld_${lv}`, 48, 36 + lv * 12, object(['#8A6A44', '#B08A5A', '#D8B060'][lv - 1], ['圃', '府', '脉'][lv - 1], 0.85, 1));
   add('obj_furnace', 40, 40, object('#7A3A2E', '炉'));
   for (const id of Object.keys(ITEM_PICTURES)) add(`card_${id}`, 88, 120, itemCard(id));
-  add('centre_bg', 448, 448, (ctx, w, h) => {
-    ctx.fillStyle = '#23213A';
-    ctx.fillRect(0, 0, w, h);
-    ctx.strokeStyle = '#2E2B4A';
-    ctx.lineWidth = 1;
-    for (let k = 0; k <= w; k += 32) {
-      ctx.beginPath(); ctx.moveTo(k, 0); ctx.lineTo(k, h); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(0, k); ctx.lineTo(w, k); ctx.stroke();
-    }
-  });
   add('baize', 100, 104, both(object('#E6E4F0', '白泽', 0.9, 0.85)));
   for (const [hid, [fill, ch]] of Object.entries(HERO_FILL)) {
     const { w: tw, h: th } = TOKEN_FRAME;
