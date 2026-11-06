@@ -19,6 +19,7 @@ import { STAGE, type Rect } from '../ui/layout';
 import { LogPanel } from '../ui/LogPanel';
 import { playMiniGame, type MiniGameSpec } from '../ui/MiniGame';
 import { Minimap } from '../ui/Minimap';
+import { aiTurnNarration, heroNameForSeat, narrateEvent, resumeNarration, roundNarration, turnNarration } from '../ui/narration';
 import { PlayerCards } from '../ui/PlayerCards';
 import { downloadRecord, saveAutosave } from '../ui/saves';
 import type { SessionConfig } from '../ui/session';
@@ -65,11 +66,11 @@ const SPEEDS = [0.5, 1, 2, 4];
 
 /** Big events get a full-width cutscene banner; a null spec means this instance is not big. */
 const CUTSCENES: Partial<Record<GameEventType, (g: Game, e: GameEvent) => BannerSpec | null>> = {
-  breakthrough: (g, e) => ({ title: '破境！', sub: e.text, icon: portrait(g, e), color: COLORS.gold }),
-  manifest: (_g, e) => ({ title: '白泽现世', sub: e.text, icon: 'baize', color: 0xe6e4f0, dim: true }),
-  duel: (g, e) => ({ title: '斗法', sub: e.text, icon: portrait(g, e), color: PLAYER_COLORS[e.player!] }),
-  bankrupt: (g, e) => ({ title: '破产重整', sub: e.text, icon: portrait(g, e), color: COLORS.bad }),
-  win: (g, e) => ({ title: g.state.endReason === 'ascend' ? '渡劫化神' : '夺得魁首', sub: e.text, icon: portrait(g, e), color: COLORS.gold, dim: true }),
+  breakthrough: (g, e) => ({ title: '破境！', sub: narrateEvent(g, e) ?? '', icon: portrait(g, e), color: COLORS.gold }),
+  manifest: (g, e) => ({ title: '白泽现世', sub: narrateEvent(g, e) ?? '', icon: 'baize', color: 0xe6e4f0, dim: true }),
+  duel: (g, e) => ({ title: '斗法', sub: narrateEvent(g, e) ?? '', icon: portrait(g, e), color: PLAYER_COLORS[e.player!] }),
+  bankrupt: (g, e) => ({ title: '破产重整', sub: narrateEvent(g, e) ?? '', icon: portrait(g, e), color: COLORS.bad }),
+  win: (g, e) => ({ title: g.state.endReason === 'ascend' ? '渡劫化神' : '秘境关闭', sub: narrateEvent(g, e) ?? '', icon: portrait(g, e), color: COLORS.gold, dim: true }),
 };
 
 /** Smaller beats get a non-blocking ribbon under the top bar. */
@@ -261,8 +262,11 @@ export class GameScene extends Phaser.Scene {
   /** State that normally arrives through events (battle log, 白泽 on the board) for a replayed game. */
   private showResumed(): void {
     const st = this.engine.state;
-    for (const e of this.engine.log.slice(-3)) if (e.text) this.logPanel.log(e.text);
-    this.logPanel.log(`—— 已恢复上局：第 ${st.round} 轮 ——`);
+    for (const e of this.engine.log.slice(-3)) {
+      const line = narrateEvent(this.engine, e);
+      if (line) this.logPanel.log(line);
+    }
+    this.logPanel.log(resumeNarration(st.round));
     if (st.manifested && st.round === this.engine.data.config.manifest.round) this.boardView.showBaize(true);
   }
 
@@ -275,7 +279,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   private async playEvent(e: GameEvent): Promise<void> {
-    if (e.text) this.logPanel.log(e.text);
+    const line = narrateEvent(this.engine, e);
+    if (line) this.logPanel.log(line);
     const seat = e.player ?? 0;
     const pace = PACE[this.isHuman(e.snap?.current ?? this.engine.state.current) ? 'human' : 'ai'];
     if (e.snap && (e.type === 'step' || e.type === 'teleport')) this.boardView.markCurrent(e.snap);
@@ -340,7 +345,7 @@ export class GameScene extends Phaser.Scene {
     }
     const rib = RIBBONS[e.type]?.(this.engine, e);
     if (rib) {
-      this.fx.ribbon(rib.title, e.text, rib.color, STAGE.turnRibbonY, this.ms(pace.slow * 2 + 400));
+      this.fx.ribbon(rib.title, narrateEvent(this.engine, e) ?? '', rib.color, STAGE.turnRibbonY, this.ms(pace.slow * 2 + 400));
       await this.wait(this.ms(pace.slow));
     } else if (SLOW_EVENTS.has(e.type)) {
       await this.wait(this.ms(pace.slow));
@@ -348,27 +353,26 @@ export class GameScene extends Phaser.Scene {
   }
 
   private roundRibbon(st: GameState): void {
-    const cfg = this.engine.data.config;
-    const left = cfg.manifest.round - st.round;
-    const sub = st.round === cfg.rounds ? '最终轮！境界最高者将夺得魁首'
-      : left > 0 ? `白泽现世还有 ${left} 轮` : '先渡劫化神者即胜';
-    this.fx.ribbon(`第 ${st.round} / ${cfg.rounds} 轮`, sub, COLORS.gold, STAGE.cy, this.ms(1400));
+    const copy = roundNarration(this.engine, st);
+    this.fx.ribbon(copy.title, copy.sub, COLORS.gold, STAGE.cy, this.ms(1400));
   }
 
   /** AI turns get a quick ribbon; a human seat's turn gets a full "轮到你了" moment. */
   private async turnIntro(st: GameState, seat: number): Promise<void> {
     this.renderAll(st, false);
     const p = st.players[seat];
+    const name = heroNameForSeat(this.engine, seat);
     if (!this.isHuman(seat)) {
-      this.fx.ribbon(`${p.name} 的回合`, '', PLAYER_COLORS[seat], STAGE.turnRibbonY, this.ms(PACE.ai.turnStart + 400));
+      this.fx.ribbon(aiTurnNarration(name), '', PLAYER_COLORS[seat], STAGE.turnRibbonY, this.ms(PACE.ai.turnStart + 400));
       await this.wait(this.ms(PACE.ai.turnStart));
       return;
     }
     const multiHuman = this.ais.filter((a) => a === null).length > 1;
+    const copy = turnNarration(name, st.round, multiHuman);
     // Not awaited: the banner tells the player to press Space, so the roll has to be live while it shows.
     void this.fx.banner({
-      title: multiHuman ? `轮到 ${p.name}` : '轮到你了！',
-      sub: `${p.name} · 第 ${st.round} 轮 · 按空格掷骰，或先升级、出符`,
+      title: copy.title,
+      sub: copy.sub,
       icon: `por_${p.hero}`, color: PLAYER_COLORS[seat],
     }, this.ms(PACE.human.turnStart));
   }

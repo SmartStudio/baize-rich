@@ -104,5 +104,157 @@
     "fit": "frame",
     "size": 40,
     "colors": 32
+  },
+  "iso_land_wood": {
+    "src": "tile_land_wood",
+    "fit": "w",
+    "size": 96,
+    "colors": 32
+  },
+  "iso_land_fire": {
+    "src": "tile_land_fire",
+    "fit": "w",
+    "size": 96,
+    "colors": 32
+  },
+  "iso_land_water": {
+    "src": "tile_land_water",
+    "fit": "w",
+    "size": 96,
+    "colors": 32
+  },
+  "iso_land_earth": {
+    "src": "tile_land_earth",
+    "fit": "w",
+    "size": 96,
+    "colors": 32
+  },
+  "iso_jade": {
+    "fit": "w",
+    "size": 96,
+    "colors": 32,
+    "ref": "tile_land_wood",
+    "prompt": "HD pixel art, 2:1 isometric view from the upper right, same style as tile_land_wood, on solid magenta (#FF00FF), no ground unless stated, no shadow, no text: white jade paved iso path block, gold inlay, carved cloud, marble sides; same shape as tile_land_wood."
+  },
+  "iso_altar": {
+    "fit": "w",
+    "size": 288,
+    "colors": 48,
+    "ref": "tile_land_wood",
+    "prompt": "HD pixel art, 2:1 isometric view from the upper right, same style as tile_land_wood, on solid magenta (#FF00FF), no ground unless stated, no shadow, no text: 3x3 white jade Baize altar platform, stairs on each side, bronze incense burners, Baize statue with golden halo."
+  },
+  "lm_start": {
+    "fit": "h",
+    "size": 76,
+    "colors": 40,
+    "ref": "tile_land_wood",
+    "prompt": "HD pixel art, 2:1 isometric view from the upper right, same style as tile_land_wood, on solid magenta (#FF00FF), no ground unless stated, no shadow, no text: sect hall: two-tier red-pillared pavilion, green tiled roofs, gold ridges, stone lanterns."
+  },
+  "lm_gate": {
+    "fit": "h",
+    "size": 72,
+    "colors": 32,
+    "ref": "tile_land_wood",
+    "prompt": "HD pixel art, 2:1 isometric view from the upper right, same style as tile_land_wood, on solid magenta (#FF00FF), no ground unless stated, no shadow, no text: mountain gate paifang: stone pillars, dark tiled roof, blank plaque, two-way signpost."
+  },
+  "lm_alchemy": {
+    "fit": "h",
+    "size": 68,
+    "colors": 32,
+    "ref": "tile_land_wood",
+    "prompt": "HD pixel art, 2:1 isometric view from the upper right, same style as tile_land_wood, on solid magenta (#FF00FF), no ground unless stated, no shadow, no text: alchemy furnace: bronze three-legged ding over fire, smoke and pill sparks, small wooden shelter."
+  },
+  "lm_market": {
+    "fit": "h",
+    "size": 68,
+    "colors": 32,
+    "ref": "tile_land_wood",
+    "prompt": "HD pixel art, 2:1 isometric view from the upper right, same style as tile_land_wood, on solid magenta (#FF00FF), no ground unless stated, no shadow, no text: market stall: striped red-yellow awning, pill bottles, talismans, lantern, banner."
+  },
+  "lm_secret": {
+    "fit": "w",
+    "size": 64,
+    "colors": 32,
+    "ref": "tile_land_wood",
+    "prompt": "HD pixel art, 2:1 isometric view from the upper right, same style as tile_land_wood, on solid magenta (#FF00FF), no ground unless stated, no shadow, no text: secret realm portal: rock arch with cyan runes around a navy-teal-cyan vortex, no pink."
+  },
+  "lm_spring": {
+    "fit": "w",
+    "size": 64,
+    "colors": 32,
+    "ref": "tile_land_wood",
+    "prompt": "HD pixel art, 2:1 isometric view from the upper right, same style as tile_land_wood, on solid magenta (#FF00FF), no ground unless stated, no shadow, no text: spirit spring: mossy stone pool, glowing cyan water, lotus leaves, sparkles."
+  },
+  "lm_beast": {
+    "fit": "w",
+    "size": 72,
+    "colors": 32,
+    "ref": "tile_land_wood",
+    "prompt": "HD pixel art, 2:1 isometric view from the upper right, same style as tile_land_wood, on solid magenta (#FF00FF), no ground unless stated, no shadow, no text: beast den: rock cave with claw marks, horned skull, red eyes, bones, dead branches."
+  },
+  "lm_ruins": {
+    "fit": "w",
+    "size": 72,
+    "colors": 32,
+    "ref": "tile_land_wood",
+    "prompt": "HD pixel art, 2:1 isometric view from the upper right, same style as tile_land_wood, on solid magenta (#FF00FF), no ground unless stated, no shadow, no text: ancient cave abode: mossy rock with carved stone double door, gold seals, guardian statues, stele."
+  },
+  "lm_eye": {
+    "fit": "w",
+    "size": 64,
+    "colors": 32,
+    "ref": "tile_land_wood",
+    "prompt": "HD pixel art, 2:1 isometric view from the upper right, same style as tile_land_wood, on solid magenta (#FF00FF), no ground unless stated, no shadow, no text: spirit eye: ring of carved white stones with eye marks, floating golden qi orb."
+  },
+  "iso_bld_1": {
+    "fit": "w",
+    "size": 72,
+    "colors": 32,
+    "ref": "tile_land_wood",
+    "prompt": "HD pixel art, 2:1 isometric view from the upper right, same style as tile_land_wood, on solid magenta (#FF00FF), no ground unless stated, no shadow, no text: herb garden: bamboo-fenced plot, rows of glowing spirit herbs, post with straw hat."
+  },
+  "iso_bld_2": {
+    "fit": "w",
+    "size": 64,
+    "colors": 32,
+    "ref": "tile_land_wood",
+    "prompt": "HD pixel art, 2:1 isometric view from the upper right, same style as tile_land_wood, on solid magenta (#FF00FF), no ground unless stated, no shadow, no text: cave dwelling: rock outcrop with round wooden door, small awning, lantern, cushion, incense burner."
+  },
+  "iso_bld_3": {
+    "fit": "h",
+    "size": 72,
+    "colors": 40,
+    "ref": "tile_land_wood",
+    "prompt": "HD pixel art, 2:1 isometric view from the upper right, same style as tile_land_wood, on solid magenta (#FF00FF), no ground unless stated, no shadow, no text: spirit-vein estate: small two-storey pavilion on a white stone plinth with a glowing green vein, pine tree."
+  },
+  "ic_stone": {
+    "fit": "h",
+    "size": 16,
+    "colors": 12,
+    "prompt": "Tiny game UI icon, HD pixel art, bold dark outline, readable at 16px, on solid magenta (#FF00FF), no shadow, no text: glowing cyan spirit stone crystal."
+  },
+  "ic_herb": {
+    "fit": "h",
+    "size": 16,
+    "colors": 16,
+    "prompt": "Tiny game UI icon, HD pixel art, bold dark outline, readable at 16px, on solid magenta (#FF00FF), no shadow, no text: green spirit herb sprig with a glowing white-blue bud."
+  },
+  "ic_pill": {
+    "fit": "h",
+    "size": 16,
+    "colors": 12,
+    "prompt": "Tiny game UI icon, HD pixel art, bold dark outline, readable at 16px, on solid magenta (#FF00FF), no shadow, no text: round golden-orange elixir pill with a swirl."
+  },
+  "ic_cult": {
+    "fit": "h",
+    "size": 16,
+    "colors": 12,
+    "prompt": "Tiny game UI icon, HD pixel art, bold dark outline, readable at 16px, on solid magenta (#FF00FF), no shadow, no text: golden qi swirl with a bright core."
+  },
+  "ic_mind": {
+    "fit": "w",
+    "size": 16,
+    "colors": 12,
+    "prompt": "Tiny game UI icon, HD pixel art, bold dark outline, readable at 16px, on solid magenta (#FF00FF), no shadow, no text: white and pale blue five-petal lotus."
   }
 }

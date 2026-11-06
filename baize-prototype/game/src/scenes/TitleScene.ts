@@ -2,19 +2,13 @@ import Phaser from 'phaser';
 import { defaultData } from '../core/data';
 import { addImg } from '../ui/assets';
 import { HowToPlay } from '../ui/HowToPlay';
+import { TITLE_SUBTITLE, titleNarration } from '../ui/narration';
 import { findResumable, markTutorialSeen, tutorialSeen } from '../ui/saves';
 import { resumeSession } from '../ui/session';
 import { COLORS, HEX, txt } from '../ui/theme';
 import { Button, fadeToScene } from '../ui/widgets';
 
-/** Opening narration, from docs/script.md §1 (lines 1–4; line 5 becomes the subtitle). */
-const INTRO = [
-  '天地有灵，五行分野。木生于东，火炎于南，水寒于北，土厚于西。',
-  '四域交汇之处，沉睡着上古神兽——白泽。它通晓万物，辟邪驱魔。',
-  '传说：凡人若能在秘境中修至化神，便可得白泽点化，渡劫飞升。',
-  '今日，秘境之门大开。四名出身凡尘的散修，踏上了问道之路……',
-];
-const SUBTITLE = '白泽秘境，开启。';
+const INTRO = titleNarration(defaultData);
 const LINE_MS = 3200;
 
 /** Title: a skippable narrated intro over an animated backdrop, then 开始游戏 / 继续上局 / 玩法说明. */
@@ -105,7 +99,7 @@ export class TitleScene extends Phaser.Scene {
     this.tweens.add({ targets: this.altar, y: 272, duration: 2600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
 
     const title = txt(this, 640, 96, '白泽秘境大富翁', { size: 60, bold: true, color: HEX.gold, origin: [0.5, 0.5], stroke: HEX.ink });
-    const sub = txt(this, 640, 150, SUBTITLE, { size: 20, origin: [0.5, 0.5], color: HEX.parchment, stroke: HEX.ink });
+    const sub = txt(this, 640, 150, TITLE_SUBTITLE, { size: 20, origin: [0.5, 0.5], color: HEX.parchment, stroke: HEX.ink });
     title.setAlpha(0).setY(60);
     sub.setAlpha(0);
     this.tweens.add({ targets: title, alpha: 1, y: 96, duration: 500, ease: 'Back.easeOut' });
