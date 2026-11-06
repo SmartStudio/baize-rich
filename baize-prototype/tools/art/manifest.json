@@ -1,31 +1,4 @@
 {
-  "tok_body": {
-    "fit": "h",
-    "size": 64,
-    "colors": 32,
-    "prompt": "Single game sprite, high-definition pixel art (HD-2D style, 32-bit detailed pixel art, crisp pixels, limited palette, clean dark outline), of a chibi Chinese xianxia cultivator character standing, 3/4 front view facing down-right: Shi Zheng, a sturdy young blacksmith boy (about 16), tanned skin, short black topknot hair tied with a red cloth band, sleeveless brown-orange martial robe with rolled cloth belt, bandaged forearms, bare strong arms, cloth shoes, confident grin, holding nothing. Full body centred, occupying about 70% of the frame height. Plain solid pure magenta background (#FF00FF) filling everything around the character, no shadow on the background, no scenery, no text."
-  },
-  "tok_magic": {
-    "fit": "h",
-    "size": 64,
-    "colors": 32,
-    "ref": "tok_body",
-    "prompt": "Single game sprite in exactly the same HD pixel art style, proportions, outline and shading as the reference character (chibi-ish xianxia cultivator, 3/4 front view facing down-right, full body, standing): Shen Qingyan, a slender 18-year-old girl from a poor village family who spent ten years copying books for money. Long black hair tied in a plain low ponytail with a simple wooden hairpin, no jewelry, no crown. Faded indigo-blue plain cotton robe with patched sleeves and ink-stained cuffs, a cloth belt, worn cloth shoes. A small wooden book box (shuxiang) strapped on her back, holding a torn half-scroll in one hand, small blue lightning sparks crackling around the fingers of the other hand. Calm, studious, determined face. Full body centred, about 70% of the frame height. Plain solid pure magenta background (#FF00FF) everywhere else, no shadow, no scenery, no text."
-  },
-  "tok_sword": {
-    "fit": "h",
-    "size": 64,
-    "colors": 32,
-    "ref": "tok_body",
-    "prompt": "Single game sprite in exactly the same HD pixel art style, proportions, outline and shading as the reference character (chibi-ish xianxia cultivator, 3/4 front view facing down-right, full body, standing): Yan Hui, a lean agile young swordswoman (about 17), escort-agency orphan, black hair in a high ponytail tied with a long red ribbon, sharp eyes, dark red and black fitted martial outfit with leather bracers and a sash, short travel cape, holding a plain straight jian sword with a worn hilt at her side. Full body centred, about 70% of the frame height. Plain solid pure magenta background (#FF00FF) everywhere else, no shadow, no scenery, no text."
-  },
-  "tok_alch": {
-    "fit": "h",
-    "size": 64,
-    "colors": 32,
-    "ref": "tok_body",
-    "prompt": "Single game sprite in exactly the same HD pixel art style, proportions, outline and shading as the reference character (chibi-ish xianxia cultivator, 3/4 front view facing down-right, full body, standing): Chen Banxia, a young apothecary apprentice boy (about 16), neat black hair in a small bun with a green cloth tie, friendly clever smile, green and beige apothecary robe with an apron, a big medicine gourd hanging at his hip, a small woven herb basket on his back with green herbs poking out, holding a sprig of herb. Full body centred, about 70% of the frame height. Plain solid pure magenta background (#FF00FF) everywhere else, no shadow, no scenery, no text."
-  },
   "tile_land_wood": {
     "fit": "w",
     "size": 128,
