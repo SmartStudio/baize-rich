@@ -43,7 +43,7 @@ describe('movement: fork, road, altar', () => {
     expect(g.state.turn.lastPath).toEqual(['S2', 'ALTAR']);
   });
 
-  it('must stop at the altar when out of 灵丹 even with steps left', () => {
+  it('must stop at the altar when out of 丹药 even with steps left', () => {
     const g = ringGame();
     const p = g.state.players[0];
     p.pos = 'R4';
@@ -51,7 +51,8 @@ describe('movement: fork, road, altar', () => {
     const seen: PendingChoice[] = [];
     g.runFlow(g.debugMove(0, 8), script({ fork: 'S1' }, seen));
     expect(p.pos).toBe('ALTAR');
-    expect(seen.map((c) => c.kind)).toEqual(['fork', 'altar']); // no altarPass offered
+    expect(seen.map((c) => c.kind)).toEqual(['fork']); // no altarPass offered
+    expect(g.state.turn.landedAltar).toBe(true);
   });
 
   it('stops at the altar when the move ends exactly there', () => {
@@ -62,7 +63,7 @@ describe('movement: fork, road, altar', () => {
     const seen: PendingChoice[] = [];
     g.runFlow(g.debugMove(0, 3), script({ fork: 'S1' }, seen));
     expect(p.pos).toBe('ALTAR');
-    expect(seen.map((c) => c.kind)).toEqual(['fork', 'altar']);
+    expect(seen.map((c) => c.kind)).toEqual(['fork']);
     expect(p.pills).toBe(5);
   });
 
@@ -106,80 +107,26 @@ describe('movement: fork, road, altar', () => {
     expect(p.stones).toBe(s0 + cfg.salaryPass);
     p.pos = 'R30';
     const s1 = p.stones;
-    // R31 is earth: mire eats one step, so 3 steps end exactly on R0
-    g.runFlow(g.debugMove(0, 3), script({ buy: 'no' }));
+    g.runFlow(g.debugMove(0, 2), script({ buy: 'no' }));
     expect(p.pos).toBe('R0');
     expect(p.stones).toBe(s1 + cfg.salaryLand);
   });
 });
 
-describe('terrain', () => {
-  it('寒冰滑行: ending on water slides one more cell (only once)', () => {
-    const g = ringGame();
-    const p = g.state.players[0];
-    p.pos = 'R16';
-    g.runFlow(g.debugMove(0, 2), script({ buy: 'no' }));
-    // R17, R18 (water) -> slide to R19 (water, no second slide)
-    expect(g.state.turn.lastPath).toEqual(['R16', 'R17', 'R18', 'R19']);
-    expect(p.pos).toBe('R19');
-  });
-
-  it('寒冰滑行 onto a gate does not trigger the fork', () => {
-    const g = ringGame();
-    const p = g.state.players[0];
-    p.pos = 'R18';
-    const seen: PendingChoice[] = [];
-    g.runFlow(g.debugMove(0, 1), script({ buy: 'no' }, seen));
-    expect(p.pos).toBe('R20');
-    expect(seen.some((c) => c.kind === 'fork')).toBe(false);
-  });
-
-  it('瘴泽泥沼: first earth land entered this turn costs 1 remaining step, once per turn', () => {
-    const g = ringGame();
-    const p = g.state.players[0];
-    p.pos = 'R24';
-    g.runFlow(g.debugMove(0, 3), script({ buy: 'no' }));
-    expect(p.pos).toBe('R26'); // R25 (mire -1) -> R26
-    // same turn: no second mire
-    g.state.turn.lastPath = [];
-    const walk = g.walk(0, 2, 1);
-    g.runFlow(walk, script({ buy: 'no' }));
-    expect(p.pos).toBe('R28');
-  });
-
-  it('瘴泽泥沼 never reduces a move below 1 step', () => {
-    const g = ringGame();
-    const p = g.state.players[0];
-    p.pos = 'R24';
-    g.runFlow(g.debugMove(0, 1), script({ buy: 'no' }));
-    expect(p.pos).toBe('R25');
-  });
-});
-
 describe('rules config', () => {
-  it('a ringData() copy with a tweaked rules value changes the 丹炉 payout', () => {
+  it('a ringData() copy with a tweaked alchemy value changes the 丹房 yield', () => {
     const data = ringData();
-    data.config.rules.furnacePills = 5;
-    for (const [g, gain] of [[ringGame(1), 2], [ringGame(1, data), 5]] as const) {
+    data.config.alchemy.herbsPerPill = 4;
+    for (const [g, gain] of [[ringGame(1), 2], [ringGame(1, data), 1]] as const) {
       const p = g.state.players[0];
       p.pos = 'R5';
+      p.herbs = 4;
       const pills0 = p.pills;
-      g.runFlow(g.debugMove(0, 1), script({}));
+      g.runFlow(g.debugMove(0, 1), script({ miniGame: 'ok' }));
       expect(p.pos).toBe('R6');
       expect(p.pills).toBe(pills0 + gain);
+      expect(p.herbs).toBe(0);
     }
   });
 
-  it('rules.chartDraw sets how many talismans the 白泽图 blessing draws', () => {
-    const data = ringData();
-    data.config.rules.chartDraw = 2;
-    for (const [g, drawn] of [[ringGame(1), 1], [ringGame(1, data), 2]] as const) {
-      const p = g.state.players[0];
-      p.hand = [];
-      const cult0 = p.cultBase;
-      g.runFlow((g as any).applyHeaven(0, 'chart'), script({}));
-      expect(p.hand.length).toBe(drawn);
-      expect(p.cultBase).toBe(cult0 + 1);
-    }
-  });
 });

@@ -128,8 +128,8 @@ export class TitleScene extends Phaser.Scene {
       b.setAlpha(0);
       this.tweens.add({ targets: b, alpha: 1, duration: 400, delay: 350 + k * 120 });
     });
-    const { winCultivation, rounds } = defaultData.config;
-    txt(this, 640, 700, `率先修至 ${winCultivation} 点修为即刻飞升；第 ${rounds} 轮结束时修为最高者胜 · 空格 / Enter 确认 · H 玩法说明`, {
+    const { rounds } = defaultData.config;
+    txt(this, 640, 700, `率先渡劫化神即胜；第 ${rounds} 轮秘境关闭时境界最高者胜 · 空格 / Enter 确认 · H 玩法说明`, {
       size: 13, color: HEX.dim, origin: [0.5, 0.5],
     });
   }

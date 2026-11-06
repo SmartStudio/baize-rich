@@ -1,15 +1,12 @@
 // Board rendering: ground and roads (Ground.ts), tiles, objects, buildings, ownership wash/rims/flags,
-// tokens, demon, and the 白泽现世 light on the altar. Everything here lives in world coordinates (WorldMap);
+// tokens, and the 白泽现世 light on the altar. Everything here lives in world coordinates (WorldMap);
 // GameScene's camera scrolls and zooms it. Sprite scales come from SPRITE.
 import Phaser from 'phaser';
 import { ALTAR, type Board } from '../core/board';
-import type { SpiritEvent } from '../core/events';
-import { ownsStreet } from '../core/rules';
-import type { GameState, HeroId, NodeId, SpiritKind } from '../core/types';
+import type { GameState, HeroId, NodeId } from '../core/types';
 import { addImg, setFrame } from './assets';
 import { drawWorld, tileRect } from './Ground';
 import { SPRITE, type Rect } from './layout';
-import { addSpirit, possessionAura } from './Spirits';
 import { COLORS, FS, HEX, PLAYER_COLORS, PLAYER_HEX, txt } from './theme';
 import { rectCentre, WorldMap, type Point } from './world';
 
@@ -32,34 +29,18 @@ const RIM_DEPTH = 2.5;
 const OWN_WASH = 0.16;
 /** Plain ownership rim, in world px. */
 const OWN_BORDER = 3;
-/** Completed street: a thicker owner rim plus an inset second rim. */
-const MONO_OUTER = 5;
-const CHAIN_W = 2;
-/** Inner rim starts clear of the thicker outer rim, so the two lines stay separate. */
-const CHAIN_INSET = 7;
-/**
- * Seat 0's colour is COLORS.gold, so a gold inner rim would disappear on that seat.
- * Parchment matches HEX.parchment.
- */
-const CHAIN_ON_GOLD = 0xf4e9d0;
 
 interface LandView {
   decor: Phaser.GameObjects.Image;
   bld: Phaser.GameObjects.Image;
   flag: Phaser.GameObjects.Image;
-  /** §17 禁制 marker, in the owner's seat colour. */
-  trap: Phaser.GameObjects.Text;
   /** Tile size in world px. The rim is drawn in this box. */
   w: number;
   h: number;
   /** Owner-colour fill under decor and buildings. Hidden while the land is unowned. */
   wash: Phaser.GameObjects.Rectangle;
-  /** Owner rim, and the inner street rim when the street is complete. `flashStreet` pulses this. */
+  /** Owner rim. */
   rim: Phaser.GameObjects.Graphics;
-}
-
-function chainInk(seat: number): number {
-  return PLAYER_COLORS[seat] === COLORS.gold ? CHAIN_ON_GOLD : COLORS.gold;
 }
 
 /** A crisp rectangular frame. Four filled bars, so the thickness stays an integer pixel band. */
@@ -70,21 +51,12 @@ function fillFrame(g: Phaser.GameObjects.Graphics, w: number, h: number, inset: 
   g.fillRect(w - inset - thick, inset + thick, thick, h - 2 * inset - 2 * thick);
 }
 
-/** Board markers that come and go with state: §18.3 路障 (public) and 爆炎阵 (owner only). */
-const MARKS = { barrier: '障', blast: '爆' } as const;
-type MarkKind = keyof typeof MARKS;
-
 export class BoardView {
   private lands = new Map<NodeId, LandView>();
   private tokens: Phaser.GameObjects.Container[] = [];
   /** The hero figure inside each token container (the part that hops). */
   private figures: Phaser.GameObjects.Image[] = [];
   private tokenNode: NodeId[] = [];
-  /** Wandering spirits on the board; a possessing one lives on as its holder's aura instead. */
-  private spirits = new Map<SpiritKind, Phaser.GameObjects.Container>();
-  private auras: ({ kind: SpiritKind; c: Phaser.GameObjects.Container } | null)[] = [];
-  private marks = new Map<string, Phaser.GameObjects.Text>();
-  private demon: Phaser.GameObjects.Image;
   private manifest: Manifest;
   private highlights: Phaser.GameObjects.Rectangle[] = [];
   private hoverFn: ((n: NodeId | null) => void) | null = null;
@@ -97,7 +69,7 @@ export class BoardView {
 
   readonly world: WorldMap;
 
-  constructor(private scene: Phaser.Scene, private board: Board, heroes: HeroId[]) {
+  constructor(private scene: Phaser.Scene, board: Board, heroes: HeroId[]) {
     const s = scene;
     this.world = new WorldMap(board.data);
     drawWorld(s, this.world, board.data);
@@ -110,8 +82,7 @@ export class BoardView {
       const foot = y + u(48);
       if (n.type === 'land') this.mountLand(id, n.region, x, y, w, h, foot);
       else {
-        const obj = n.type === 'minigame' ? `obj_minigame_${n.game}` : `obj_${n.type}`;
-        addImg(s, x + w / 2, foot, obj).setOrigin(0.5, 1).setDepth(foot).setScale(SPRITE.prop);
+        addImg(s, x + w / 2, foot, `obj_${n.type}`).setOrigin(0.5, 1).setDepth(foot).setScale(SPRITE.prop);
       }
       const cell = this.world.cellRect(id);
       this.addZone(id, cell.x, cell.y, cell.w, cell.h);
@@ -121,7 +92,6 @@ export class BoardView {
     addImg(s, ax, ay, 'altar').setOrigin(0.5, 0.5).setDepth(altar.y + altar.h).setScale(SPRITE.altar);
     this.addZone(ALTAR, altar.x, altar.y, altar.w, altar.h);
     this.manifest = new Manifest(s, ax, ay + STATUE_DY * SPRITE.altar, altar.y + altar.h + 1);
-    this.demon = addImg(s, 0, 0, 'demon').setOrigin(0.5, 1).setVisible(false).setScale(SPRITE.demon);
     this.rock = txt(s, 0, 0, '山', { size: FS.lg, bold: true, color: HEX.gold, stroke: HEX.ink, origin: [0.5, 0.5] }).setDepth(TOP + 600).setVisible(false);
     this.currentMark = s.add.rectangle(0, 0, 10, 10, COLORS.gold, 0.16).setOrigin(0, 0).setStrokeStyle(4, COLORS.gold).setDepth(3).setVisible(false);
     s.tweens.add({ targets: this.currentMark, alpha: 0.45, duration: 520, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
@@ -132,7 +102,6 @@ export class BoardView {
       const c = s.add.container(0, 0, [base, tok]).setScale(SPRITE.token);
       this.tokens.push(c);
       this.figures.push(tok);
-      this.auras.push(null);
       this.tokenNode.push(board.startId);
     });
   }
@@ -231,15 +200,13 @@ export class BoardView {
     const decor = addImg(s, x + w / 2, foot, `decor_${region}`).setOrigin(0.5, 1).setDepth(foot).setScale(SPRITE.prop);
     const bld = addImg(s, x + w / 2, foot, 'bld_1').setOrigin(0.5, 1).setDepth(foot).setVisible(false).setScale(SPRITE.prop);
     const flag = addImg(s, x + u(9), y + u(24), 'flag_p1').setOrigin(0.5, 1).setDepth(foot + 1).setVisible(false).setScale(SPRITE.prop);
-    const trap = txt(s, x + w - u(4), y + u(4), '禁', { size: FS.sm, bold: true, stroke: HEX.ink, origin: [1, 0] })
-      .setDepth(TOP + 500).setVisible(false);
     const wash = s.add.rectangle(x, y, w, h, PLAYER_COLORS[0], OWN_WASH).setOrigin(0, 0).setDepth(OWN_DEPTH).setVisible(false);
     const rim = s.add.graphics().setPosition(x, y).setDepth(RIM_DEPTH).setVisible(false);
-    this.lands.set(id, { decor, bld, flag, trap, w, h, wash, rim });
+    this.lands.set(id, { decor, bld, flag, w, h, wash, rim });
   }
 
-  /** Owner wash, rim, and flag. Leaves rim alpha alone while owned, so a street flash can keep pulsing. */
-  private showOwnership(v: LandView, owner: number | null, chained: boolean): void {
+  /** Owner wash, rim, and flag. */
+  private showOwnership(v: LandView, owner: number | null): void {
     const owned = owner !== null;
     v.flag.setVisible(owned);
     v.wash.setVisible(owned);
@@ -254,179 +221,25 @@ export class BoardView {
     const g = v.rim;
     g.clear();
     g.fillStyle(color, 1);
-    fillFrame(g, v.w, v.h, 0, chained ? MONO_OUTER : OWN_BORDER);
-    if (!chained) return;
-    g.fillStyle(chainInk(owner), 1);
-    fillFrame(g, v.w, v.h, CHAIN_INSET, CHAIN_W);
+    fillFrame(g, v.w, v.h, 0, OWN_BORDER);
   }
 
-  /**
-   * Refresh ownership / buildings / spirits / markers / demon from a (snapshot) state.
-   * `blastAlpha(seat)` is how visible that seat's hidden 爆炎阵 are on this screen (0 hides them).
-   */
-  render(state: GameState, blastAlpha: (seat: number) => number = () => 0): void {
+  /** Refresh ownership / buildings / markers from a (snapshot) state. */
+  render(state: GameState): void {
     for (const [id, v] of this.lands) {
       const t = state.tiles[id];
       const owner = t.owner;
-      this.showOwnership(v, owner, owner !== null && ownsStreet(state, this.board, id, owner));
-      const bld = t.special ? `bld_${t.special}` : t.level > 0 ? `bld_${t.level}` : null;
+      this.showOwnership(v, owner);
+      const bld = t.level > 0 ? `bld_${t.level}` : null;
       v.decor.setVisible(bld === null);
       v.bld.setVisible(bld !== null);
       if (bld) setFrame(v.bld, bld);
-      v.trap.setVisible(t.trap && owner !== null);
-      if (t.trap && owner !== null) v.trap.setColor(PLAYER_HEX[owner]);
     }
-    this.renderSpirits(state);
-    this.renderMarks([
-      ...state.barriers.map((b) => ({ kind: 'barrier' as const, ...b, alpha: 1 })),
-      ...state.blasts.map((b) => ({ kind: 'blast' as const, ...b, alpha: blastAlpha(b.seat) })),
-    ]);
     if (state.roadblock) {
       const r = this.nodeRect(state.roadblock.node);
       this.rock.setVisible(true).setPosition(r.x + r.w / 2, r.y + u(20)).setColor(PLAYER_HEX[state.roadblock.seat]);
     } else this.rock.setVisible(false);
-    if (state.demon) {
-      const { x, y } = this.demonXY(state.demon.node);
-      this.demon.setVisible(true).setPosition(x, y).setDepth(y + 50);
-    } else this.demon.setVisible(false);
     this.markCurrent(state);
-  }
-
-  private demonXY(id: NodeId): { x: number; y: number } {
-    const r = this.nodeRect(id);
-    return { x: r.x + r.w / 2, y: r.y + u(46) };
-  }
-
-  moveDemon(from: NodeId | undefined, to: NodeId, ms: number): Promise<void> {
-    const { x, y } = this.demonXY(to);
-    if (!from || !this.demon.visible) {
-      this.demon.setVisible(true).setPosition(x, y).setAlpha(0);
-      return new Promise((res) => this.scene.tweens.add({ targets: this.demon, alpha: 1, duration: ms, onComplete: () => res() }));
-    }
-    return new Promise((res) => this.scene.tweens.add({
-      targets: this.demon, x, y, duration: ms, ease: 'Sine.easeInOut',
-      onComplete: () => { this.demon.setDepth(y + 50); res(); },
-    }));
-  }
-
-  /** Where a wandering spirit stands on a tile: the upper corners, clear of the tokens and the demon. */
-  private spiritXY(id: NodeId, kind: SpiritKind): Point {
-    const r = this.nodeRect(id);
-    return { x: r.x + u(kind === 'fox' ? 52 : 12), y: r.y + u(32) };
-  }
-
-  private placeSpirit(kind: SpiritKind, id: NodeId): Phaser.GameObjects.Container {
-    const { x, y } = this.spiritXY(id, kind);
-    let fig = this.spirits.get(kind);
-    if (!fig) {
-      fig = addSpirit(this.scene, x, y, kind);
-      this.spirits.set(kind, fig);
-    }
-    return fig.setPosition(x, y).setDepth(y + 60);
-  }
-
-  private dropSpirit(kind: SpiritKind): void {
-    this.spirits.get(kind)?.destroy();
-    this.spirits.delete(kind);
-  }
-
-  private setAura(seat: number, kind: SpiritKind | null): Phaser.GameObjects.Container | null {
-    const have = this.auras[seat];
-    if (have?.kind === kind) return have.c;
-    have?.c.destroy();
-    this.auras[seat] = kind ? { kind, c: possessionAura(this.scene, this.tokens[seat], kind) } : null;
-    return this.auras[seat]?.c ?? null;
-  }
-
-  /** Idempotent: a figure on every wandering spirit's node, an aura on every holder. Leaves moving figures alone. */
-  private renderSpirits(state: GameState): void {
-    for (const sp of state.spirits) {
-      const fig = this.spirits.get(sp.kind);
-      if (fig && this.scene.tweens.isTweening(fig)) continue;
-      if (sp.node) this.placeSpirit(sp.kind, sp.node);
-      else this.dropSpirit(sp.kind);
-    }
-    this.tokens.forEach((_, seat) => this.setAura(seat, state.spirits.find((sp) => sp.holder === seat)?.kind ?? null));
-  }
-
-  /** Live positions of the wandering spirits, for the minimap. */
-  spiritPoints(): { kind: SpiritKind; p: Point }[] {
-    return [...this.spirits].map(([kind, c]) => ({ kind, p: { x: c.x, y: c.y - 12 } }));
-  }
-
-  /**
-   * Stage one §18.2 spirit event; `render` reconciles afterwards. move glides the figure, possess flies
-   * it into the token and lights the aura, transfer hands the aura over, expire fades it and the figure
-   * reappears on its spawn cell.
-   */
-  async animateSpirit(ev: SpiritEvent, ms: number): Promise<void> {
-    const s = this.scene;
-    const tween = (cfg: Phaser.Types.Tweens.TweenBuilderConfig): Promise<void> =>
-      new Promise((res) => s.tweens.add({ ...cfg, onComplete: () => res() }));
-    const popIn = (c: Phaser.GameObjects.Container | null): Promise<void> =>
-      c ? tween({ targets: c, scale: { from: 0.2, to: 1 }, alpha: { from: 0, to: 1 }, duration: ms * 0.6, ease: 'Back.easeOut' }) : Promise.resolve();
-    switch (ev.action) {
-      case 'move': {
-        const fig = this.spirits.get(ev.kind) ?? this.placeSpirit(ev.kind, ev.from!);
-        const to = this.spiritXY(ev.to!, ev.kind);
-        await tween({ targets: fig, x: to.x, y: to.y, duration: ms, ease: 'Sine.easeInOut', onUpdate: () => fig.setDepth(fig.y + 60) });
-        return;
-      }
-      case 'possess': {
-        const tok = this.tokens[ev.seat!];
-        const fig = this.spirits.get(ev.kind);
-        if (fig) {
-          await tween({ targets: fig, x: tok.x, y: tok.y - 10, scale: 0.4, alpha: 0.3, duration: ms * 0.7, ease: 'Cubic.easeIn' });
-          this.dropSpirit(ev.kind);
-        }
-        await popIn(this.setAura(ev.seat!, ev.kind));
-        return;
-      }
-      case 'transfer':
-        if (ev.giver !== undefined) this.setAura(ev.giver, null);
-        await popIn(this.setAura(ev.seat!, ev.kind));
-        return;
-      case 'expire': {
-        const aura = ev.seat !== undefined ? this.auras[ev.seat] : null;
-        if (aura?.kind === ev.kind) {
-          await tween({ targets: aura.c, alpha: 0, scale: 1.8, duration: ms * 0.5 });
-          this.setAura(ev.seat!, null);
-        }
-        this.dropSpirit(ev.kind);
-        if (ev.to) await popIn(this.placeSpirit(ev.kind, ev.to));
-      }
-    }
-  }
-
-  /** §18.1 A street just completed: its borders flash in the owner's colour. */
-  flashStreet(node: NodeId, seat: number, ms: number): void {
-    for (const id of this.board.streetOf(node)) {
-      const v = this.lands.get(id);
-      if (!v) continue;
-      this.showOwnership(v, seat, true);
-      this.scene.tweens.add({ targets: v.rim, alpha: { from: 1, to: 0.2 }, duration: ms / 6, yoyo: true, repeat: 2 });
-    }
-  }
-
-  private renderMarks(want: { kind: MarkKind; node: NodeId; seat: number; alpha: number }[]): void {
-    const keep = new Set<string>();
-    for (const m of want) {
-      if (m.alpha <= 0) continue;
-      const key = `${m.kind}:${m.node}`;
-      keep.add(key);
-      let t = this.marks.get(key);
-      if (!t) {
-        const r = this.nodeRect(m.node);
-        t = txt(this.scene, r.x + r.w / 2, r.y + u(20), MARKS[m.kind], { size: FS.lg, bold: true, stroke: HEX.ink, origin: [0.5, 0.5] }).setDepth(TOP + 550);
-        this.marks.set(key, t);
-      }
-      t.setColor(PLAYER_HEX[m.seat]).setAlpha(m.alpha);
-    }
-    for (const [key, t] of this.marks) {
-      if (keep.has(key)) continue;
-      t.destroy();
-      this.marks.delete(key);
-    }
   }
 
   /** 白泽现世: the altar's own statue lights up. Idempotent. */

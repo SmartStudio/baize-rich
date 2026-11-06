@@ -11,6 +11,7 @@
     "sim": "tsx src/sim/run.ts",
     "board": "tsx src/sim/board.ts",
     "sweep": "tsx src/sim/sweep.ts",
+    "matchup": "tsx src/sim/matchup.ts",
     "replay": "tsx src/sim/replay.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "shots": "node scripts/screenshots.cjs"

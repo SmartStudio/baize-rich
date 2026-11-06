@@ -5,7 +5,7 @@
 //   A node whose next and prev hold the same nodes is two-way (the 神道 and the altar):
 //   walks never turn back on it, so the node a walker came from fixes its heading.
 //   The altar is the single node 'ALTAR'; its `rect` is only for drawing.
-import type { BoardData, MiniGameId, NodeId, RegionId, RoadId, TileType } from './types';
+import type { BoardData, NodeId, RegionId, RoadId, TileType } from './types';
 
 export interface BoardNode {
   id: NodeId;
@@ -18,8 +18,6 @@ export interface BoardNode {
   road?: RoadId;
   /** 灵田所属街道（BoardData.streets 的键） */
   street?: string;
-  /** 小游戏格的玩法 */
-  game?: MiniGameId;
   outer: boolean;
   next: NodeId[];
   prev: NodeId[];
@@ -32,9 +30,6 @@ export class Board {
   readonly nodes = new Map<NodeId, BoardNode>();
   readonly lands: NodeId[] = [];
   readonly startId: NodeId;
-  readonly cliffId: NodeId;
-  /** 医馆（没有医馆的旧图为 null，爆炎阵改为原地定身） */
-  readonly hospitalId: NodeId | null;
   /** Street id -> its lands, in data order. */
   readonly streets = new Map<string, NodeId[]>();
   private readonly toAltar = new Map<NodeId, number>();
@@ -43,7 +38,7 @@ export class Board {
     for (const t of data.nodes) {
       this.nodes.set(t.id, {
         id: t.id, type: t.type, pos: t.pos, name: t.name ?? data.tileTypes[t.type].name,
-        region: t.region, price: t.price, road: t.road, street: t.street, game: t.game, outer: t.outer ?? false, next: t.next, prev: [],
+        region: t.region, price: t.price, road: t.road, street: t.street, outer: t.outer ?? false, next: t.next, prev: [],
       });
       if (t.type === 'land') this.lands.push(t.id);
       if (t.type === 'land' && t.street) {
@@ -58,8 +53,6 @@ export class Board {
     }
     if (this.node(ALTAR).type !== 'altar') throw new Error(`${ALTAR} must be the altar`);
     this.startId = this.firstOfType('start');
-    this.cliffId = this.firstOfType('cliff');
-    this.hospitalId = this.allNodeIds().find((x) => this.node(x).type === 'hospital') ?? null;
     const queue = [ALTAR];
     this.toAltar.set(ALTAR, 0);
     for (let i = 0; i < queue.length; i++) {
@@ -105,18 +98,6 @@ export class Board {
   mainStep(id: NodeId, dir: 1 | -1): NodeId {
     const n = this.node(id);
     return (dir === 1 ? n.next : n.prev)[0];
-  }
-
-  /** Main-line nodes after `id` up to and including the first gate. */
-  pathToGate(id: NodeId): NodeId[] {
-    const path: NodeId[] = [];
-    let cur = id;
-    for (let k = 0; k < this.nodes.size; k++) {
-      cur = this.mainStep(cur, 1);
-      path.push(cur);
-      if (this.node(cur).type === 'gate') return path;
-    }
-    throw new Error(`no gate ahead of ${id}`);
   }
 
   /** Fewest steps between two outer nodes over outer nodes in either direction (-1 if either is off the outer ring). */
@@ -168,10 +149,6 @@ export class Board {
 
   roadName(road: RoadId): string {
     return this.data.roads[road].name;
-  }
-
-  regionNodes(region: RegionId): NodeId[] {
-    return this.allNodeIds().filter((id) => this.node(id).region === region);
   }
 
   /** Lands of the street `id` belongs to ([] for a land without a street). */

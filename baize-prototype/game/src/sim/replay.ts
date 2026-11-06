@@ -3,7 +3,7 @@
 import { readFileSync } from 'node:fs';
 import { DIFFICULTY_LABEL, PERSONALITY_LABEL } from '../ai/ai';
 import { parseRecord, replayRecord } from '../core/record';
-import { cultivation, realmName, totalAssets } from '../core/rules';
+import { realmName, totalAssets } from '../core/rules';
 
 function die(msg: string): never {
   console.error(msg);
@@ -33,10 +33,10 @@ try {
 if (process.argv.includes('--log')) for (const e of game.log) if (e.text) console.log(`[R${e.round}] ${e.text}`);
 
 const st = game.state;
-console.log(`\n白泽秘境大富翁 · 对局复盘  ${file}`);
+console.log(`\n凡人问道 · 对局复盘  ${file}`);
 console.log(`种子 ${rec.setup.seed} · 数据版本 ${rec.dataVersion} · 保存于 ${rec.savedAt} · 共 ${rec.history.length} 次决定`);
 if (st.over) {
-  const reason = st.endReason === 'cultivation' ? '修为达成，渡劫飞升' : `第 ${game.data.config.rounds} 轮结束时修为最高`;
+  const reason = st.endReason === 'ascend' ? '渡劫化神' : `第 ${game.data.config.rounds} 轮秘境关闭，境界最高`;
   console.log(`结果：${st.players[st.winner!].name} 获胜（${reason}），共 ${st.round} 轮`);
 } else {
   const c = game.pending!;
@@ -47,6 +47,5 @@ for (const seat of game.ranking()) {
   const p = st.players[seat];
   const s = rec.seats[seat];
   const who = s.human ? '玩家' : `AI·${DIFFICULTY_LABEL[s.difficulty]}·${PERSONALITY_LABEL[s.personality]}`;
-  const cult = cultivation(st, game.data, seat);
-  console.log(`  ${p.name}（${who}）修为 ${cult} ${realmName(game.data, cult)} · 灵石 ${p.stones} · 灵丹 ${p.pills} · 突破 ${p.stats.breakthroughs} 次 · 总资产 ${totalAssets(st, game.board, game.data, seat)}`);
+  console.log(`  ${p.name}（${who}）${realmName(game.data, p.realm)} 修为 ${p.cult} · 灵石 ${p.stones} · 丹药 ${p.pills} · 灵草 ${p.herbs} · 突破 ${p.stats.breakthroughs} 次 · 总资产 ${totalAssets(st, game.board, game.data, seat)}`);
 }

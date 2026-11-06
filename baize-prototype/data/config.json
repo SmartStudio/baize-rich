@@ -1,161 +1,79 @@
 {
-  "version": "0.7",
+  "version": "0.8",
   "rounds": 12,
-  "winCultivation": 8,
   "startStones": 1500,
-  "seatBonusStones": [0, 300, 600, 900],
-  "startPills": 2,
-  "startHand": 2,
-  "handLimit": 5,
+  "seatBonusStones": [0, 25, 50, 75],
+  "startPills": 0,
+  "startHerbs": 0,
+  "startHand": 1,
+  "handLimit": 4,
   "salaryPass": 200,
   "salaryLand": 400,
-  "cliffFee": 100,
-  "cliffMaxTurns": 3,
-  "maxDoubles": 2,
-  "marketCardPrice": 100,
-  "marketMaxBuy": 2,
   "altarToll": 1,
-  "breakthroughThresholds": [
-    2,
-    4,
-    6
-  ],
-  "breakthroughCost": [
-    1,
-    2,
-    3
-  ],
-  "breakthroughDraw": 3,
-  "breakthroughDrawLowest": 4,
-  "maxDivine": 3,
-  "shrineDiscount": 1,
-  "demonCostPenalty": 1,
   "rentRate": 0.1,
-  "levelRentMult": [
-    1,
-    3,
-    6,
-    10,
-    15
+  "realms": [
+    { "name": "练气", "bar": 4, "target": 8, "ability": null },
+    { "name": "筑基", "bar": 4, "target": 9, "ability": "steer" },
+    { "name": "结丹", "bar": 4, "target": 10, "ability": "sense" },
+    { "name": "元婴", "bar": 4, "target": 11, "ability": "escape" },
+    { "name": "化神", "bar": 0, "target": 0, "ability": null }
   ],
-  "levelUpgradeCostP": [
-    0,
-    0.5,
-    0.5,
-    1.0,
-    1.0
+  "landLevels": [
+    { "upgradeCostP": 0, "rentMult": 1, "herbs": 0, "sit": 1, "closureBonus": null },
+    { "upgradeCostP": 0.5, "rentMult": 3, "herbs": 1, "sit": 1, "closureBonus": null },
+    { "upgradeCostP": 0.5, "rentMult": 6, "herbs": 1, "sit": 2, "closureBonus": 0 },
+    { "upgradeCostP": 1, "rentMult": 10, "herbs": 2, "sit": 2, "closureBonus": 1 }
   ],
-  "lv4PillCost": 2,
-  "cultivationOnBuild": {
-    "2": 1,
-    "3": 1,
-    "4": 1
+  "cultivation": {
+    "breath": 1,
+    "bodySit": 1,
+    "spring": 1,
+    "eye": 2,
+    "pill": 2,
+    "altarCalm": 1,
+    "magicBonus": 1
   },
-  "veinLordMinLands": 4,
-  "veinLordCultivation": 2,
-  "monopolyRentMult": 2,
-  "endgameRounds": [
-    10,
-    11,
-    12
-  ],
-  "endgameRentMult": 1.5,
-  "bankrupt": {
-    "resetStones": 300,
-    "cultivationLoss": 2
+  "breakthrough": {
+    "pillBonus": 2,
+    "maxPills": 3,
+    "altarBonus": 2,
+    "mindBonus": 1,
+    "guidanceBonus": 2,
+    "calmBonus": 2
   },
-  "eruptionRounds": [
-    3,
-    6,
-    9
-  ],
-  "demon": {
-    "spawnRounds": [
-      4,
-      8
-    ],
-    "hp": 6,
-    "stayRounds": 3,
-    "movePerRound": 2
+  "alchemy": {
+    "herbsPerPill": 2,
+    "perfectBonus": 1,
+    "alchBonus": 1
   },
-  "baizeManifestRound": 6,
-  "manifestRentMult": 0.5,
-  "ult": {
-    "pillCost": 3,
-    "maxUses": 2
+  "market": {
+    "pillPrice": 200,
+    "pillMax": 2,
+    "cardPrice": 100,
+    "cardMax": 2
   },
-  "badLuckStreak": 3,
-  "maxActiveTasks": 2,
-  "pillValueInStones": 50,
+  "spring": { "herbs": 1 },
+  "beast": { "target": 8, "herbs": 3, "loss": 100 },
+  "duel": {
+    "senseBonus": 1,
+    "swordAttack": 1,
+    "bodyDefense": 2,
+    "glowBonus": 1,
+    "glowAt": 3,
+    "steal": 1,
+    "glowSteal": 2,
+    "lossStones": 100
+  },
+  "bankrupt": { "resetStones": 300 },
+  "manifest": { "round": 6, "chartCult": 3, "giftStones": 400, "giftPills": 2 },
+  "assetValue": { "pill": 200, "herb": 60 },
   "rules": {
-    "alchBuyDiscount": 0.7,
-    "discountCardMult": 0.7,
-    "buyoutMult": 1.5,
-    "swordQiSteal": 10,
-    "goldtouchStones": 200,
     "swiftstepMax": 3,
-    "swiftDivineDelta": 1,
-    "swordUltDelta": 3,
-    "magicPassivePills": 1,
-    "gatherPills": 1,
-    "midasMult": 1.2,
-    "goldbodyCooldownRounds": 3,
-    "shrinkCooldownRounds": 3,
-    "pillheartBelow": 2,
-    "immovableTurns": 2,
-    "wardRounds": 4,
-    "chartCultivation": 1,
-    "chartDraw": 1,
-    "auspiceLands": 2,
-    "veinStones": 400,
-    "dawnPills": 4,
-    "bountyCultivation": 1,
-    "demonLastHitCultivation": 2,
-    "thunderDemonDamage": 2,
-    "magicUltDemonDamage": 3,
-    "subdueDamageMult": 2,
-    "springPills": 1,
-    "furnacePills": 2,
-    "shrinePills": 1,
-    "beastRollMin": 1,
-    "beastRollMax": 6,
-    "senseDrawCount": 2,
-    "duelMaxPills": 2,
-    "swordDuelAttack": 1,
-    "bodyDuelDefense": 1,
-    "duelStealPct": 0.2,
-    "duelStealMax": 300,
-    "bountyMinCult": 2,
-    "bountyDuelCultivation": 1,
-    "trapPillCost": 1,
-    "trapMaxPerPlayer": 2,
-    "trapStones": 100,
+    "diceCardMin": 2,
+    "diceCardMax": 12,
     "skillCooldownTurns": 2,
     "roadblockRange": 6,
     "swapRange": 8,
-    "swordDashRange": 8,
-    "streetRentMult": 2,
-    "foxRentMult": 1.5,
-    "foxLandDiscount": 0.8,
-    "heartRentMult": 1.5,
-    "heartPills": 1,
-    "spiritTurns": 4,
-    "spiritMoveMax": 3,
-    "gardenPills": 1,
-    "bazaarFee": 100,
-    "portalPills": 0,
-    "specialCultivation": 1,
-    "miniGameRewards": {
-      "alchemy": { "fail": 0, "ok": 1, "perfect": 3 },
-      "dice": { "fail": 0, "ok": 0, "perfect": 1 }
-    },
-    "diceStakes": [0, 100, 200],
-    "diceWinMult": 2,
-    "diceBigMin": 8,
-    "diceSmallMax": 6,
-    "diceCardMin": 2,
-    "diceCardMax": 12,
-    "barrierRange": 6,
-    "hospitalTurns": 1
+    "swordDashRange": 5
   }
 }

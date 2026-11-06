@@ -38,10 +38,10 @@ describe('board checker catches', () => {
     expect(problems(b)).toMatch(new RegExp(`${branch} is not reachable`));
   });
 
-  it('a second cliff', () => {
+  it('a second 妖兽谷', () => {
     const b = board();
-    b.nodes.find((n) => n.type === 'land')!.type = 'cliff';
-    expect(problems(b)).toMatch(/expected 1 cliff, found 2/);
+    b.nodes.find((n) => n.type === 'land')!.type = 'beast';
+    expect(problems(b)).toMatch(/expected 1 beast, found 2/);
   });
 
   it('overlapping cells and a land without a street', () => {
@@ -56,7 +56,7 @@ describe('board checker catches', () => {
   it('a district without a market', () => {
     const b = board();
     const m = b.nodes.find((n) => n.type === 'market')!;
-    m.type = 'trial';
+    m.type = 'secret';
     expect(problems(b)).toMatch(new RegExp(`${m.region}: no market`));
   });
 });

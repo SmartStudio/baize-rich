@@ -1,7 +1,6 @@
 import Phaser from 'phaser';
 import { addImg } from '../ui/assets';
 import { playMiniGame, type MiniGameOpts, type MiniGameSpec, type MiniGameTier } from '../ui/MiniGame';
-import { addSpirit, possessionAura } from '../ui/Spirits';
 import { COLORS, FS, HEX, txt } from '../ui/theme';
 import { Button } from '../ui/widgets';
 
@@ -61,13 +60,6 @@ export class PreviewScene extends Phaser.Scene {
       txt(this, cx, cy + 128, name, { size: FS.xs, color: HEX.dim, origin: [0.5, 0.5] });
     });
 
-    txt(this, 330, 560, '待机 / 附身：', { size: FS.md, color: HEX.dim });
-    for (const [x, kind] of [[480, 'fox'], [560, 'heart']] as const) addSpirit(this, x, 640, kind).setScale(2);
-    for (const [x, hero, kind] of [[680, 'body', 'fox'], [780, 'sword', 'heart']] as const) {
-      const base = this.add.ellipse(0, -2, 22, 8, COLORS.gold).setStrokeStyle(1, COLORS.outline);
-      const tok = this.add.container(x, 650, [base, addImg(this, 0, 0, `tok_${hero}`).setOrigin(0.5, 1)]).setScale(2);
-      possessionAura(this, tok, kind);
-    }
     for (const [x, tile, obj] of [[900, 'tile_shop', 'obj_shop'], [990, 'tile_minigame', 'obj_minigame_dice'], [1080, 'tile_hospital', 'obj_hospital']] as const) {
       addImg(this, x, 590, tile).setOrigin(0, 0).setScale(72 / 64);
       addImg(this, x + 36, 590 + 54, obj).setOrigin(0.5, 1);

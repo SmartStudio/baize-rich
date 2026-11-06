@@ -1,18 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { PendingChoice } from '../src/core/choices';
 import type { Game } from '../src/core/engine';
-import { nextFloat } from '../src/core/rng';
-import { ringGame, script } from './helpers';
+import { ringGame, rngFor, script } from './helpers';
 
 // Seats in newGame: 0 A 体修(body), 1 B 法修(magic), 2 C 剑修(sword), 3 D 丹师(alch).
-
-/** An rng state whose next d6 rolls are exactly `rolls`. */
-function rngFor(rolls: number[]): number {
-  for (let s = 1; ; s++) {
-    const h = { rng: s };
-    if (rolls.every((r) => 1 + Math.floor(nextFloat(h) * 6) === r)) return s;
-  }
-}
 
 /** Round 1, everyone far apart on the ring, plenty of stones, no pills. */
 function spread(g: Game): void {
@@ -26,51 +17,103 @@ function spread(g: Game): void {
 }
 
 const rules = ringGame().data.config.rules;
+const duel = ringGame().data.config.duel;
 
-describe('§17 斗法', () => {
-  it('higher total wins and takes duelStealPct of the loser stones; bets are spent either way', () => {
+describe('斗法', () => {
+  const lastDuel = (g: Game) => g.log.filter((x) => x.type === 'duel').pop()!.duel!;
+
+  it('higher 1D6 total wins and takes one pill', () => {
     const g = ringGame();
     spread(g);
-    const [a, b] = [g.state.players[3], g.state.players[1]]; // 丹师 attacks 法修: no hero bonus
-    a.pills = 2;
-    b.pills = 1;
-    g.state.rng = rngFor([2, 5]);
-    // attacker 2 + 2 pills = 4, defender 5 + 1 pill = 6
-    g.runFlow(g.testDuel(3, 1), script({ duelBet: (c) => (c.player === 3 ? 'b2' : 'b1') }));
-    const e = g.log.find((x) => x.type === 'duel')!;
-    expect(e.duel).toMatchObject({ rolls: [2, 5], bets: [2, 1], totals: [4, 6], winner: 1, loser: 3, amount: 200 });
-    expect(a.stones).toBe(800);
-    expect(b.stones).toBe(1200);
-    expect(a.pills).toBe(0);
-    expect(b.pills).toBe(0);
+    const [d, b] = [g.state.players[3], g.state.players[1]]; // 丹师 vs 法修: no hero bonus
+    b.pills = 2;
+    g.state.rng = rngFor([5, 2]);
+    g.runFlow(g.testDuel(3, 1), script({}));
+    expect(lastDuel(g)).toMatchObject({ rolls: [5, 2], bonus: [0, 0], winner: 3, loser: 1, pills: duel.steal });
+    expect([d.pills, b.pills]).toEqual([duel.steal, 2 - duel.steal]);
   });
 
-  it('a tie goes to the defender', () => {
+  it('a loser without pills hands over lossStones; a tie goes to the defender', () => {
     const g = ringGame();
     spread(g);
+    g.state.rng = rngFor([6, 1]);
+    g.runFlow(g.testDuel(3, 1), script({}));
+    expect(g.state.players[3].stones).toBe(1000 + duel.lossStones);
     g.state.rng = rngFor([4, 4]);
     g.runFlow(g.testDuel(3, 1), script({}));
-    expect(g.log.find((x) => x.type === 'duel')!.duel!.winner).toBe(1);
+    expect(lastDuel(g).winner).toBe(1);
   });
 
-  it('剑修 attacks with +1 and 体修 defends with +1', () => {
+  it('剑修 attacks +1, 体修 defends +1, and the higher realm adds the gap', () => {
     const g = ringGame();
     spread(g);
     g.state.rng = rngFor([3, 3]);
     g.runFlow(g.testDuel(2, 0), script({}));
-    const d = g.log.find((x) => x.type === 'duel')!.duel!;
-    expect(d.bonus).toEqual([rules.swordDuelAttack, rules.bodyDuelDefense]);
-    expect(d.winner).toBe(0); // 4 vs 4, tie to the defender
+    expect(lastDuel(g).bonus).toEqual([duel.swordAttack, duel.bodyDefense]);
+    g.state.players[3].realm = 2;
+    g.state.rng = rngFor([3, 3]);
+    g.runFlow(g.testDuel(1, 3), script({}));
+    expect(lastDuel(g).bonus).toEqual([0, 2 + duel.senseBonus]); // 结丹 has 神识
   });
 
-  it('the stake is capped at duelStealMax', () => {
+  it('宝光: a defender holding glowAt+ pills gives the attacker +1 and loses two pills', () => {
     const g = ringGame();
     spread(g);
-    g.state.players[1].stones = 5000;
-    g.state.rng = rngFor([6, 1]);
+    const b = g.state.players[1];
+    b.pills = duel.glowAt;
+    g.state.rng = rngFor([4, 4]);
     g.runFlow(g.testDuel(3, 1), script({}));
-    expect(g.log.find((x) => x.type === 'duel')!.amount).toBe(rules.duelStealMax);
-    expect(g.state.players[3].stones).toBe(1000 + rules.duelStealMax);
+    expect(lastDuel(g)).toMatchObject({ bonus: [duel.glowBonus, 0], winner: 3, pills: duel.glowSteal });
+    expect(b.pills).toBe(duel.glowAt - duel.glowSteal);
+  });
+
+  it('宝光外泄 makes a player glow for the round even without pills', () => {
+    const g = ringGame();
+    spread(g);
+    g.runFlow(g.testFortune(1, 'leak'), script({}));
+    g.state.rng = rngFor([4, 4]);
+    g.runFlow(g.testDuel(3, 1), script({}));
+    expect(lastDuel(g).bonus).toEqual([duel.glowBonus, 0]);
+  });
+
+  it('元婴遁: a 元婴 loser keeps the loot once per round', () => {
+    const g = ringGame();
+    spread(g);
+    const b = g.state.players[1];
+    b.realm = 3;
+    b.pills = 1;
+    g.state.players[3].realm = 3;
+    g.state.rng = rngFor([6, 1, 6, 1]);
+    g.runFlow(g.testDuel(3, 1), script({}));
+    expect(lastDuel(g)).toMatchObject({ winner: 3, escaped: true, pills: 0 });
+    g.runFlow(g.testDuel(3, 1), script({}));
+    expect(lastDuel(g)).toMatchObject({ winner: 3, escaped: false, pills: 1 });
+    expect(b.pills).toBe(0);
+  });
+
+  it('金光符 blocks the duel before any dice are rolled', () => {
+    const g = ringGame();
+    spread(g);
+    const b = g.state.players[1];
+    b.hand = ['goldlight'];
+    b.pills = 2;
+    g.runFlow(g.testDuel(3, 1), script({ guardReact: 'goldlight' }));
+    expect(g.log.some((x) => x.type === 'duel')).toBe(false);
+    expect(b.pills).toBe(2);
+    expect(b.hand).toEqual([]);
+  });
+
+  it('夺灵符 takes one pill unless 金光符 answers', () => {
+    const g = ringGame();
+    spread(g);
+    const [d, b] = [g.state.players[3], g.state.players[1]];
+    d.hand = ['drain', 'drain'];
+    b.pills = 2;
+    g.runFlow(g.testActionPhase(3), script({ action: ['cast:drain', 'end'], target: 'p1' }));
+    expect([d.pills, b.pills]).toEqual([1, 1]);
+    b.hand = ['goldlight'];
+    g.runFlow(g.testActionPhase(3), script({ action: ['cast:drain', 'end'], target: 'p1', guardReact: 'goldlight' }));
+    expect([d.pills, b.pills]).toEqual([1, 1]);
   });
 
   it('after a walk, offers a duel to players passed on the way or on the landing tile, at most once per turn', () => {
@@ -85,122 +128,7 @@ describe('§17 斗法', () => {
     const offer = seen.find((c) => c.kind === 'duel')!;
     expect(offer.options.map((o) => o.id)).toEqual(['p1', 'p2', 'none']);
     expect(g.log.filter((x) => x.type === 'duel')).toHaveLength(1);
-    expect(g.state.turn.duelDone).toBe(true);
-    // the defender is shielded for the rest of the round
-    expect(g.duelEligible(2)).toBe(false);
-  });
-
-  it('players in 面壁 cannot be challenged', () => {
-    const g = ringGame();
-    spread(g);
-    g.state.players[3].pos = 'R1';
-    g.state.players[1].pos = 'R3';
-    g.state.players[1].jailed = true;
-    const seen: PendingChoice[] = [];
-    g.runFlow(g.testMove(3, 4), script({ buy: 'no' }, seen));
-    expect(seen.some((c) => c.kind === 'duel')).toBe(false);
-  });
-});
-
-describe('§17 悬赏令', () => {
-  it('goes to the unique 修为 leader at or above bountyMinCult, and is withdrawn on a tie', () => {
-    const g = ringGame();
-    g.state.players[1].cultBase = rules.bountyMinCult - 1;
-    g.testUpdateBounty();
-    expect(g.state.bountySeat).toBeNull();
-    g.state.players[1].cultBase = rules.bountyMinCult;
-    g.testUpdateBounty();
-    expect(g.state.bountySeat).toBe(1);
-    g.state.players[2].cultBase = rules.bountyMinCult;
-    g.testUpdateBounty();
-    expect(g.state.bountySeat).toBeNull();
-    expect(g.log.filter((e) => e.type === 'bounty')).toHaveLength(2);
-  });
-
-  it('beating the holder in a duel pays bountyDuelCultivation 修为 and clears the bounty', () => {
-    const g = ringGame();
-    spread(g);
-    g.state.players[1].cultBase = 3;
-    g.testUpdateBounty();
-    g.state.rng = rngFor([6, 1]);
-    g.runFlow(g.testDuel(3, 1), script({}));
-    expect(g.state.players[3].cultBase).toBe(rules.bountyDuelCultivation);
-    expect(g.state.players[3].stats.bountyClaims).toBe(1);
-    expect(g.state.bountySeat).toBeNull();
-    expect(g.log.find((e) => e.type === 'duel')!.duel!.bounty).toBe(true);
-  });
-
-  it('the holder winning keeps the bounty', () => {
-    const g = ringGame();
-    spread(g);
-    g.state.players[1].cultBase = 3;
-    g.testUpdateBounty();
-    g.state.rng = rngFor([1, 6]);
-    g.runFlow(g.testDuel(3, 1), script({}));
-    expect(g.state.bountySeat).toBe(1);
-    expect(g.state.players[3].cultBase).toBe(0);
-  });
-});
-
-describe('§17 禁制', () => {
-  function ownR5(g: Game): void {
-    g.state.tiles.R5.owner = 0;
-    g.state.tiles.R5.level = 1;
-  }
-
-  it('is placed from the action phase for trapPillCost 灵丹, at most trapMaxPerPlayer at a time', () => {
-    const g = ringGame();
-    spread(g);
-    for (const n of ['R1', 'R2', 'R3']) g.state.tiles[n].owner = 0;
-    g.state.players[0].pills = 5;
-    expect(g.trapSpots(0)).toEqual(['R1', 'R2', 'R3']);
-    g.state.tiles.R1.trap = true;
-    g.state.tiles.R2.trap = true;
-    expect(g.trapSpots(0)).toEqual([]);
-  });
-
-  it('an opponent stopping there pays rent, then trapStones, is bound next turn, and the trap is used up', () => {
-    const g = ringGame();
-    spread(g);
-    ownR5(g);
-    g.state.tiles.R5.trap = true;
-    const v = g.state.players[3];
-    v.pos = 'R1';
-    g.runFlow(g.testMove(3, 4), script({}));
-    expect(v.pos).toBe('R5');
-    const rent = v.stats.rentPaid;
-    expect(rent).toBeGreaterThan(0);
-    expect(v.stones).toBe(1000 - rent - rules.trapStones);
-    expect(v.bound).toBe(true);
-    expect(g.state.tiles.R5.trap).toBe(false);
-    expect(g.state.players[0].stats.trapTriggers).toBe(1);
-  });
-
-  it('does not fire on the owner or on the bound stay-settle', () => {
-    const g = ringGame();
-    spread(g);
-    ownR5(g);
-    g.state.tiles.R5.trap = true;
-    g.state.players[0].pos = 'R1';
-    g.runFlow(g.testMove(0, 4), script({}));
-    expect(g.state.tiles.R5.trap).toBe(true);
-    // a bound opponent standing on it settles in place without triggering it
-    const v = g.state.players[3];
-    v.pos = 'R5';
-    v.bound = true;
-    g.runFlow(g.testPlayTurn(3), script({}));
-    expect(g.state.tiles.R5.trap).toBe(true);
-  });
-
-  it('is cleared when the land changes hands', () => {
-    const g = ringGame();
-    spread(g);
-    ownR5(g);
-    g.state.tiles.R5.trap = true;
-    g.state.players[0].stones = 10;
-    g.state.tiles.R9 = { owner: 1, level: 1, trap: false };
-    g.runFlow(g.testPayRent(0, 'R9'), script({})); // 破产重整: lands go back to the bank
-    expect(g.state.tiles.R5).toEqual({ owner: null, level: 0, trap: false });
+    expect(g.duelCandidates(3)).toEqual([]);
   });
 });
 
@@ -209,7 +137,8 @@ describe('§12 主动技能', () => {
     const g = ringGame();
     spread(g);
     const c = g.state.players[2];
-    g.state.players[1].pos = 'R5';
+    c.pos = 'R1';
+    g.state.players[1].pos = 'R5'; // 4 steps, inside swordDashRange
     g.state.rng = rngFor([6, 1]);
     let r: string | undefined;
     const flow = g.testUseSkill(2);

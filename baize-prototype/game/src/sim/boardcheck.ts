@@ -6,8 +6,7 @@ import { ALTAR, Board, REGION_IDS } from '../core/board';
 import type { BoardData, NodeId, TileType } from '../core/types';
 
 const GLYPH: Record<TileType, string> = {
-  start: 'S', land: '.', gate: 'G', trial: 'T', spring: '~', market: '$', furnace: '%', cliff: 'X', array: 'A', shrine: '+', altar: '@',
-  shop: '&', minigame: '?', hospital: 'H',
+  start: 'S', land: '.', gate: 'G', secret: '?', spring: '~', market: '$', alchemy: '%', beast: 'X', ruins: 'R', eye: '+', altar: '@',
 };
 
 type State = { node: NodeId; from: NodeId | null };
@@ -42,14 +41,9 @@ export function checkBoard(data: BoardData): string[] {
   if (problems.length) return problems; // the Board class cannot be built
 
   const count = (t: TileType) => data.nodes.filter((n) => n.type === t).length;
-  if (count('start') !== 1) problems.push(`expected 1 start, found ${count('start')}`);
-  if (count('cliff') !== 1) problems.push(`expected 1 cliff, found ${count('cliff')}`);
-  if (count('altar') !== 1) problems.push(`expected 1 altar, found ${count('altar')}`);
-  if (count('hospital') !== 1) problems.push(`expected 1 hospital, found ${count('hospital')}`);
-  for (const n of data.nodes) {
-    if (n.type === 'minigame' && (!n.game || !data.games?.[n.game])) problems.push(`minigame ${n.id} needs a game listed in games`);
+  for (const t of ['start', 'beast', 'ruins', 'eye', 'altar'] as TileType[]) {
+    if (count(t) !== 1) problems.push(`expected 1 ${t}, found ${count(t)}`);
   }
-  for (const id of data.spiritSpawns ?? []) if (!data.nodes.some((n) => n.id === id)) problems.push(`spirit spawn ${id} is not a node`);
   const altar = data.nodes.find((n) => n.id === ALTAR);
   if (!altar || altar.type !== 'altar' || !altar.rect) problems.push(`node ${ALTAR} must be the altar with a rect`);
   if (problems.length) return problems;
@@ -96,7 +90,7 @@ export function checkBoard(data: BoardData): string[] {
   const queue: State[] = [];
   const push = (s: State) => { if (!seen.has(key(s))) { seen.set(key(s), s); queue.push(s); } };
   push({ node: b.startId, from: null });
-  for (const id of b.allNodeIds()) push({ node: id, from: null }); // teleports (cliff, 缩地成寸, 遁地符) land with no heading
+  for (const id of b.allNodeIds()) push({ node: id, from: null }); // teleports land with no heading
   for (let i = 0; i < queue.length; i++) {
     const s = queue[i];
     const outs = forward(b, s);
@@ -125,12 +119,6 @@ export function checkBoard(data: BoardData): string[] {
     if (n.prev.length === 0 || (b.isTwoWay(id) && id !== ALTAR && n.prev.length < 2)) problems.push(`reverse dead end at ${id}`);
   }
 
-  // Main line: every road-network node finds a gate ahead (遁地符), and the demon's path never stalls.
-  for (const id of b.allNodeIds()) {
-    if (!b.node(id).outer) continue;
-    try { b.pathToGate(id); } catch { problems.push(`no gate on the main line after ${id}`); }
-  }
-
   // Lands and streets.
   const streets = data.streets ?? {};
   const names = new Set<string>();
@@ -155,8 +143,7 @@ export function checkBoard(data: BoardData): string[] {
     const has = (t: TileType) => mine.filter((id) => b.node(id).type === t).length;
     const forks = mine.filter((id) => b.node(id).next.length > 1).length;
     if (forks < 2) problems.push(`${r}: ${forks} forks (need ≥2)`);
-    for (const t of ['spring', 'furnace', 'trial', 'minigame'] as TileType[]) if (has(t) < 1) problems.push(`${r}: no ${t}`);
-    if (has('market') + has('shop') < 1) problems.push(`${r}: no market or shop`);
+    for (const t of ['spring', 'alchemy', 'secret', 'market'] as TileType[]) if (has(t) < 1) problems.push(`${r}: no ${t}`);
     const st = Object.entries(streets).filter(([, s]) => s.region === r);
     if (st.length < 3) problems.push(`${r}: ${st.length} streets (need 3)`);
     for (const [sid] of st) {

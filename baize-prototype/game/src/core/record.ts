@@ -16,7 +16,7 @@ export interface SeatControl {
 
 export interface GameRecord {
   format: 'baize-record';
-  version: 2;
+  version: 3;
   /** `config.version` of the data the game was played with. */
   dataVersion: string;
   setup: GameSetup;
@@ -31,7 +31,7 @@ export type ParseResult = { ok: true; record: GameRecord } | { ok: false; error:
 export function toRecord(game: Game, seats: SeatControl[], now: Date = new Date()): GameRecord {
   return {
     format: 'baize-record',
-    version: 2,
+    version: 3,
     dataVersion: game.data.config.version,
     setup: structuredClone(game.setup),
     seats: seats.map(({ human, difficulty, personality }) => ({ human, difficulty, personality })),
@@ -49,7 +49,7 @@ const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object
 export function parseRecord(json: unknown, data: GameData = defaultData): ParseResult {
   const fail = (error: string): ParseResult => ({ ok: false, error });
   if (!isObj(json) || json.format !== 'baize-record') return fail('不是白泽秘境的对局记录文件');
-  if (json.version !== 2) return fail(`不支持的记录版本 ${String(json.version)}（当前只支持 2）`);
+  if (json.version !== 3) return fail(`不支持的记录版本 ${String(json.version)}（当前只支持 3）`);
   if (json.dataVersion !== data.config.version) {
     return fail(`数据版本不符：记录为 ${String(json.dataVersion)}，当前为 ${data.config.version}，无法复现`);
   }

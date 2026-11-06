@@ -5,7 +5,6 @@ import board from '../../../data/board.json';
 import heroes from '../../../data/heroes.json';
 import spells from '../../../data/spells.json';
 import events from '../../../data/events.json';
-import blessings from '../../../data/blessings.json';
 import type { GameData } from './types';
 
 export const defaultData: GameData = {
@@ -14,7 +13,6 @@ export const defaultData: GameData = {
   heroes: heroes as GameData['heroes'],
   spells: spells as GameData['spells'],
   events: events as GameData['events'],
-  blessings: blessings as GameData['blessings'],
 };
 
 /** Deep copy so tests can tweak numbers without affecting other games. */

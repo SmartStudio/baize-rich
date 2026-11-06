@@ -6,9 +6,9 @@ import { AIController, DIFFICULTY_LABEL, PERSONALITY_LABEL } from '../ai/ai';
 import type { PendingChoice } from '../core/choices';
 import { defaultData } from '../core/data';
 import { Game } from '../core/engine';
-import type { GameEvent, GameEventType, MiniGameResult } from '../core/events';
+import type { GameEvent, GameEventType } from '../core/events';
 import { toRecord, type GameRecord } from '../core/record';
-import { countOwned, cultivation, nominalRent, realmName, totalAssets } from '../core/rules';
+import { nominalRent, realmName, totalAssets } from '../core/rules';
 import { ALTAR } from '../core/board';
 import type { GameState, NodeId } from '../core/types';
 import { BoardCamera } from '../ui/BoardCamera';
@@ -31,16 +31,12 @@ import { unionRect } from '../ui/world';
 import type { ResultData } from './ResultScene';
 
 const SLOW_EVENTS = new Set<GameEvent['type']>([
-  'buy', 'rent', 'upgrade', 'downgrade', 'ownerChange', 'divine', 'heaven', 'cult',
-  'eruption', 'demonHit', 'demonGone', 'taskDone', 'event', 'cast', 'block', 'jail', 'veinLord',
-  'bounty', 'trapSet', 'trap', 'skill', 'roadblock', 'roadblockHit', 'roadblockGone',
+  'buy', 'rent', 'upgrade', 'cult', 'event', 'cast', 'block', 'skill', 'roadblock', 'roadblockHit', 'roadblockGone',
 ]);
-
-const SPIRIT_COLOR = { fox: 0xf2b93b, heart: 0xb03a6e } as const;
 
 /** preRoll / action option ids reached through the 出符 menu (C) rather than their own button. */
 const isCastId = (id: string): boolean =>
-  id.startsWith('cast:') || id.startsWith('trap:') || id === 'ult' || id === 'shrink' || id === 'skill';
+  id.startsWith('cast:') || id === 'skill';
 
 /**
  * Animation budget per beat, in ms at 1×. The AI profile lands an AI turn at about 4–5 s; a human
@@ -49,11 +45,9 @@ const isCastId = (id: string): boolean =>
  */
 interface Pace {
   step: number;
-  slide: number;
   teleport: number;
   roll: number;
   rollHold: number;
-  demon: number;
   slow: number;
   turnStart: number;
   think: number;
@@ -61,8 +55,8 @@ interface Pace {
 }
 
 const PACE: Record<'ai' | 'human', Pace> = {
-  ai: { step: 200, slide: 400, teleport: 450, roll: 450, rollHold: 280, demon: 550, slow: 300, turnStart: 300, think: 80, thinkModal: 220 },
-  human: { step: 240, slide: 480, teleport: 540, roll: 700, rollHold: 600, demon: 650, slow: 650, turnStart: 1100, think: 0, thinkModal: 0 },
+  ai: { step: 200, teleport: 450, roll: 450, rollHold: 280, slow: 300, turnStart: 300, think: 80, thinkModal: 220 },
+  human: { step: 240, teleport: 540, roll: 700, rollHold: 600, slow: 650, turnStart: 1100, think: 0, thinkModal: 0 },
 };
 const ROUND_WAIT = 700;
 const CUTSCENE_MS = 1500;
@@ -71,47 +65,22 @@ const SPEEDS = [0.5, 1, 2, 4];
 
 /** Big events get a full-width cutscene banner; a null spec means this instance is not big. */
 const CUTSCENES: Partial<Record<GameEventType, (g: Game, e: GameEvent) => BannerSpec | null>> = {
-  street: (g, e) => ({ title: '整街！', sub: e.text, icon: portrait(g, e), color: PLAYER_COLORS[e.player!] }),
-  blast: (_g, e) => ({ title: '爆炎阵！', sub: e.text, icon: 'card_blast', color: COLORS.bad }),
-  spirit: (g, e) => {
-    const sp = e.spirit!;
-    if (sp.action !== 'possess' && sp.action !== 'transfer') return null;
-    const title = sp.action === 'transfer' ? '心魔转附' : `${g.spiritName(sp.kind)}附身`;
-    return { title, sub: e.text, icon: `spirit_${sp.kind}`, color: SPIRIT_COLOR[sp.kind] };
-  },
   breakthrough: (g, e) => ({ title: '破境！', sub: e.text, icon: portrait(g, e), color: COLORS.gold }),
-  demonSpawn: (_g, e) => ({ title: '天魔降世', sub: e.text, icon: 'demon', color: 0xc04ad0, dim: true }),
   manifest: (_g, e) => ({ title: '白泽现世', sub: e.text, icon: 'baize', color: 0xe6e4f0, dim: true }),
-  ult: (g, e) => {
-    const p = g.state.players[e.player!];
-    const ult = g.data.heroes.find((h) => h.id === p.hero)!.ult;
-    return { title: `大招·${ult.name}`, sub: `${p.name}：${ult.desc}`, icon: portrait(g, e), color: PLAYER_COLORS[e.player!] };
-  },
   duel: (g, e) => ({ title: '斗法', sub: e.text, icon: portrait(g, e), color: PLAYER_COLORS[e.player!] }),
   bankrupt: (g, e) => ({ title: '破产重整', sub: e.text, icon: portrait(g, e), color: COLORS.bad }),
-  win: (g, e) => ({ title: g.state.endReason === 'cultivation' ? '渡劫飞升' : '夺得魁首', sub: e.text, icon: portrait(g, e), color: COLORS.gold, dim: true }),
+  win: (g, e) => ({ title: g.state.endReason === 'ascend' ? '渡劫化神' : '夺得魁首', sub: e.text, icon: portrait(g, e), color: COLORS.gold, dim: true }),
 };
 
 /** Smaller beats get a non-blocking ribbon under the top bar. */
 const RIBBONS: Partial<Record<GameEventType, (g: Game, e: GameEvent) => { title: string; color: number } | null>> = {
-  special: (g, e) => ({ title: e.card ? '集市强卖' : `改建·${g.data.board.specials?.[e.special!]?.name ?? e.special}`, color: COLORS.gold }),
-  shop: () => ({ title: '百宝阁', color: COLORS.gold }),
-  barrier: (_g, e) => ({ title: '路障', color: PLAYER_COLORS[e.player!] }),
-  barrierHit: () => ({ title: '撞上路障', color: COLORS.bad }),
-  blastSet: (_g, e) => ({ title: '暗埋爆炎阵', color: PLAYER_COLORS[e.player!] }),
-  hospital: () => ({ title: '医馆休养', color: 0x6fb7d8 }),
-  spirit: (g, e) => (e.spirit!.action === 'expire' ? { title: `${g.spiritName(e.spirit!.kind)}离去`, color: SPIRIT_COLOR[e.spirit!.kind] } : null),
 };
 
 /** Sub-menu answer meaning "re-open narrowed to this tile". */
 const NARROW = '@node:';
 
-/** Rebuild a mini-game overlay spec from its result event, for watching someone else play. */
-function miniSpec(mg: MiniGameResult): MiniGameSpec {
-  return mg.game === 'dice'
-    ? { game: 'dice', stake: mg.stake ?? 0, side: mg.side ?? 'big', roll: mg.roll ?? [1, 1], win: mg.tier === 'perfect' }
-    : { game: 'alchemy' };
-}
+/** The mini-game overlay spec used when watching someone else's 火候. */
+const HEAT_SPEC: MiniGameSpec = { game: 'alchemy' };
 
 function portrait(g: Game, e: GameEvent): string {
   return `por_${g.state.players[e.player ?? 0].hero}`;
@@ -120,8 +89,9 @@ function portrait(g: Game, e: GameEvent): string {
 /** Resource deltas between two snapshots that float up from the token as "+200 灵石". */
 const DELTAS: { label: string; color: [string, string]; of: (g: Game, st: GameState, seat: number) => number }[] = [
   { label: '灵石', color: [HEX.good, HEX.bad], of: (_g, st, i) => st.players[i].stones },
-  { label: '灵丹', color: ['#F0A060', HEX.bad], of: (_g, st, i) => st.players[i].pills },
-  { label: '修为', color: [HEX.gold, HEX.bad], of: (g, st, i) => cultivation(st, g.data, i) },
+  { label: '丹药', color: ['#F0A060', HEX.bad], of: (_g, st, i) => st.players[i].pills },
+  { label: '灵草', color: [HEX.good, HEX.bad], of: (_g, st, i) => st.players[i].herbs },
+  { label: '修为', color: [HEX.gold, HEX.bad], of: (_g, st, i) => st.players[i].cult },
 ];
 
 export class GameScene extends Phaser.Scene {
@@ -237,14 +207,11 @@ export class GameScene extends Phaser.Scene {
     if (!moved && this.camMoving) this.showTile();
     this.camMoving = moved;
     const st = this.shownState;
-    const world = this.boardView.world;
     this.minimap.update(
       this.cam.visibleRect(),
       st.players.map((_, i) => this.boardView.tokenFocus(i)),
       st.current,
-      st.demon ? world.centre(st.demon.node) : null,
       this.cam.fits(),
-      this.boardView.spiritPoints(),
     );
   }
 
@@ -297,7 +264,7 @@ export class GameScene extends Phaser.Scene {
     const st = this.engine.state;
     for (const e of this.engine.log.slice(-3)) if (e.text) this.logPanel.log(e.text);
     this.logPanel.log(`—— 已恢复上局：第 ${st.round} 轮 ——`);
-    if (st.manifested && st.round === this.engine.data.config.baizeManifestRound) this.boardView.showBaize(true);
+    if (st.manifested && st.round === this.engine.data.config.manifest.round) this.boardView.showBaize(true);
   }
 
   private async drain(): Promise<void> {
@@ -312,15 +279,11 @@ export class GameScene extends Phaser.Scene {
     if (e.text) this.logPanel.log(e.text);
     const seat = e.player ?? 0;
     const pace = PACE[this.isHuman(e.snap?.current ?? this.engine.state.current) ? 'human' : 'ai'];
-    if (e.snap && (e.type === 'step' || e.type === 'slide' || e.type === 'teleport')) this.boardView.markCurrent(e.snap);
+    if (e.snap && (e.type === 'step' || e.type === 'teleport')) this.boardView.markCurrent(e.snap);
     switch (e.type) {
       case 'step':
         this.cam.follow(seat);
         await this.boardView.moveToken(seat, e.node!, this.ms(pace.step));
-        break;
-      case 'slide':
-        this.cam.follow(seat);
-        await this.boardView.moveToken(seat, e.node!, this.ms(pace.slide), false);
         break;
       case 'teleport':
         if (e.from && e.from !== e.node) this.cam.frameTeleport(unionRect([this.boardView.nodeRect(e.from), this.boardView.nodeRect(e.node!)]), seat);
@@ -334,18 +297,12 @@ export class GameScene extends Phaser.Scene {
           this.side.setDice(e.dice);
         }
         break;
-      case 'demonMove':
-        await this.boardView.moveDemon(e.from, e.node!, this.ms(pace.demon));
-        break;
-      case 'demonSpawn':
-        await Promise.all([this.cutscene(e), this.boardView.moveDemon(undefined, e.node!, this.ms(pace.demon))]);
-        break;
       case 'manifest':
         this.boardView.showBaize(true);
         await this.cutscene(e);
         break;
       case 'roundStart':
-        if (e.snap && e.snap.round !== this.engine.data.config.baizeManifestRound) this.boardView.showBaize(false);
+        if (e.snap && e.snap.round !== this.engine.data.config.manifest.round) this.boardView.showBaize(false);
         if (e.snap) this.roundRibbon(e.snap);
         await this.wait(this.ms(ROUND_WAIT));
         break;
@@ -353,21 +310,13 @@ export class GameScene extends Phaser.Scene {
         this.cam.recentre(seat);
         if (e.snap) await this.turnIntro(e.snap, seat);
         break;
-      case 'spirit':
-        await this.boardView.animateSpirit(e.spirit!, this.ms(e.spirit!.action === 'move' ? pace.slide : pace.teleport));
-        await this.present(e, pace);
-        break;
-      case 'street':
-        this.boardView.flashStreet(e.node!, seat, this.ms(CUTSCENE_MS));
-        await this.present(e, pace);
-        break;
       case 'miniGame':
         if (this.playedMini) {
           this.playedMini = false;
           await this.wait(this.ms(pace.slow));
         } else {
           const p = (e.snap ?? this.engine.state).players[seat];
-          await playMiniGame(this.hud, miniSpec(e.miniGame!), { auto: e.miniGame!.tier, speed: this.speed, who: p.name });
+          await playMiniGame(this.hud, HEAT_SPEC, { auto: e.miniGame!.tier, speed: this.speed, who: p.name });
         }
         break;
       default:
@@ -399,22 +348,11 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /**
-   * §18.3 爆炎阵 are hidden from opponents. Its owner sees them when that seat is the only human, or is
-   * the human whose hand is on screen. An AI-only game shows them faintly so a spectator can follow.
-   */
-  private blastAlpha(seat: number): number {
-    const humans = this.ais.filter((a) => a === null).length;
-    if (humans === 0) return 0.35;
-    if (!this.isHuman(seat)) return 0;
-    return humans === 1 || this.handViewer(this.shownState) === seat ? 1 : 0;
-  }
-
   private roundRibbon(st: GameState): void {
     const cfg = this.engine.data.config;
-    const left = cfg.baizeManifestRound - st.round;
-    const sub = st.round === cfg.rounds ? '最终轮！修为最高者将夺得魁首'
-      : left > 0 ? `白泽现世还有 ${left} 轮` : `修为先到 ${cfg.winCultivation} 即胜`;
+    const left = cfg.manifest.round - st.round;
+    const sub = st.round === cfg.rounds ? '最终轮！境界最高者将夺得魁首'
+      : left > 0 ? `白泽现世还有 ${left} 轮` : '先渡劫化神者即胜';
     this.fx.ribbon(`第 ${st.round} / ${cfg.rounds} 轮`, sub, COLORS.gold, STAGE.cy, this.ms(1400));
   }
 
@@ -435,7 +373,7 @@ export class GameScene extends Phaser.Scene {
     }, this.ms(PACE.human.turnStart));
   }
 
-  /** Float each seat's 灵石 / 灵丹 / 修为 change since the last snapshot over its token. */
+  /** Float each seat's 灵石 / 丹药 / 灵草 / 修为 change since the last snapshot over its token. */
   private popDeltas(snap: GameState): void {
     const prev = this.lastSnap;
     this.lastSnap = snap;
@@ -452,9 +390,9 @@ export class GameScene extends Phaser.Scene {
 
   private renderAll(state: GameState, syncTokens = true): void {
     this.shownState = state;
-    this.boardView.render(state, (seat) => this.blastAlpha(seat));
+    this.boardView.render(state);
     if (syncTokens) this.boardView.syncTokens(state);
-    this.cards.render(state, this.handViewer(state));
+    this.cards.render(state);
     this.top.render(state);
     this.side.setTurn(state, this.isHuman(state.current));
     this.side.btnSpeed.setLabel(`倍速 ×${this.speed} · F`);
@@ -479,10 +417,9 @@ export class GameScene extends Phaser.Scene {
       state: structuredClone(st),
       ranking: g.ranking(),
       rows: st.players.map((_, i) => {
-        const c = cultivation(st, g.data, i);
         const s = this.session.seats[i];
         return {
-          cult: c, realm: realmName(g.data, c), assets: totalAssets(st, g.board, g.data, i),
+          cult: st.players[i].cult, realm: realmName(g.data, st.players[i].realm), assets: totalAssets(st, g.board, g.data, i),
           label: s.human ? '玩家' : `AI·${PERSONALITY_LABEL[s.personality]}`,
         };
       }),
@@ -501,13 +438,9 @@ export class GameScene extends Phaser.Scene {
     return this.modalChoice(c);
   }
 
-  /** §18.5 The human plays the overlay; alchemy's tier is the answer, dice only reveals the engine's roll. */
+  /** §18.5 The human plays the alchemy overlay; its tier is the answer. */
   private async playHumanMini(c: Extract<PendingChoice, { kind: 'miniGame' }>): Promise<string> {
-    const { game, diceBet, dice } = c.ctx;
-    const win = c.options[0].id === 'perfect';
-    const spec: MiniGameSpec = game === 'dice' && diceBet && dice
-      ? { game: 'dice', stake: diceBet.stake, side: diceBet.side, roll: dice, win }
-      : { game: 'alchemy' };
+    const spec: MiniGameSpec = { game: 'alchemy' };
     const multiHuman = this.ais.filter((a) => a === null).length > 1;
     const tier = await playMiniGame(this.hud, spec, { who: multiHuman ? this.engine.state.players[c.player].name : undefined });
     this.playedMini = true;
@@ -554,7 +487,7 @@ export class GameScene extends Phaser.Scene {
     this.frameTargets(c.player);
     const where = only ? `【${this.engine.board.node(only).name}】` : '';
     const id = await this.modal.open({
-      title: which === 'upgrade' ? (where ? `升级 / 改建${where}` : '升级 / 改建洞府（每回合 1 次）') : '符箓 / 大招 / 神通 / 技能 / 禁制',
+      title: which === 'upgrade' ? (where ? `升级 / 改建${where}` : '升级 / 改建洞府（每回合 1 次）') : '符箓 / 技能',
       options: opts.map((o) => ({ id: o.id, label: o.label, hint: o.hint })),
       closable: true, cancelId: null, placement: which === 'upgrade' ? 'side' : 'center', avoid: this.tokenScreenRect(c.player),
     });
@@ -595,38 +528,22 @@ export class GameScene extends Phaser.Scene {
     const p = g.state.players[c.player];
     let desc = c.desc ?? '';
     if (this.nodeOptions.size > 9) desc += '\n也可直接点击棋盘上高亮的格子';
-    if (c.kind === 'heavenPick') this.cards.render({ ...this.shownState, current: c.player }, c.player);
     let preview: ModalSpec['preview'];
     if (c.kind === 'rentReact') desc += `（可用避劫符 ${p.hand.filter((x) => x === 'evade').length} 张）`;
     if (c.kind === 'guardReact') desc += `（可用金光符 ${p.hand.filter((x) => x === 'goldlight').length} 张）`;
     if (c.kind === 'buy' && c.ctx.node) {
       const n = g.board.node(c.ctx.node);
       const region = n.region!;
-      const mine = countOwned(g.state, g.board, c.player, region);
-      const others = Math.max(...g.state.players.filter((o) => o.seat !== c.player).map((o) => countOwned(g.state, g.board, o.seat, region)));
-      const lines = [desc, `基础租金 ${nominalRent(g.data, n.price!, 0)} 灵石 · 本域已占 ${mine}/5`];
-      if (mine + 1 >= g.data.config.veinLordMinLands && mine + 1 > others && g.state.veinLords[region] !== c.player) {
-        lines.push(`买下即成为${g.data.board.regions[region].name}灵脉之主 · 修为 +${g.data.config.veinLordCultivation}`);
-      }
-      if (mine + 1 === g.board.landsInRegion(region).length) lines.push('买下即一域独占 · 租金 ×2');
-      desc = lines.join('\n');
+      desc = [desc, `基础租金 ${nominalRent(g.data, n.price!, 0)} 灵石`].join('\n');
       preview = { tile: `tile_land_${region}`, obj: `decor_${region}` };
     }
-    if (c.kind === 'shop') preview = { tile: 'tile_shop', obj: 'obj_shop' };
-    if (c.kind === 'diceBet') preview = { tile: 'tile_minigame', obj: 'obj_minigame_dice' };
     const multiHuman = this.ais.filter((a) => a === null).length > 1;
-    const title = multiHuman || c.kind === 'heavenPick' ? `${p.name} · ${c.title}` : c.title;
-    const cards = c.kind === 'divinePick' || c.kind === 'heavenPick';
-    const options: ModalOption[] = c.options.map((o) => ({
-      id: o.id, label: o.label, hint: o.hint,
-      icon: c.kind === 'divinePick' ? `div_${o.value}` : c.kind === 'heavenPick' ? `hv_${o.value}` : undefined,
-    }));
+    const title = multiHuman ? `${p.name} · ${c.title}` : c.title;
+    const options: ModalOption[] = c.options.map((o) => ({ id: o.id, label: o.label, hint: o.hint }));
     const id = await this.modal.open({
       title, desc: desc || undefined, options, defaultId: c.defaultId, cancelId: c.cancelId, preview,
       placement: this.nodeOptions.size >= 2 ? 'side' : 'center',
-      layout: cards ? 'cards' : 'list',
-      cardFrame: c.kind === 'heavenPick' ? 'card_heaven' : 'card_divine',
-      cardLabel: c.kind === 'heavenPick' ? '天赐' : '神通',
+      layout: 'list',
       numbered: c.kind !== 'rollValue',
       avoid: this.tokenScreenRect(c.player),
     });
