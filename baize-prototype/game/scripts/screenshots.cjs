@@ -30,11 +30,26 @@ async function waitScene(page, key, ms = 8000) {
   throw new Error(`scene ${key} never became active`);
 }
 
+// Take the first option on every prompt until the engine asks the human for `kind`.
+async function answerUntil(page, kind, ms = 15000) {
+  const t0 = Date.now();
+  while (Date.now() - t0 < ms) {
+    const p = await page.evaluate(() => {
+      const q = window.__baize.pending;
+      return q && q.player === 0 ? q.kind : null;
+    });
+    if (p === kind) return;
+    if (p && p !== 'preRoll' && p !== 'action') await page.keyboard.press('Space');
+    await sleep(300);
+  }
+  throw new Error(`never reached a human ${kind} prompt`);
+}
+
 // New game from a clean slate: 标题 → 选修士（默认第一位，作为「你」）→ 对阵 → 对局.
-// The tutorial is marked seen and the autosave cleared so 空格 always means 开始游戏.
+// The tutorial is marked seen, the in-game guide switched off and the autosave cleared so 空格 always means 开始游戏.
 async function startQuickGame(page, url, shots = {}) {
   await page.goto(url);
-  await page.evaluate(() => { localStorage.setItem('baize.tutorialSeen', '1'); localStorage.removeItem('baize.autosave'); });
+  await page.evaluate(() => { localStorage.setItem('baize.tutorialSeen', '1'); localStorage.setItem('baize.coach', '{"armed":false,"seen":[]}'); localStorage.removeItem('baize.autosave'); });
   await page.goto(url);
   await waitScene(page, 'Title');
   await sleep(1500);
@@ -75,7 +90,7 @@ function choiceScenarios() {
 
 async function resume(page, record) {
   await page.goto(BASE);
-  await page.evaluate((r) => { localStorage.setItem('baize.tutorialSeen', '1'); localStorage.setItem('baize.autosave', JSON.stringify(r)); }, record);
+  await page.evaluate((r) => { localStorage.setItem('baize.tutorialSeen', '1'); localStorage.setItem('baize.coach', '{"armed":false,"seen":[]}'); localStorage.setItem('baize.autosave', JSON.stringify(r)); }, record);
   await page.goto(BASE);
   await waitScene(page, 'Title');
   await sleep(800);
@@ -159,10 +174,13 @@ async function tourShots(page, errors) {
   await page.keyboard.press('Space');
   await sleep(900);
   await shot(page, '02b-dice.png');
-  await sleep(2100);
+  await answerUntil(page, 'buy'); // a roll can pass a fork first
+  await sleep(600);
   await shot(page, '03-human-buy-dialog.png');
   await page.keyboard.press('Space'); // buy
-  await sleep(1200);
+  await answerUntil(page, 'action');
+  await page.waitForFunction(() => window.__phaser.scene.getScene('Game').shownPlan.end);
+  await sleep(300);
   await shot(page, '04-human-action-phase.png');
 
   await page.keyboard.press('c'); // 出符 sub-menu
