@@ -190,7 +190,6 @@ export class AIController implements Controller {
     const st = this.st;
     switch (this.game.heroOf(this.seat).skill.id) {
       case 'sworddash': return this.challengeValue(t as number) + this.landingScore(st.players[t as number].pos) - this.expectedRoll(1);
-      case 'swap': return this.expectedRoll(1, [0], st.players[t as number].pos) - this.expectedRoll(1);
       case 'daze': return 40 + (t === this.leaderOpponent() ? 40 : 0) + this.standing(t as number) * 2;
       case 'roadblock': return this.roadblockValue(t as NodeId);
       default: return 0;
@@ -358,6 +357,17 @@ export class AIController implements Controller {
     return chance >= this.persona.closeAt - failCheap || this.board.distance(this.me.pos, ALTAR) > 10;
   }
 
+  /**
+   * 引雷破境 is offered only off every closure site. Waiting keeps the bar and stores the overflow
+   * as 感悟, so strike only when the odds at the −1 site already clear the persona bar, or time is short.
+   */
+  private shouldThunder(): boolean {
+    if (this.roundsLeft <= 1) return true;
+    const site = this.data.config.breakthrough.thunderSite;
+    const chance = closureChance(this.view, site, stakeFor(this.view, this.stakeTarget(), site));
+    return chance >= (this.difficulty === 'easy' ? 0.4 : this.persona.closeAt);
+  }
+
   // ---------------------------------------------------------- pre-roll ---
 
   private preRoll(c: PendingChoiceOf<'preRoll'>): string {
@@ -391,12 +401,13 @@ export class AIController implements Controller {
     const find = (pred: (v: ActionAct) => boolean) => c.options.find((o) => pred(o.value));
     const close = find((v) => v.t === 'closure');
     if (close && this.shouldClose()) return close.id;
+    const skill = find((v) => v.t === 'skill');
+    if (skill && this.game.heroOf(this.seat).skill.id === 'thunder' && this.shouldThunder()) return skill.id;
     const bestUp = this.bestUpgrade(c.options.filter((o) => o.value.t === 'upgrade').map((o) => (o.value as { node: NodeId }).node));
     if (bestUp) return `upgrade:${bestUp}`;
     if (find((v) => v.t === 'eat') && this.shouldEat()) return 'eat';
     const cast = this.castChoice(find);
     if (cast) return cast;
-    const skill = find((v) => v.t === 'skill');
     if (skill && (this.difficulty !== 'easy' || this.rng.float() < 0.5)) {
       const sk = this.bestSkill();
       if (sk && sk.value > 20) return skill.id;
@@ -486,7 +497,7 @@ export class AIController implements Controller {
       }
       case 'drain':
         return this.bestBy(real, (o) => (o.value.t === 'player' ? this.st.players[o.value.seat].pills * 10 + this.standing(o.value.seat) : 0));
-      case 'sworddash': case 'swap': case 'daze': case 'roadblock':
+      case 'sworddash': case 'daze': case 'roadblock':
         return this.bestSkill()?.id ?? 'cancel';
       default:
         return real[0].id;

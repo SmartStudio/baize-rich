@@ -3,12 +3,12 @@
 import type { Board } from '../core/board';
 import type { ManifestGift } from '../core/choices';
 import {
-  barSize, chance2d6, closureBonus, closureSite, hasAbility, hasTrait, isGlowing, rentFor, sitGain, winRealm,
+  barSize, chance2d6, closureBonus, closureSite, hasAbility, hasTrait, insightRoom, isGlowing, rentFor, sitGain, winRealm,
 } from '../core/rules';
 import type { EventEffect, GameData, GameState, NodeId, PlayerState } from '../core/types';
 
 /** Stone-equivalents used to compare heterogeneous gains. */
-export const VALUE = { pill: 200, herb: 60, cult: 120, card: 90 };
+export const VALUE = { pill: 200, herb: 60, cult: 120, card: 90, insight: 50 };
 
 export interface View {
   st: GameState;
@@ -25,9 +25,11 @@ export function barRoom(v: View): number {
   return p.realm >= winRealm(v.data) ? 0 : barSize(v.data, p) - p.cult;
 }
 
-/** Value of gaining `n` 修为 now; overflow is worth nothing. */
+/** Value of gaining `n` 修为 now; overflow is worth nothing unless it can be stored as 感悟. */
 export function cultValue(v: View, n: number): number {
-  return Math.min(n, barRoom(v)) * VALUE.cult;
+  const kept = Math.min(n, barRoom(v));
+  const stored = Math.min(n - kept, insightRoom(v.data, me(v)));
+  return kept * VALUE.cult + stored * VALUE.insight;
 }
 
 /** Bar full, or one point short (吐纳 fills it at turn end). */

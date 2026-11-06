@@ -121,7 +121,19 @@ export function canClose(state: GameState, data: GameData, seat: number): boolea
 export function fixedBonuses(state: GameState, data: GameData, seat: number, site: number): Omit<BreakthroughBonuses, 'pills' | 'calm'> {
   const p = state.players[seat];
   const b = data.config.breakthrough;
-  return { site, mind: p.mind * b.mindBonus, guidance: p.guidance > 0 ? b.guidanceBonus : 0 };
+  return { site, mind: p.mind * b.mindBonus, guidance: p.guidance > 0 ? b.guidanceBonus : 0, insight: insightBonus(data, p) };
+}
+
+/** 过目不忘: every insightPer 感悟 is +1 at the next breakthrough, at most insightMax. */
+export function insightBonus(data: GameData, p: PlayerState): number {
+  const b = data.config.breakthrough;
+  return Math.min(b.insightMax, Math.floor(p.insight / b.insightPer));
+}
+
+/** 感悟 the player can still store: none without 过目不忘, else up to what reaches insightMax. */
+export function insightRoom(data: GameData, p: PlayerState): number {
+  const b = data.config.breakthrough;
+  return hasTrait(data, p, 'insight') ? b.insightPer * b.insightMax - p.insight : 0;
 }
 
 export function closureBonus(state: GameState, data: GameData, seat: number, site: number): number {

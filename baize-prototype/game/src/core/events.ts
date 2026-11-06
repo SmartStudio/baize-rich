@@ -43,6 +43,8 @@ export interface BreakthroughBonuses {
   site: number;
   mind: number;
   guidance: number;
+  /** 过目不忘 */
+  insight: number;
   calm: number;
 }
 
@@ -59,10 +61,11 @@ export interface BreakthroughResult {
   cultLost: number;
 }
 
-/** 修为变化：gained 是实际计入修为条的点数，wasted 是溢出作废的。 */
+/** 修为变化：gained 计入修为条，insight 溢出存为感悟，wasted 溢出作废。 */
 export interface CultChange {
   source: CultSource;
   gained: number;
+  insight: number;
   wasted: number;
 }
 

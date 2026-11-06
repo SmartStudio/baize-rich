@@ -8,8 +8,8 @@
   {
     "id": "magic", "name": "沈青砚", "school": "法修", "origin": "私塾先生之女 · 雷灵根",
     "quote": "「灵根差？那就多读几遍。」", "color": "white",
-    "passive": { "id": "none", "name": "无", "desc": "无", "traits": [] },
-    "skill": { "id": "swap", "name": "乾坤挪移", "timing": "preroll", "cooldown": 2, "desc": "掷骰前与 8 格内一名他人互换位置（不结算），再照常掷骰" }
+    "passive": { "id": "recall", "name": "过目不忘", "desc": "修为条满后多出的修为存为感悟（最多 4 点）；闭关时每 2 点感悟突破 +1，最多 +2，一闭关就用尽", "traits": ["insight"] },
+    "skill": { "id": "thunder", "name": "引雷破境", "timing": "action", "cooldown": 3, "desc": "修为条满、脚下又不能闭关时，就地闭关突破，地点加成按 −1 算" }
   },
   {
     "id": "sword", "name": "燕回", "school": "剑修", "origin": "镖局孤女 · 金灵根",

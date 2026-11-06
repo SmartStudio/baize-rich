@@ -79,6 +79,12 @@ export interface ConfigData {
     guidanceBonus: number;
     /** 清心符 */
     calmBonus: number;
+    /** 过目不忘：每这么多点感悟突破 +1 */
+    insightPer: number;
+    /** 过目不忘：感悟加成的上限 */
+    insightMax: number;
+    /** 引雷破境：在任意格闭关时的地点加成 */
+    thunderSite: number;
   };
   alchemy: {
     herbsPerPill: number;
@@ -120,8 +126,6 @@ export interface RulesConfig {
   diceCardMax: number;
   /** 镇山：山岳可放在前方 1 至此值格 */
   roadblockRange: number;
-  /** 乾坤挪移：只能与路网上相距不超过此格数的他人互换 */
-  swapRange: number;
   /** 剑遁：只能瞬移到相距不超过此格数（沿路网任意方向）的他人 */
   swordDashRange: number;
 }
@@ -139,7 +143,7 @@ export interface BoardNodeData {
   street?: string;
   /** 所属神道（BoardData.roads 的键），拐入时显示「拐入某神道」并计入进入神道次数 */
   road?: RoadId;
-  /** 路网格（除神道与灵台外的所有格）：回首符、镇山、乾坤挪移只在路网格上生效 */
+  /** 路网格（除神道与灵台外的所有格）：回首符、镇山只在路网格上生效 */
   outer?: boolean;
   /** 灵台占据的格子矩形 [c0, r0, c1, r1]，仅用于绘制 */
   rect?: [number, number, number, number];
@@ -185,7 +189,9 @@ export type HeroTrait =
   /** 斗法攻方 +duel.swordAttack */
   | 'swordQi'
   /** 每次停在丹房炼丹 +alchemy.alchBonus */
-  | 'pillway';
+  | 'pillway'
+  /** 修为条满后溢出的修为存为感悟，突破时折成加成 */
+  | 'insight';
 export interface HeroSkillData {
   id: HeroSkillId;
   name: string;
@@ -194,7 +200,7 @@ export interface HeroSkillData {
   /** 用后隔多少个自己的回合再次可用：本回合用掉，第 turnsTaken + cooldown 个回合起就绪。 */
   cooldown: number;
 }
-export type HeroSkillId = 'sworddash' | 'swap' | 'roadblock' | 'daze';
+export type HeroSkillId = 'sworddash' | 'thunder' | 'roadblock' | 'daze';
 
 // ---- spells.json ----------------------------------------------------------
 export type SpellCat = 'attack' | 'guard' | 'move' | 'mind';
@@ -289,6 +295,8 @@ export interface PlayerState {
   mind: number;
   /** 前辈指点：下一次突破的加成次数。 */
   guidance: number;
+  /** 过目不忘：存下的感悟，下一次闭关时用尽。 */
+  insight: number;
   /** 宝光外泄所在的轮次（本轮算作身怀宝光）。 */
   glowRound: number;
   /** 元婴遁最近一次生效的轮次（每轮 1 次）。 */

@@ -37,7 +37,10 @@
     "altarBonus": 1,
     "mindBonus": 1,
     "guidanceBonus": 2,
-    "calmBonus": 2
+    "calmBonus": 2,
+    "insightPer": 2,
+    "insightMax": 2,
+    "thunderSite": -1
   },
   "alchemy": {
     "herbsPerPill": 2,
@@ -70,7 +73,6 @@
     "diceCardMin": 2,
     "diceCardMax": 12,
     "roadblockRange": 6,
-    "swapRange": 8,
     "swordDashRange": 5
   }
 }

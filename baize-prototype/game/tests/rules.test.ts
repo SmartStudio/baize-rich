@@ -93,11 +93,11 @@ describe('修为', () => {
 
   it('the bar caps 修为; the overflow is wasted and counted', () => {
     const g = ringGame();
-    const p = g.state.players[1];
+    const p = g.state.players[3];
     p.cult = g.data.config.realms[0].bar - 1;
-    g.state.tiles.R1 = { owner: 1, level: 3 };
+    g.state.tiles.R1 = { owner: 3, level: 3 };
     p.pos = 'R1';
-    g.testTurnEnd(1); // +1 吐纳, +2 打坐: only 1 fits
+    g.testTurnEnd(3); // +1 吐纳, +2 打坐: only 1 fits
     expect(p.cult).toBe(g.data.config.realms[0].bar);
     expect(p.stats.cultWasted).toBe(2);
   });
@@ -149,7 +149,7 @@ describe('闭关突破', () => {
     g.state.rng = rngFor([2, 1]);
     g.runFlow(g.testClosure(0), script({ stake: 's2' }));
     const r = g.log.find((e) => e.type === 'breakthrough')!.breakthrough!;
-    expect(r.bonuses).toEqual({ pills: 2 * b.pillBonus, site: b.altarBonus, mind: b.mindBonus, guidance: 0, calm: 0 });
+    expect(r.bonuses).toEqual({ pills: 2 * b.pillBonus, site: b.altarBonus, mind: b.mindBonus, guidance: 0, insight: 0, calm: 0 });
     expect(r.total).toBe(3 + 2 * b.pillBonus + b.altarBonus + b.mindBonus);
     expect(r.total).toBeGreaterThanOrEqual(g.data.config.realms[0].target);
     expect([p.realm, p.cult, p.mind, p.pills]).toEqual([1, 0, 0, 2]);
@@ -237,6 +237,41 @@ describe('石铮 · 铜皮铁骨', () => {
     g.state.rng = rngFor([1, 2]);
     g.runFlow(g.testClosure(0), script({ stake: 's1' }));
     expect([p.realm, p.cult, p.mind, p.pills]).toEqual([0, g.data.config.realms[0].bar, 1, 0]);
+  });
+});
+
+describe('沈青砚 · 过目不忘', () => {
+  it('stores 修为 overflowing a full bar as 感悟, up to what the +insightMax bonus needs; others waste it', () => {
+    const g = ringGame();
+    const b = g.data.config.breakthrough;
+    const bar = g.data.config.realms[0].bar;
+    const [body, magic] = g.state.players;
+    body.cult = bar;
+    magic.cult = bar;
+    g.addCult(0, 3, 'event', '顿悟');
+    g.addCult(1, 3, 'event', '顿悟');
+    expect([body.cult, body.insight, body.stats.cultWasted]).toEqual([bar, 0, 3]);
+    expect([magic.cult, magic.insight, magic.stats.cultWasted]).toEqual([bar, 3, 0]);
+    const cap = b.insightPer * b.insightMax;
+    g.addCult(1, 3, 'event', '顿悟');
+    expect([magic.insight, magic.stats.cultWasted]).toEqual([cap, 6 - cap]);
+  });
+
+  it('every insightPer 感悟 is +1 at the breakthrough, at most +insightMax, and the attempt spends them all', () => {
+    const g = ringGame();
+    const b = g.data.config.breakthrough;
+    const p = g.state.players[1];
+    const bonusFor = (insight: number) => {
+      readyToClose(g, 1, 'ALTAR');
+      p.insight = insight;
+      g.state.rng = rngFor([1, 1]);
+      g.runFlow(g.testClosure(1), script({}));
+      expect(p.insight).toBe(0);
+      return g.log.filter((e) => e.type === 'breakthrough').pop()!.breakthrough!.bonuses.insight;
+    };
+    expect(bonusFor(b.insightPer - 1)).toBe(0);
+    expect(bonusFor(b.insightPer)).toBe(1);
+    expect(bonusFor(b.insightPer * (b.insightMax + 1))).toBe(b.insightMax);
   });
 });
 

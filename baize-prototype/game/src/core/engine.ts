@@ -19,11 +19,12 @@ import type {
   MarketBuy, PendingChoice, PendingChoiceOf, PreRollAct, Target, ThreatKind,
 } from './choices';
 import { defaultData } from './data';
-import type { BreakthroughBonuses, BreakthroughResult, CultSource, DuelResult, GameEvent, GameEventType } from './events';
+import type { BreakthroughBonuses, BreakthroughResult, CultChange, CultSource, DuelResult, GameEvent, GameEventType } from './events';
 import { skillTerms } from './heroes';
 import { hashSeed, nextFloat } from './rng';
 import {
-  barFull, barSize, canClose, closureBonus, closureSite, compareStanding, duelBonus, fixedBonuses, hasAbility, hasTrait, herbYield, isGlowing, maxLevel,
+  barFull, barSize, canClose, closureBonus, closureSite, compareStanding, duelBonus, fixedBonuses, hasAbility, hasTrait, herbYield,
+  insightRoom, isGlowing, maxLevel,
   realmName, realmOf, rentFor, sitGain, upgradeCost, winRealm,
 } from './rules';
 import type {
@@ -216,7 +217,7 @@ export class Game {
     return {
       seat, name, hero, pos: this.board.startId, cameFrom: null,
       stones: cfg.startStones + cfg.seatBonusStones[seat], herbs: cfg.startHerbs, pills: cfg.startPills,
-      realm: 0, cult: 0, mind: 0, guidance: 0, glowRound: 0, escapeRound: 0,
+      realm: 0, cult: 0, mind: 0, guidance: 0, insight: 0, glowRound: 0, escapeRound: 0,
       hand: [], bound: false, turnsTaken: 0, skillReadyTurn: 0, dazed: false,
       stats: {
         rentCollected: 0, rentPaid: 0, breakthroughs: 0, breakthroughFails: 0, roadEntries: 0, altarVisits: 0,
@@ -1013,6 +1014,7 @@ export class Game {
     const calm = yield* this.askCalm(seat);
     const r = this.rollBreakthrough(seat, site, stake, calm, target);
     p.pills -= stake;
+    p.insight = 0;
     if (p.guidance > 0) p.guidance--;
     p.stats.breakthroughs++;
     if (r.success) this.ascendRealm(seat, r);
@@ -1063,7 +1065,7 @@ export class Game {
 
   private breakdown(r: BreakthroughResult): string {
     const names: [keyof BreakthroughResult['bonuses'], string][] = [
-      ['pills', '押丹'], ['site', '地点'], ['mind', '心境'], ['guidance', '指点'], ['calm', '清心'],
+      ['pills', '押丹'], ['site', '地点'], ['mind', '心境'], ['guidance', '指点'], ['insight', '感悟'], ['calm', '清心'],
     ];
     const parts = names.filter(([k]) => r.bonuses[k] !== 0).map(([k, n]) => `${r.bonuses[k] > 0 ? '+' : '−'} ${n} ${Math.abs(r.bonuses[k])}`);
     return `${r.dice[0]} + ${r.dice[1]}${parts.map((s) => ` ${s}`).join('')} = ${r.total}（目标 ${r.target}）`;
@@ -1186,7 +1188,7 @@ export class Game {
     return p.turnsTaken >= p.skillReadyTurn;
   }
 
-  /** Targets of the hero's active skill (players for 剑遁 / 乾坤挪移 / 迷魂丹, ring nodes for 镇山). */
+  /** Targets of the hero's active skill (players for 剑遁 / 迷魂丹, ring nodes for 镇山, none for 引雷破境). */
   skillTargets(seat: number): number[] | NodeId[] {
     const st = this.state;
     const p = st.players[seat];
@@ -1196,12 +1198,8 @@ export class Game {
       case 'sworddash':
         if (st.turn.duelDone) return [];
         return others.filter((o) => this.board.distance(p.pos, o.pos) <= r.swordDashRange).map((o) => o.seat);
-      case 'swap':
-        if (!this.board.node(p.pos).outer) return [];
-        return others.filter((o) => {
-          const d = this.board.outerDistance(p.pos, o.pos);
-          return d >= 0 && d <= r.swapRange;
-        }).map((o) => o.seat);
+      case 'thunder':
+        return [];
       case 'daze':
         return st.players.filter((o) => o.seat !== seat && !o.dazed).map((o) => o.seat);
       case 'roadblock':
@@ -1223,7 +1221,16 @@ export class Game {
   }
 
   private skillAvailable(seat: number, phase: 'preroll' | 'action'): boolean {
-    return this.heroOf(seat).skill.timing === phase && this.skillReady(seat) && this.skillTargets(seat).length > 0;
+    const sk = this.heroOf(seat).skill;
+    if (sk.timing !== phase || !this.skillReady(seat)) return false;
+    return sk.id === 'thunder' ? this.canThunder(seat) : this.skillTargets(seat).length > 0;
+  }
+
+  /** 引雷破境 has a use: a full bar on a tile where no ordinary 闭关 is possible. */
+  private canThunder(seat: number): boolean {
+    const st = this.state;
+    const p = st.players[seat];
+    return !st.turn.closed && barFull(this.data, p) && closureSite(st, this.data, seat, p.pos) === null;
   }
 
   private skillOption(seat: number): ChoiceOption<{ t: 'skill' }> {
@@ -1242,6 +1249,11 @@ export class Game {
   private *useSkill(seat: number): Flow<'moved' | 'ok' | 'cancel'> {
     const sk = this.heroOf(seat).skill;
     if (sk.id === 'roadblock') return yield* this.placeRoadblock(seat);
+    if (sk.id === 'thunder') {
+      this.spendSkill(seat);
+      yield* this.closure(seat, this.cfg.breakthrough.thunderSite);
+      return 'ok';
+    }
     const seats = this.skillTargets(seat) as number[];
     const tg = yield* this.askTarget(seat, sk.name, sk.desc, seats.map((x) => ({ t: 'player' as const, seat: x })), sk.id);
     if (tg.t !== 'player') return 'cancel';
@@ -1250,8 +1262,7 @@ export class Game {
       yield* this.swordDash(seat, tg.seat);
       return 'moved';
     }
-    if (sk.id === 'swap') this.swap(seat, tg.seat);
-    else this.daze(tg.seat);
+    this.daze(tg.seat);
     return 'ok';
   }
 
@@ -1276,17 +1287,6 @@ export class Game {
     yield* this.settle(seat, p.pos);
   }
 
-  private swap(seat: number, target: number): void {
-    const p = this.state.players[seat];
-    const o = this.state.players[target];
-    const [mine, theirs] = [p.pos, o.pos];
-    p.pos = theirs;
-    o.pos = mine;
-    [p.cameFrom, o.cameFrom] = [o.cameFrom, p.cameFrom];
-    this.emit('teleport', `${this.pn(seat)} 乾坤挪移，与 ${this.pn(target)} 互换位置`, { player: seat, node: theirs, from: mine });
-    this.emit('teleport', '', { player: target, node: mine, from: theirs });
-  }
-
   private daze(target: number): void {
     this.state.players[target].dazed = true;
     this.emit('status', `${this.pn(target)} 中了迷魂丹，下次移动步数减半`, { player: target });
@@ -1294,19 +1294,27 @@ export class Game {
 
   // ------------------------------------------------------------- 修为 ---
 
-  /** Adds to the current bar, capped at its size; the overflow is wasted (GDD §5.1). */
+  /** Adds to the current bar, capped at its size; the overflow becomes 感悟 (过目不忘) or is wasted (GDD §5.1). */
   addCult(seat: number, n: number, source: CultSource, why: string): void {
     const p = this.state.players[seat];
     if (p.realm >= winRealm(this.data) || n === 0) return;
     const room = barSize(this.data, p) - p.cult;
     const gained = n > 0 ? Math.min(n, room) : -Math.min(p.cult, -n);
-    const wasted = n > 0 ? n - gained : 0;
+    const over = n > 0 ? n - gained : 0;
+    const insight = Math.min(over, insightRoom(this.data, p));
+    const change: CultChange = { source, gained, insight, wasted: over - insight };
     p.cult += gained;
-    p.stats.cultWasted += wasted;
-    const tail = wasted > 0 ? `（修为条已满，作废 ${wasted}）` : barFull(this.data, p) && gained > 0 ? '（修为条已满，可闭关突破）' : '';
-    this.emit('cult', `${this.pn(seat)} ${why}，修为 ${n > 0 ? '+' : ''}${n}${tail}`, {
-      player: seat, amount: gained, cult: { source, gained, wasted },
+    p.insight += insight;
+    p.stats.cultWasted += change.wasted;
+    this.emit('cult', `${this.pn(seat)} ${why}，修为 ${n > 0 ? '+' : ''}${n}${this.cultTail(p, change)}`, {
+      player: seat, amount: gained, cult: change,
     });
+  }
+
+  private cultTail(p: PlayerState, c: CultChange): string {
+    const parts = [c.insight > 0 ? `存为感悟 ${c.insight}` : '', c.wasted > 0 ? `作废 ${c.wasted}` : ''].filter(Boolean);
+    if (parts.length) return `（修为条已满，${parts.join('，')}）`;
+    return barFull(this.data, p) && c.gained > 0 ? '（修为条已满，可闭关突破）' : '';
   }
 
   // ------------------------------------------------------------ 白泽现世 --

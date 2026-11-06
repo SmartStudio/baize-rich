@@ -16,7 +16,6 @@ function spread(g: Game): void {
   });
 }
 
-const rules = ringGame().data.config.rules;
 const duel = ringGame().data.config.duel;
 
 describe('斗法', () => {
@@ -150,29 +149,42 @@ describe('§12 主动技能', () => {
     expect(seen.map((x) => x.kind)).toEqual(['target', 'buy']); // settles the unowned land it landed on
   });
 
-  it('乾坤挪移 swaps with a nearby ring player without settling', () => {
+  const actionIds = (g: Game, seat: number) => {
+    const seen: PendingChoice[] = [];
+    g.runFlow(g.testActionPhase(seat), script({ action: 'end' }, seen));
+    return seen[0].options.map((o) => o.id);
+  };
+
+  it('引雷破境: a full bar off every closure site closes on the spot at the thunder site bonus, then cools down', () => {
     const g = ringGame();
     spread(g);
     const b = g.state.players[1];
-    const d = g.state.players[3];
-    b.pos = 'R5';
-    d.pos = 'R8'; // 3 steps away
-    g.state.players[0].pos = 'R20'; // far: not offered
-    expect(g.skillTargets(1)).toEqual([3]);
-    const seen: PendingChoice[] = [];
-    g.runFlow(g.testUseSkill(1), script({ target: 'p3' }, seen));
-    expect([b.pos, d.pos]).toEqual(['R8', 'R5']);
-    expect(seen.map((x) => x.kind)).toEqual(['target']);
+    b.pos = 'R14'; // 坊市
+    b.turnsTaken = 1;
+    expect(actionIds(g, 1)).not.toContain('skill');
+    b.cult = g.data.config.realms[0].bar;
+    expect(actionIds(g, 1)).toContain('skill');
+    g.state.rng = rngFor([6, 6]);
+    g.runFlow(g.testActionPhase(1), script({ action: ['skill', 'end'] }));
+    const r = g.log.find((e) => e.type === 'breakthrough')!.breakthrough!;
+    expect(r.bonuses.site).toBe(g.data.config.breakthrough.thunderSite);
+    expect(b.realm).toBe(1);
+    const cooldown = g.heroOf(1).skill.cooldown;
+    b.turnsTaken += cooldown - 1;
+    expect(g.skillReady(1)).toBe(false);
+    b.turnsTaken++;
+    expect(g.skillReady(1)).toBe(true);
   });
 
-  it(`乾坤挪移 only reaches players within swapRange`, () => {
+  it('引雷破境 is not offered where an ordinary 闭关 is possible', () => {
     const g = ringGame();
     spread(g);
-    g.state.players[1].pos = 'R0';
-    g.state.players[3].pos = `R${rules.swapRange + 1}`;
-    g.state.players[0].pos = `R${32 - rules.swapRange}`;
-    g.state.players[2].pos = 'R16';
-    expect(g.skillTargets(1)).toEqual([0]);
+    const b = g.state.players[1];
+    b.pos = 'ALTAR';
+    b.cult = g.data.config.realms[0].bar;
+    const ids = actionIds(g, 1);
+    expect(ids).toContain('closure');
+    expect(ids).not.toContain('skill');
   });
 
   it('剑遁 only reaches players within swordDashRange steps along the roads', () => {

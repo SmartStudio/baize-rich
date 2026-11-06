@@ -91,7 +91,7 @@ export interface ChoiceOption<V> {
   hint?: string;
 }
 
-export type ChoicePurpose = 'rift' | 'drain' | 'bind' | 'sworddash' | 'swap' | 'roadblock' | 'daze';
+export type ChoicePurpose = 'rift' | 'drain' | 'bind' | 'sworddash' | 'roadblock' | 'daze';
 
 export interface ChoiceContext {
   /** Free-form extra info for UI/AI (e.g. rent amount, remaining steps, purpose). */
