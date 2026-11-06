@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { PendingChoice } from '../src/core/choices';
 import type { Game } from '../src/core/engine';
 import { nominalRent, upgradeCost } from '../src/core/rules';
+import { presentChoice } from '../src/ui/choices/registry';
 import { dockPlan } from '../src/ui/dockPlan';
 import { ringGame, script } from './helpers';
 
@@ -62,6 +63,41 @@ describe('action dock plan', () => {
     expect(plan.offers[2].title).toContain('闭关');
     expect(plan.offers[2].title).toContain('练气→筑基');
     expect(plan.endLoud).toBe(false);
+  });
+
+  describe('闭关 row', () => {
+    /** The dock row and the 押丹 tiles for the same seat, with `pills` and `hand` on R1 (a 洞府 of seat 0). */
+    function closeRow(pills: number, hand: string[] = []) {
+      const g = ringGame();
+      const p = g.state.players[0];
+      Object.assign(p, { pills, hand, pos: 'R1', cult: g.data.config.realms[0].bar });
+      g.state.tiles.R1 = { owner: 0, level: 1 };
+      g.state.turn.upgraded = true;
+      const row = dockPlan(g, askAction(g)).offers.find((o) => o.t === 'closure')!;
+      let tiles: string[] = [];
+      g.runFlow(g.testClosure(0), (c) => {
+        if (c.kind === 'stake') tiles = presentChoice(c, { game: g }).options.map((o) => o.big!);
+        return c.defaultId ?? c.options[0].id;
+      });
+      return { row, tiles };
+    }
+
+    it('shows the unstaked chance and the most the pills on hand buy, as the 押丹 tiles do', () => {
+      const { row, tiles } = closeRow(2);
+      expect(row.detail).toBe(`成功 ${tiles[0]}，押 2 颗 ${tiles[2]}`);
+    });
+
+    it('counts a held 清心符', () => {
+      const bare = closeRow(3);
+      const held = closeRow(3, ['calm']);
+      expect(held.row.detail).toBe(`成功 ${held.tiles[0]}，押 3 颗 ${held.tiles[3]}`);
+      expect(parseInt(held.tiles[0])).toBeGreaterThan(parseInt(bare.tiles[0]));
+    });
+
+    it('shows only the bare chance with no pills to stake', () => {
+      const { row, tiles } = closeRow(0);
+      expect(row.detail).toBe(`成功 ${tiles[0]}`);
+    });
   });
 
   it('shows three upgrade rows and keeps the rest clickable', () => {

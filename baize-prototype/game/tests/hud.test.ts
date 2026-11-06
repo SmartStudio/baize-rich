@@ -51,6 +51,15 @@ describe('闭关 readout', () => {
     expect(closeReadout(g.state, g.data, 1)?.label).toBe(`可闭关 ${Math.round(chance2d6(target - altarBonus) * 100)}%`);
   });
 
+  it('counts a held 清心符 only for a seat whose hand the viewer sees', () => {
+    const g = ringGame();
+    const { altarBonus, calmBonus } = g.data.config.breakthrough;
+    const target = g.data.config.realms[0].target;
+    Object.assign(g.state.players[0], { cult: g.data.config.realms[0].bar, pos: 'ALTAR', hand: ['calm'] });
+    expect(closeReadout(g.state, g.data, 0, true)?.label).toBe(`可闭关 ${Math.round(chance2d6(target - altarBonus - calmBonus) * 100)}%`);
+    expect(closeReadout(g.state, g.data, 0)?.label).toBe(`可闭关 ${Math.round(chance2d6(target - altarBonus) * 100)}%`);
+  });
+
   it('action menu offers eat and closure under those ids', () => {
     const g = ringGame();
     const p = g.state.players[0];

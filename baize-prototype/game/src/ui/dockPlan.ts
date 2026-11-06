@@ -1,8 +1,9 @@
 // What the action dock shows for the current human choice.
 // The engine still decides which options exist. This module only names them.
 import type { PendingChoice, PendingChoiceOf } from '../core/choices';
+import { closureOdds, percent } from '../core/closureOdds';
 import type { Game } from '../core/engine';
-import { maxLevel, nominalRent, realmName, realmOf, upgradeCost } from '../core/rules';
+import { closureSite, maxLevel, nominalRent, realmName, upgradeCost } from '../core/rules';
 import type { NodeId } from '../core/types';
 
 /** Upgrade rows kept inline. The rest stay on the board and behind B. */
@@ -188,12 +189,18 @@ function eatOffer(game: Game, seat: number, key: string): DockOffer {
   return { t: 'eat', id: 'eat', key, title: `${key}  服丹`, detail: `+${gain} 修为 · 丹药 ${have}→${have - 1}` };
 }
 
+/** 「成功 28%，押 3 颗 97%」: the unstaked chance, then the most the pills on hand can buy. */
 function closeOffer(game: Game, seat: number, key: string): DockOffer {
-  const player = game.state.players[seat];
-  const from = realmName(game.data, player.realm);
-  const to = realmName(game.data, player.realm + 1);
-  const target = realmOf(game.data, player.realm).target;
-  return { t: 'closure', id: 'closure', key, title: `${key}  闭关  ${from}→${to}`, detail: `目标 ${target}，可押丹` };
+  const { state, data } = game;
+  const player = state.players[seat];
+  const from = realmName(data, player.realm);
+  const to = realmName(data, player.realm + 1);
+  const [bare, ...staked] = closureOdds(state, data, seat, closureSite(state, data, seat, player.pos)!).stakes;
+  const most = staked.at(-1);
+  const detail = most && most.chance > bare.chance
+    ? `成功 ${percent(bare.chance)}，押 ${most.pills} 颗 ${percent(most.chance)}`
+    : `成功 ${percent(bare.chance)}`;
+  return { t: 'closure', id: 'closure', key, title: `${key}  闭关  ${from}→${to}`, detail };
 }
 
 function isCastId(id: string): boolean {

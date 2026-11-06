@@ -33,9 +33,10 @@ function breakthroughAfter(g: Game, answer: string): boolean {
 }
 
 /** A stake of 2+ pills where the most pills break through and none fails, with no 清心符 prompt in between. */
+const stakeIds = (c: PendingChoice): string[] => c.options.map((o) => o.id).filter((id) => id !== c.cancelId);
 const stakeDecides = (g: Game, c: PendingChoice): boolean => {
-  const most = c.options.at(-1)!.id;
-  return c.options.length >= 3 && !g.state.players[0].hand.includes('calm') && breakthroughAfter(g, most) && !breakthroughAfter(g, 's0');
+  const most = stakeIds(c).at(-1)!;
+  return stakeIds(c).length >= 3 && !g.state.players[0].hand.includes('calm') && breakthroughAfter(g, most) && !breakthroughAfter(g, 's0');
 };
 
 /** A board pick with at least `n` lit cells, every landing shown. */
@@ -45,9 +46,9 @@ const lights = (n: number) => (g: Game, c: PendingChoice): boolean => {
 };
 
 const stake = findAsk('body', 'stake', stakeDecides);
-const stakeOptions = Game.replay(stake.setup, stake.history).pending!.options;
+const stakeAsk = Game.replay(stake.setup, stake.history).pending!;
 console.log(JSON.stringify({
-  stake: { record: stake, win: stakeOptions.at(-1)!.id.slice(1), lose: '0' },
+  stake: { record: stake, win: stakeIds(stakeAsk).at(-1)!.slice(1), lose: '0' },
   brew: { record: findAsk('alch', 'brew', (_g, c) => c.options.length >= 4) },
   market: { record: findAsk('magic', 'market') },
   fortune: { record: findAsk('sword', 'fortunePick') },

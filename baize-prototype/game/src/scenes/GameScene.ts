@@ -24,6 +24,7 @@ import { dockPlan, IDLE_PLAN, type DockPlan } from '../ui/dockPlan';
 import { LEFT, RACE, RIGHT, STAGE, W, type Rect } from '../ui/layout';
 import { LogPanel } from '../ui/LogPanel';
 import { playMiniGame } from '../ui/MiniGame';
+import { AI_TURN, breakthroughBeats, HUMAN_INTRO, nextSpeed, PACE, PAUSE_EVENTS, speedNote, tempoOf, type Pace } from '../ui/pacing';
 import { aiTurnNarration, heroNameForSeat, narrateEvent, resumeNarration, roundNarration, turnNarration } from '../ui/narration';
 import { pickPlan, ROUTE_KINDS, type PickCell, type PickPlan } from '../ui/pickPlan';
 import { PlayerCards } from '../ui/PlayerCards';
@@ -41,41 +42,13 @@ import { Button } from '../ui/widgets';
 import { unionRect } from '../ui/world';
 import type { ResultData } from './ResultScene';
 
-const SLOW_EVENTS = new Set<GameEvent['type']>([
-  'buy', 'rent', 'upgrade', 'cult', 'event', 'cast', 'block', 'skill', 'roadblock', 'roadblockHit', 'roadblockGone',
-]);
-
 /** preRoll / action option ids reached through the 出符 menu (C) rather than their own button. */
 const isCastId = (id: string): boolean =>
   id.startsWith('cast:') || id === 'skill' || id === 'brew';
 
-/**
- * Animation budget per beat, in ms at 1×. The AI profile lands an AI turn at about 4–5 s; a human
- * seat's own turn runs slower still so its results can be read. `step` is one hop between cells,
- * `rollHold` how long the rolled pair stays up, `think` the pause before an AI answers.
- */
-interface Pace {
-  step: number;
-  teleport: number;
-  roll: number;
-  rollHold: number;
-  slow: number;
-  turnStart: number;
-  think: number;
-  thinkModal: number;
-}
-
-const PACE: Record<'ai' | 'human', Pace> = {
-  ai: { step: 200, teleport: 450, roll: 450, rollHold: 280, slow: 300, turnStart: 300, think: 80, thinkModal: 220 },
-  human: { step: 240, teleport: 540, roll: 700, rollHold: 600, slow: 650, turnStart: 1100, think: 0, thinkModal: 0 },
-};
 /** Round ribbon lifetime. The turn banner starts only after this, so the two never share the board. */
 const ROUND_RIBBON_MS = 1000;
-const CUTSCENE_MS = 1500;
 const WIN_MS = 2000;
-const SPEEDS = [0.5, 1, 2, 4];
-/** An AI's 闭关 plays the same cutscene, a little quicker than a human's own. */
-const AI_BREAKTHROUGH = 0.7;
 
 /** Big events get a full-width cutscene banner; a null spec means this instance is not big. */
 const CUTSCENES: Partial<Record<GameEventType, (g: Game, e: GameEvent) => BannerSpec | null>> = {
@@ -108,6 +81,7 @@ export class GameScene extends Phaser.Scene {
   private session!: SessionConfig;
   private engine!: Game;
   private ais: (AIController | null)[] = [];
+  private humans = new Set<number>();
   private boardView!: BoardView;
   private cards!: PlayerCards;
   private top!: TopBar;
@@ -179,6 +153,7 @@ export class GameScene extends Phaser.Scene {
       : new Game(session.setup, defaultData, { snapshots: true });
     (window as unknown as { __baize: Game }).__baize = this.engine; // debugging handle
     this.ais = session.seats.map((s, i) => (s.human ? null : new AIController(this.engine, i, { difficulty: s.difficulty, personality: s.personality, seed: session.setup.seed })));
+    this.humans = new Set(session.seats.flatMap((s, i) => (s.human ? [i] : [])));
     const labels = session.seats.map((s) => (s.human ? '玩家' : `AI·${DIFFICULTY_LABEL[s.difficulty]}·${PERSONALITY_LABEL[s.personality]}`));
 
     // The board lives in this scene's world; every widget lives on the Hud overlay scene, whose camera
@@ -192,7 +167,7 @@ export class GameScene extends Phaser.Scene {
     this.cam = new BoardCamera(this, this.boardView.world, (seat) => this.boardView.tokenFocus(seat), () => this.speed);
     this.tip = new Tooltip(hud);
     this.top = new TopBar(hud, this.engine, this.tip);
-    this.cards = new PlayerCards(hud, this.engine, labels, this.tip);
+    this.cards = new PlayerCards(hud, this.engine, labels, this.humans, this.tip);
     this.side = new ActionDock(hud, this.engine, this.tip, session.seats.some((s) => s.human));
     this.modal = new ChoiceModal(hud);
     this.logPanel = new LogPanel(hud);
@@ -287,7 +262,7 @@ export class GameScene extends Phaser.Scene {
       const ai = this.ais[c.player];
       let id: string;
       if (ai) {
-        await this.wait(this.ms(c.kind === 'preRoll' || c.kind === 'action' ? PACE.ai.think : PACE.ai.thinkModal));
+        await this.wait(this.ms(c.kind === 'preRoll' || c.kind === 'action' ? AI_TURN.think : AI_TURN.thinkModal));
         if (!this.alive) return;
         id = ai.decide(c);
       } else {
@@ -330,7 +305,8 @@ export class GameScene extends Phaser.Scene {
     const line = narrateEvent(this.engine, e);
     if (line) this.logPanel.log(line);
     const seat = e.player ?? 0;
-    const pace = PACE[this.isHuman(e.snap?.current ?? this.engine.state.current) ? 'human' : 'ai'];
+    const tempo = tempoOf(e, this.lastSnap, this.humans);
+    const pace = PACE[tempo];
     if (e.snap && (e.type === 'step' || e.type === 'teleport')) this.boardView.markCurrent(e.snap);
     switch (e.type) {
       case 'step':
@@ -351,11 +327,11 @@ export class GameScene extends Phaser.Scene {
         break;
       case 'manifest':
         this.boardView.showBaize(true);
-        await this.cutscene(e);
+        await this.present(e, pace);
         break;
       case 'breakthrough':
         this.cam.follow(seat);
-        await this.breakthrough.play(breakthroughView(this.engine, e), (b) => this.ms(b * (this.isHuman(seat) ? 1 : AI_BREAKTHROUGH)));
+        await this.breakthrough.play(breakthroughView(this.engine, e), breakthroughBeats(this.isHuman(seat), this.speed));
         break;
       case 'roundStart':
         if (e.snap && e.snap.round !== this.engine.data.config.manifest.round) this.boardView.showBaize(false);
@@ -367,9 +343,9 @@ export class GameScene extends Phaser.Scene {
         if (e.snap) await this.turnIntro(e.snap, seat);
         break;
       case 'miniGame':
-        if (this.playedMini) {
+        if (this.playedMini || tempo === 'skim') {
           this.playedMini = false;
-          await this.wait(this.ms(pace.slow));
+          await this.wait(this.ms(pace.pause));
         } else {
           const p = (e.snap ?? this.engine.state).players[seat];
           await playMiniGame(this.hud, { auto: e.miniGame!.tier, speed: this.speed, who: p.name });
@@ -385,23 +361,19 @@ export class GameScene extends Phaser.Scene {
     this.noteCoach(this.momentFromEvent(e));
   }
 
-  private cutscene(e: GameEvent): Promise<void> {
-    return this.fx.banner(CUTSCENES[e.type]!(this.engine, e)!, this.ms(e.type === 'win' ? WIN_MS : CUTSCENE_MS));
-  }
-
   /** The generic beat for an event: its cutscene banner, else its ribbon, else a pause if it is a slow one. */
   private async present(e: GameEvent, pace: Pace): Promise<void> {
     const banner = CUTSCENES[e.type]?.(this.engine, e);
     if (banner) {
-      await this.fx.banner(banner, this.ms(e.type === 'win' ? WIN_MS : CUTSCENE_MS));
+      await this.fx.banner(banner, this.ms(e.type === 'win' ? WIN_MS : pace.banner));
       return;
     }
     const rib = RIBBONS[e.type]?.(this.engine, e);
     if (rib) {
-      this.fx.ribbon(rib.title, narrateEvent(this.engine, e) ?? '', rib.color, STAGE.turnRibbonY, this.ms(pace.slow * 2 + 400));
-      await this.wait(this.ms(pace.slow));
-    } else if (SLOW_EVENTS.has(e.type)) {
-      await this.wait(this.ms(pace.slow));
+      this.fx.ribbon(rib.title, narrateEvent(this.engine, e) ?? '', rib.color, STAGE.turnRibbonY, this.ms(pace.pause * 2 + 400));
+      await this.wait(this.ms(pace.pause));
+    } else if (PAUSE_EVENTS.has(e.type)) {
+      await this.wait(this.ms(pace.pause));
     }
   }
 
@@ -416,8 +388,8 @@ export class GameScene extends Phaser.Scene {
     const p = st.players[seat];
     const name = heroNameForSeat(this.engine, seat);
     if (!this.isHuman(seat)) {
-      this.fx.ribbon(aiTurnNarration(name), '', PLAYER_COLORS[seat], STAGE.turnRibbonY, this.ms(PACE.ai.turnStart + 400));
-      await this.wait(this.ms(PACE.ai.turnStart));
+      this.fx.ribbon(aiTurnNarration(name), '', PLAYER_COLORS[seat], STAGE.turnRibbonY, this.ms(AI_TURN.intro + 400));
+      await this.wait(this.ms(AI_TURN.intro));
       return;
     }
     const multiHuman = this.ais.filter((a) => a === null).length > 1;
@@ -427,7 +399,7 @@ export class GameScene extends Phaser.Scene {
       title: copy.title,
       sub: copy.sub,
       icon: `por_${p.hero}`, color: PLAYER_COLORS[seat],
-    }, this.ms(PACE.human.turnStart));
+    }, this.ms(HUMAN_INTRO));
   }
 
   /** Float each seat's 灵石 / 丹药 / 灵草 / 修为 change since the last snapshot over its token. */
@@ -722,9 +694,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   private cycleSpeed(): void {
-    this.speed = SPEEDS[(SPEEDS.indexOf(this.speed) + 1) % SPEEDS.length];
+    this.speed = nextSpeed(this.speed);
     this.side.btnSpeed.setLabel(`倍速 ×${this.speed} · F`);
-    this.toast(`速度 ${this.speed}×`);
+    this.toast(`倍速 ×${this.speed} · ${speedNote(this.speed)}`);
   }
 
   private saveRecord(): void {

@@ -49,12 +49,26 @@ describe('押丹 screen', () => {
     expect(spec.defaultId).toBe('s0');
   });
 
-  it('flags a held 清心符 as extra bonus not in the odds', () => {
+  it('counts a held 清心符 in every tile and lists it with the bonuses', () => {
+    const screen = (hand: string[]) => {
+      const g = ringGame();
+      readyAtAltar(g, 0, 1);
+      g.state.players[0].hand = hand;
+      return screenFor(g, g.testClosure(0), 'stake', { calm: 'no' });
+    };
+    const { calmBonus, pillBonus } = ringGame().data.config.breakthrough;
+    const { target, bonus } = screen([]).choice.ctx as { target: number; bonus: number };
+    const held = screen(['calm']).spec;
+    expect(held.facts!.find((f) => f.label === '清心符')?.value).toBe(`+${calmBonus}`);
+    expect(held.options.map((o) => o.big)).toEqual([0, 1].map((k) => `${Math.round(chance2d6(target - bonus - calmBonus - k * pillBonus) * 100)}%`));
+  });
+
+  it('offers 返回 as its Esc and its button, outside the pill tiles', () => {
     const g = ringGame();
-    readyAtAltar(g, 0, 1);
-    g.state.players[0].hand = ['calm'];
-    const { spec } = screenFor(g, g.testClosure(0), 'stake', { calm: 'no' });
-    expect(spec.facts!.find((f) => f.label === '清心符')?.value).toBe(`可再 +${g.data.config.breakthrough.calmBonus}`);
+    readyAtAltar(g, 0, 2);
+    const { spec } = screenFor(g, g.testClosure(0), 'stake', { stake: 'back' });
+    expect(spec.options.map((o) => o.id)).toEqual(['s0', 's1', 's2']);
+    expect(spec).toMatchObject({ cancelId: 'back', closable: true });
   });
 });
 

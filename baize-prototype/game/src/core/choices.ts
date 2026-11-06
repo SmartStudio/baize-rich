@@ -62,8 +62,8 @@ export interface ChoiceValueMap {
   rentReact: boolean;
   /** 金光符 when challenged or drained. */
   guardReact: boolean;
-  /** 闭关突破: pills staked (each +breakthrough.pillBonus). */
-  stake: number;
+  /** 闭关突破: pills staked (each +breakthrough.pillBonus); null = 返回 to the choice that opened the 闭关, nothing spent. */
+  stake: number | null;
   /** 清心符 before the breakthrough roll. */
   calm: boolean;
   /** 丹房: how many pills to brew. */
