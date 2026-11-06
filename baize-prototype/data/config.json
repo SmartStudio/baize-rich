@@ -26,6 +26,7 @@
   ],
   "cultivation": {
     "breath": 1,
+    "bodySit": 1,
     "spring": 1,
     "eye": 2,
     "pill": 2,

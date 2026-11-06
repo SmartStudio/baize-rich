@@ -61,6 +61,8 @@ export interface ConfigData {
   cultivation: {
     /** 吐纳：每个自己的回合结束 */
     breath: number;
+    /** 体修铜皮铁骨：在自家地上打坐额外所得 */
+    bodySit: number;
     spring: number;
     eye: number;
     /** 服丹：每颗 */

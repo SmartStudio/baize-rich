@@ -83,13 +83,26 @@ describe('修为', () => {
     expect(p.cult).toBe(Math.min(1 + 1 + lv[3].sit, g.data.config.realms[0].bar));
   });
 
+  it('铜皮铁骨: 体修 gains 1 more 修为 than others when sitting on own land', () => {
+    const g = ringGame();
+    const lv = g.data.config.landLevels;
+    g.state.tiles.R1 = { owner: 0, level: 0 };
+    g.state.tiles.R2 = { owner: 1, level: 0 };
+    g.state.players[0].pos = 'R1';
+    g.state.players[1].pos = 'R2';
+    g.testTurnEnd(0);
+    g.testTurnEnd(1);
+    expect(g.state.players[0].cult).toBe(1 + lv[0].sit + 1);
+    expect(g.state.players[1].cult).toBe(1 + lv[0].sit);
+  });
+
   it('the bar caps 修为; the overflow is wasted and counted', () => {
     const g = ringGame();
-    const p = g.state.players[0];
+    const p = g.state.players[1];
     p.cult = g.data.config.realms[0].bar - 1;
-    g.state.tiles.R1 = { owner: 0, level: 3 };
+    g.state.tiles.R1 = { owner: 1, level: 3 };
     p.pos = 'R1';
-    g.testTurnEnd(0); // +1 吐纳, +2 打坐: only 1 fits
+    g.testTurnEnd(1); // +1 吐纳, +2 打坐: only 1 fits
     expect(p.cult).toBe(g.data.config.realms[0].bar);
     expect(p.stats.cultWasted).toBe(2);
   });
