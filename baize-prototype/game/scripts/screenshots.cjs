@@ -52,6 +52,27 @@ async function startQuickGame(page, url, shots = {}) {
   await waitScene(page, 'Game');
 }
 
+// Point at a node's top face, k of the way from its diamond centre to its left corner, and screenshot its popover.
+// Fails the run unless that node is the one hovered and its popover is showing, so hit zones must match the art.
+async function hoverNode(page, errors, id, k, file) {
+  const at = await page.evaluate(([id, k]) => {
+    const sc = window.__phaser.scene.getScene('Game');
+    const w = sc.boardView.world;
+    const c = w.centre(id);
+    const left = w.diamond(id)[3];
+    return sc.cam.toScreen({ x: c.x + (left.x - c.x) * k, y: c.y + (left.y - c.y) * k, w: 0, h: 0 });
+  }, [id, k]);
+  await page.mouse.move(at.x, at.y);
+  await sleep(500);
+  await shot(page, file);
+  const seen = await page.evaluate(() => {
+    const sc = window.__phaser.scene.getScene('Game');
+    return { hovered: sc.hovered, shown: sc.tip.layer.visible, title: sc.tip.title.text };
+  });
+  console.log(`hover ${id}:`, JSON.stringify(seen));
+  if (seen.hovered !== id || !seen.shown) errors.push(`hover ${id} at ${JSON.stringify(at)}: ${JSON.stringify(seen)}`);
+}
+
 async function waitForServer(url, tries = 50) {
   for (let i = 0; i < tries; i++) {
     try { const r = await fetch(url); if (r.ok) return; } catch { /* not up yet */ }
@@ -92,6 +113,12 @@ async function waitForServer(url, tries = 50) {
     await shot(page, '04b-cast-menu.png');
     await page.keyboard.press('Escape');
     await sleep(300);
+
+    const land = await page.evaluate(() => window.__baize.state.players[0].pos);
+    await hoverNode(page, errors, land, 0.85, '04c-hover-land.png');
+    await page.evaluate(() => { const sc = window.__phaser.scene.getScene('Game'); sc.cam.panTo(sc.boardView.world.centre('ALTAR')); });
+    await sleep(1500);
+    await hoverNode(page, errors, 'ALTAR', 0.9, '04d-hover-altar.png');
 
     // 3) card-style pick dialog (opened directly on the scene's modal, for layout review)
     await page.evaluate(() => {
