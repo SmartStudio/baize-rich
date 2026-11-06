@@ -23,7 +23,13 @@ export default defineConfig({
   server: { fs: { allow: [resolve(here, '..')] } },
   build: {
     outDir: 'dist',
-    chunkSizeWarningLimit: 2000,
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [{ name: 'phaser', test: /[\\/]node_modules[\\/]phaser[\\/]/ }],
+        },
+      },
+    },
   },
   test: {
     include: ['tests/**/*.test.ts'],
