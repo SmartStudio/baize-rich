@@ -2,32 +2,11 @@
 // over it in the screen margins on its own overlay scene (`HudScene`), so it stays put when the camera moves.
 export const W = 1280;
 export const H = 720;
-/** Source art is drawn on a 64 px grid. */
-export const TILE = 64;
-/** World px per board grid cell. At zoom 1 a 9-row board exactly fills the screen height. */
-export const CELL = 80;
-/** Gap around each tile inside its cell, where the roads between nodes show through. */
-export const INSET = 4;
-
-/**
- * Sprite scales on the board, relative to the source art, in world px (the camera zoom scales them all).
- * Ground (tiles, owner bars) stretches to the tile; everything standing on a tile is drawn at native
- * pixel size so props, buildings, tokens, the altar and the demon keep one consistent pixel density
- * and fit inside their tile (the tallest building, 58 px, stands within a 72 px tile).
- */
-export const SPRITE = {
-  ground: (CELL - 2 * INSET) / TILE,
-  prop: 1,
-  token: 1,
-  demon: 1,
-  altar: 1,
-  /** Height of a token's hop between cells, in token-local pixels. */
-  hop: 14,
-};
-
 const M = 8;
-/** Width of each HUD margin column: the screen left over beside a 9-cell-wide board at zoom 1. */
-const SIDE_W = (W - 9 * CELL) / 2 - 2 * M;
+/** Board column left between the HUD margins, in screen px. */
+const BOARD_W = 720;
+/** Width of each HUD margin column. */
+const SIDE_W = (W - BOARD_W) / 2 - 2 * M;
 /** Left margin: round line, one chip per seat, 战报 ticker. */
 export const LEFT = { x: M, w: SIDE_W, lineY: M, lineH: 30, chipY: 48, chipH: 60, chipGap: 8, tickerY: H - M - 28, tickerH: 28 };
 /** Right margin: utility pills on top, the action dock at the bottom. */

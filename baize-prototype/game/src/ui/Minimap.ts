@@ -1,17 +1,15 @@
-// HUD minimap under the utility pills: every node as a dot in its region colour (or its owner's
-// colour), each seat's token and the camera's viewport. Clicking or dragging on it pans the
+// HUD minimap under the utility pills: the iso board shrunk to fit, every node as a diamond in its region
+// colour (or its owner's colour), each seat's token and the camera's viewport. Clicking or dragging on it pans the
 // camera; the button under it recentres on the current token.
 import Phaser from 'phaser';
-import type { BoardData, GameState } from '../core/types';
-import { CELL, MINI, RIGHT, type Rect } from './layout';
+import type { BoardData, GameState, NodeId } from '../core/types';
+import { MINI, RIGHT, type Rect } from './layout';
 import { COLORS, FLOAT_ALPHA, FS, PLAYER_COLORS } from './theme';
 import { Button } from './widgets';
 import type { Point, WorldMap } from './world';
 
 const PAD = 6;
 const NEUTRAL = 0x8a84a8;
-
-const inset = (r: Rect, d: number): Rect => ({ x: r.x + d, y: r.y + d, w: r.w - 2 * d, h: r.h - 2 * d });
 
 export class Minimap {
   private owners: Phaser.GameObjects.Graphics;
@@ -34,7 +32,7 @@ export class Minimap {
     const nodes = scene.add.graphics();
     for (const n of data.nodes) {
       const colour = n.region ? Phaser.Display.Color.HexStringToColor(data.regions[n.region].color).color : NEUTRAL;
-      nodes.fillStyle(colour, 1).fillRect(...this.box(inset(world.cellRect(n.id), CELL * 0.1)));
+      nodes.fillStyle(colour, 1).fillPoints(this.diamond(n.id, 0.85), true);
     }
     this.owners = scene.add.graphics();
     this.live = scene.add.graphics();
@@ -52,7 +50,7 @@ export class Minimap {
     this.owners.clear();
     for (const [id, t] of Object.entries(state.tiles)) {
       if (t.owner === null) continue;
-      this.owners.fillStyle(PLAYER_COLORS[t.owner], 1).fillRect(...this.box(inset(this.world.cellRect(id), CELL * 0.22)));
+      this.owners.fillStyle(PLAYER_COLORS[t.owner], 1).fillPoints(this.diamond(id, 0.5), true);
     }
   }
 
@@ -76,6 +74,12 @@ export class Minimap {
   private pt(p: Point): [number, number] {
     const b = this.world.bounds;
     return [this.ox + (p.x - b.x) * this.scale, this.oy + (p.y - b.y) * this.scale];
+  }
+
+  /** A node's top-face diamond on the minimap, shrunk about its centre by `k`. */
+  private diamond(id: NodeId, k: number): Phaser.Math.Vector2[] {
+    const c = this.world.centre(id);
+    return this.world.diamond(id).map((p) => new Phaser.Math.Vector2(...this.pt({ x: c.x + (p.x - c.x) * k, y: c.y + (p.y - c.y) * k })));
   }
 
   private box(r: Rect): [number, number, number, number] {

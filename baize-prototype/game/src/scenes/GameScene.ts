@@ -533,9 +533,8 @@ export class GameScene extends Phaser.Scene {
     if (c.kind === 'guardReact') desc += `（可用金光符 ${p.hand.filter((x) => x === 'goldlight').length} 张）`;
     if (c.kind === 'buy' && c.ctx.node) {
       const n = g.board.node(c.ctx.node);
-      const region = n.region!;
       desc = [desc, `基础租金 ${nominalRent(g.data, n.price!, 0)} 灵石`].join('\n');
-      preview = { tile: `tile_land_${region}`, obj: `decor_${region}` };
+      preview = `iso_land_${n.region!}`;
     }
     const multiHuman = this.ais.filter((a) => a === null).length > 1;
     const title = multiHuman ? `${p.name} · ${c.title}` : c.title;

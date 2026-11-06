@@ -32,14 +32,15 @@ export interface ModalSpec {
   /** Card frame for 'cards' layout ('card_divine' / 'card_heaven'). */
   cardFrame?: string;
   cardLabel?: string;
-  /** Frames stacked into a 2× preview at the left (e.g. tile + decor for 购买灵田). */
-  preview?: { tile: string; obj?: string };
+  /** A frame shown at the left at the largest whole scale that fits (e.g. the land block for 购买灵田). */
+  preview?: string;
   /** false hides the "1. " key prefix when the label already is the number (灵兽引路). */
   numbered?: boolean;
   avoid?: Rect;
 }
 
 const EDGE = 8;
+const PREVIEW_BOX = 132;
 
 /** Left edge for a `pw`-wide panel: centred, unless that covers `avoid`, then pushed to the far side. */
 function placeX(pw: number, py: number, ph: number, avoid: Rect | undefined, side: boolean): number {
@@ -111,13 +112,10 @@ export class ChoiceModal {
     const layer = this.frame(px, py, pw, ph, !side);
     const cx = px + 14 + previewW;
     if (spec.preview) {
-      layer.add(s.add.rectangle(px + 14, py + 32, 132, 132, COLORS.ink).setOrigin(0, 0));
-      const [tk, tf] = frameRef(s, spec.preview.tile);
-      layer.add(s.add.image(px + 16, py + 34, tk, tf).setOrigin(0, 0).setScale(2));
-      if (spec.preview.obj) {
-        const [ok, of] = frameRef(s, spec.preview.obj);
-        layer.add(s.add.image(px + 80, py + 130, ok, of).setOrigin(0.5, 1).setScale(2));
-      }
+      layer.add(s.add.rectangle(px + 14, py + 32, PREVIEW_BOX, PREVIEW_BOX, COLORS.ink).setOrigin(0, 0));
+      const [tk, tf] = frameRef(s, spec.preview);
+      const img = s.add.image(px + 14 + PREVIEW_BOX / 2, py + 32 + PREVIEW_BOX / 2, tk, tf);
+      layer.add(img.setScale(Math.max(1, Math.floor((PREVIEW_BOX - 4) / Math.max(img.width, img.height)))));
     }
     if (descText) layer.add(descText.setPosition(cx, py + 30));
     const all: ModalOption[] = [...spec.options];
