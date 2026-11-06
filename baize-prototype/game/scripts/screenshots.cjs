@@ -40,6 +40,19 @@ async function startQuickGame(page, url, shots = {}) {
   await page.keyboard.press('x'); // skip the intro
   await sleep(1000);
   if (shots.menu) await shot(page, shots.menu);
+  if (shots.tutorial) {
+    await page.keyboard.press('h');
+    await sleep(300);
+    const pages = ['goal', 'turn', 'land', 'alchemy', 'breakthrough', 'duel', 'heroes', 'baize'];
+    for (let i = 0; i < pages.length; i++) {
+      await shot(page, `00c-how-${String(i + 1).padStart(2, '0')}-${pages[i]}.png`);
+      if (i < pages.length - 1) {
+        await page.keyboard.press('ArrowRight');
+        await sleep(150);
+      }
+    }
+    await page.keyboard.press('Escape');
+  }
   await page.keyboard.press('Space'); // 开始游戏
   await waitScene(page, 'HeroSelect');
   await sleep(700);
@@ -72,10 +85,14 @@ async function waitForServer(url, tries = 50) {
     page.on('console', (m) => { if (m.type() === 'error') errors.push(`console: ${m.text()}`); });
     page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
 
-    // 1) title → hero select → versus (seed 2: 你's first roll lands on unowned land -> buy dialog)
-    await startQuickGame(page, `${BASE}?seed=2`, { title: '00-title.png', menu: '00b-title-menu.png', select: '01-hero-select.png', versus: '01b-versus.png' });
+    await startQuickGame(page, `${BASE}?seed=2`, {
+      title: '00-title.png',
+      menu: '00b-title-menu.png',
+      tutorial: true,
+      select: '01-hero-select.png',
+      versus: '01b-versus.png',
+    });
 
-    // 2) human seat: roll once -> 购买灵田 dialog
     await sleep(1500);
     await shot(page, '02-human-turn.png');
     await page.keyboard.press('Space');
@@ -93,23 +110,6 @@ async function waitForServer(url, tries = 50) {
     await page.keyboard.press('Escape');
     await sleep(300);
 
-    // 3) card-style pick dialog (opened directly on the scene's modal, for layout review)
-    await page.evaluate(() => {
-      const sc = window.__phaser.scene.getScene('Game');
-      sc.modal.open({
-        title: '选择神通', desc: '选 1 张永久生效', layout: 'cards', cardFrame: 'card_divine', cardLabel: '神通',
-        options: [
-          { id: 'swift', label: '身轻如燕', hint: '每次移动总点数可 +1 或 −1', icon: 'div_swift' },
-          { id: 'gather', label: '聚灵', hint: '每回合首次收到租金时 +1 灵丹', icon: 'div_gather' },
-          { id: 'midas', label: '点石成金', hint: '收租 +20%', icon: 'div_midas' },
-        ],
-        defaultId: 'midas',
-      });
-    });
-    await sleep(500);
-    await shot(page, '05-divine-pick-dialog.png');
-
-    // 4) 4-AI auto game
     await page.goto(`${BASE}?auto=1&seed=7&speed=2`);
     await sleep(15000);
     await shot(page, '06-midgame.png');
@@ -122,8 +122,18 @@ async function waitForServer(url, tries = 50) {
     await shot(page, '07-midgame-later.png');
     const info2 = await page.evaluate(() => { const g = window.__baize; return { round: g.state.round, over: g.state.over }; });
     console.log('auto game after 40 s:', JSON.stringify(info2));
+    await page.evaluate(() => {
+      const game = window.__baize;
+      const scene = window.__phaser.scene.getScene('Game');
+      game.state.over = true;
+      game.state.winner = game.ranking()[0];
+      game.state.endReason = 'roundCap';
+      scene.scene.start('Result', scene.resultData());
+    });
+    await waitScene(page, 'Result');
+    await sleep(500);
+    await shot(page, '07b-result.png');
 
-    // 5) human soak test: 1 human + 3 AI, keep confirming defaults with Space / Enter
     await startQuickGame(page, `${BASE}?seed=11`);
     await sleep(1200);
     const t0 = Date.now();
