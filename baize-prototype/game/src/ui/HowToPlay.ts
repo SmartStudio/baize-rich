@@ -84,7 +84,7 @@ const PAGES: Page[] = [
       `灵田升到${building(2)}及以上，每轮开始产灵草；在丹房每 ${cfg.alchemy.herbsPerPill} 灵草炼 1 颗丹药。`,
     ],
     art: (s, cx, cy) => [
-      ...captioned(s, cx - 80, cy - 80, 'bld_3', 1.6, building(3)),
+      ...captioned(s, cx - 80, cy - 80, 'iso_bld_3', 2, building(3)),
     ],
   },
   {
@@ -110,7 +110,7 @@ const PAGES: Page[] = [
       `失败走火入魔：修为条减半，心境 +1（之后每次突破 +${cfg.breakthrough.mindBonus}）。`,
       `步数没走完时，可付 ${cfg.altarToll} 颗丹药借道穿过灵台。`,
     ],
-    art: (s, cx, cy) => [addImg(s, cx, cy - 20, 'altar').setScale(1.25)],
+    art: (s, cx, cy) => [addImg(s, cx, cy - 20, 'iso_altar')],
   },
   {
     title: '修士与操作',
