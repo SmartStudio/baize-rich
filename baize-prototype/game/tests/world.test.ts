@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { BoardData } from '../src/core/types';
-import { CELL, H, SAFE, W } from '../src/ui/layout';
-import { keepInside, terrainRect, toScreen, viewRect, WorldMap } from '../src/ui/world';
+import { CELL, SAFE } from '../src/ui/layout';
+import { keepInside, terrainRect, toScreen, viewRect, WorldMap, ZOOMS } from '../src/ui/world';
 import { ringData } from './helpers';
 
 /** The 9×9 ring fixture: small enough to fit the screen, altar at cells (3,3)–(5,5). */
@@ -49,8 +49,6 @@ describe('WorldMap', () => {
     const edge = toScreen(v, { x: 0, y: w.bounds.h }).y;
     expect(edge - CELL * v.zoom).toBeGreaterThanOrEqual(SAFE.y);
     expect(edge).toBeLessThanOrEqual(SAFE.y + SAFE.h);
-    expect(w.fits(v)).toBe(true);
-    expect(w.zoomRange().min).toBe(1);
   });
 
   it('pans an 11-wide board at zoom 1 so the outer column sits inside the HUD-free area', () => {
@@ -67,23 +65,18 @@ describe('WorldMap', () => {
     expect(rightEdge).toBeLessThanOrEqual(SAFE.x + SAFE.w);
   });
 
-  it('centres the 11×11 board on the HUD-free area at minimum zoom', () => {
+  it('centres the 11×11 board vertically on the HUD-free area at zoom 1', () => {
     const w = new WorldMap(arena());
-    const z = w.zoomRange().min;
+    const z = 1;
     const centre = { x: w.bounds.w / 2, y: w.bounds.h / 2 };
     const framed = toScreen(w.clamp({ cx: centre.x, cy: centre.y, zoom: z }), centre);
-    expect(framed.x).toBeCloseTo(SAFE.x + SAFE.w / 2);
     expect(framed.y).toBeCloseTo(SAFE.y + SAFE.h / 2);
-    const shoved = toScreen(w.clamp({ cx: -1e6, cy: centre.y, zoom: z }), centre);
-    expect(shoved.x).toBeCloseTo(SAFE.x + SAFE.w / 2);
   });
 
   it('keeps a clamped 11×11 view inside the painted ground', () => {
     const w = new WorldMap(arena());
     const ground = terrainRect(w.bounds);
-    const { min } = w.zoomRange();
-    for (let i = 0; i <= 8; i++) {
-      const zoom = min + (1 - min) * (i / 8);
+    for (const zoom of ZOOMS) {
       for (const cx of [-1e9, 1e9]) {
         for (const cy of [-1e9, 1e9]) {
           const seen = viewRect(w.clamp({ cx, cy, zoom }));
@@ -98,21 +91,18 @@ describe('WorldMap', () => {
 
   it('lets a big world pan only until its edge reaches the HUD-free area', () => {
     const w = new WorldMap(bigBoard());
-    expect(w.fits({ cx: 0, cy: 0, zoom: 1 })).toBe(false);
     const v = w.clamp({ cx: -5000, cy: -5000, zoom: 1 });
     const corner = toScreen(v, { x: 0, y: 0 });
     expect(corner.x).toBeCloseTo(SAFE.x + CELL / 2);
     expect(corner.y).toBeCloseTo(SAFE.y + CELL / 2);
-    expect(w.zoomRange().min).toBeCloseTo(Math.min(W / (24 * CELL), H / (18 * CELL)));
   });
 
-  it('zooms out to fit a target rect into the HUD-free area, never past the zoom range', () => {
+  it('frames a target rect at the largest resting zoom that fits the HUD-free area', () => {
     const w = new WorldMap(bigBoard());
-    const r = { x: 0, y: 0, w: 12 * CELL, h: CELL };
-    const z = w.fitZoom(r, 1);
-    expect(r.w * z).toBeLessThanOrEqual(SAFE.w);
+    expect(w.fitZoom({ x: 0, y: 0, w: CELL, h: CELL }, 2)).toBe(2);
     expect(w.fitZoom({ x: 0, y: 0, w: CELL, h: CELL }, 1)).toBe(1);
-    expect(w.fitZoom({ x: 0, y: 0, w: 1e6, h: CELL }, 1)).toBe(w.zoomRange().min);
+    expect(w.fitZoom({ x: 0, y: 0, w: SAFE.w / 2, h: CELL }, 2)).toBe(1);
+    expect(w.fitZoom({ x: 0, y: 0, w: SAFE.w, h: CELL }, 2)).toBeNull();
   });
 });
 

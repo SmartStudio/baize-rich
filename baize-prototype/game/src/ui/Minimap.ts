@@ -1,6 +1,6 @@
 // HUD minimap under the utility pills: every node as a dot in its region colour (or its owner's
 // colour), each seat's token and the camera's viewport. Clicking or dragging on it pans the
-// camera; the button under it recentres on the current token. Hidden while the whole world is on screen.
+// camera; the button under it recentres on the current token.
 import Phaser from 'phaser';
 import type { BoardData, GameState } from '../core/types';
 import { CELL, MINI, RIGHT, type Rect } from './layout';
@@ -14,14 +14,12 @@ const NEUTRAL = 0x8a84a8;
 const inset = (r: Rect, d: number): Rect => ({ x: r.x + d, y: r.y + d, w: r.w - 2 * d, h: r.h - 2 * d });
 
 export class Minimap {
-  private layer: Phaser.GameObjects.Container;
   private owners: Phaser.GameObjects.Graphics;
   private live: Phaser.GameObjects.Graphics;
   readonly btnRecentre: Button;
   private scale: number;
   private ox: number;
   private oy: number;
-  private shown = true;
 
   constructor(scene: Phaser.Scene, private world: WorldMap, data: BoardData, onPan: (p: Point) => void) {
     const b = world.bounds;
@@ -41,7 +39,7 @@ export class Minimap {
     this.owners = scene.add.graphics();
     this.live = scene.add.graphics();
     this.btnRecentre = new Button(scene, RIGHT.x, y + h + 4, { w, h: MINI.btnH, label: '回到棋子 · H', size: FS.sm });
-    this.layer = scene.add.container(0, 0, [frame, nodes, this.owners, this.live, this.btnRecentre]).setDepth(50);
+    scene.add.container(0, 0, [frame, nodes, this.owners, this.live, this.btnRecentre]).setDepth(50);
 
     const pan = (p: Phaser.Input.Pointer): void => onPan({ x: b.x + (p.x - this.ox) / this.scale, y: b.y + (p.y - this.oy) / this.scale });
     frame.setInteractive({ useHandCursor: true });
@@ -58,13 +56,8 @@ export class Minimap {
     }
   }
 
-  /** Per frame: viewport rect, live token positions; hidden while `fits`. */
-  update(view: Rect, tokens: Point[], current: number, fits: boolean): void {
-    if (this.shown === fits) {
-      this.shown = !fits;
-      this.layer.setVisible(this.shown);
-    }
-    if (!this.shown) return;
+  /** Per frame: viewport rect, live token positions. */
+  update(view: Rect, tokens: Point[], current: number): void {
     const g = this.live.clear();
     tokens.forEach((t, i) => {
       if (i === current) return;

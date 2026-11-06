@@ -24,8 +24,11 @@ export interface Edge {
   twoWay: boolean;
 }
 
-export const ZOOM_MAX = 2;
-const ZOOM_FLOOR = 0.35;
+/** The camera rests only at these zooms, so every art pixel covers a whole number of screen pixels. */
+export const ZOOMS = [1, 2] as const;
+export type Zoom = (typeof ZOOMS)[number];
+/** Margin kept around a framed rect inside the SAFE area, in screen px. */
+const FRAME_MARGIN = 40;
 /** How far past the grid the camera may pan, in world px. */
 const PAD = CELL / 2;
 /** Ground painted past the board, in world px. Five cells contain every clamped view of the 11×11 board. */
@@ -104,25 +107,13 @@ export class WorldMap {
     return null;
   }
 
-  /** Zoom range: never closer than ZOOM_MAX, never further out than needed to see the whole world. */
-  zoomRange(): { min: number; max: number } {
-    const fit = Math.min(W / this.bounds.w, H / this.bounds.h);
-    return { min: Math.max(ZOOM_FLOOR, Math.min(1, fit)), max: ZOOM_MAX };
-  }
-
-  /** True when the whole world is on screen at this view. */
-  fits(v: View): boolean {
-    return this.bounds.w * v.zoom <= W + 0.5 && this.bounds.h * v.zoom <= H + 0.5;
-  }
-
   /**
    * Clamp a view to the world. An axis fits when the board is no larger than the HUD-free SAFE span.
    * A fitting axis is centred there. SAFE shares the screen midpoint, so the board midpoint lands on it.
    * A longer axis pans until the board edge plus PAD meets the SAFE edge.
    */
   clamp(v: View): View {
-    const { min, max } = this.zoomRange();
-    const zoom = Math.min(max, Math.max(min, v.zoom));
+    const zoom = Math.min(ZOOMS[ZOOMS.length - 1], Math.max(ZOOMS[0], v.zoom));
     const b = this.bounds;
     const axis = (c: number, lo: number, size: number, safe: number): number => {
       if (size * zoom <= safe) return lo + size / 2;
@@ -132,11 +123,10 @@ export class WorldMap {
     return { cx: axis(v.cx, b.x, b.w, SAFE.w), cy: axis(v.cy, b.y, b.h, SAFE.h), zoom };
   }
 
-  /** The largest zoom (≤ cap) at which world rect r fits inside the SAFE area, within the zoom range. */
-  fitZoom(r: Rect, cap: number): number {
-    const { min, max } = this.zoomRange();
-    const z = Math.min(cap, (SAFE.w - 40) / r.w, (SAFE.h - 40) / r.h);
-    return Math.min(max, Math.max(min, z));
+  /** The largest resting zoom (≤ cap) at which world rect r fits inside the SAFE area, or null if none does. */
+  fitZoom(r: Rect, cap: Zoom): Zoom | null {
+    const fits = (z: Zoom): boolean => z <= cap && r.w * z <= SAFE.w - FRAME_MARGIN && r.h * z <= SAFE.h - FRAME_MARGIN;
+    return [...ZOOMS].reverse().find(fits) ?? null;
   }
 }
 

@@ -34,7 +34,7 @@ export const LEFT = { x: M, w: SIDE_W, lineY: M, lineH: 30, chipY: 48, chipH: 60
 export const RIGHT = { x: W - M - SIDE_W, w: SIDE_W, utilY: M, utilH: 28 };
 /** Dock rows, top to bottom. The dock is bottom-anchored; AI-only games show only the header. */
 export const DOCK = { pad: 10, headH: 46, rollH: 58, btnH: 32, handH: 64, gap: 8 };
-/** Minimap under the utility pills (shown only when the world is bigger than the screen). */
+/** Minimap under the utility pills. */
 export const MINI = { maxH: 150, gap: 6, btnH: 24 };
 /**
  * Transient overlays in screen space: dice, ribbons, toasts.
