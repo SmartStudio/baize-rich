@@ -203,6 +203,9 @@ function report(t: Tally, { games, seed, difficulty }: SimOptions): SimReport {
 
 export function simulate(opts: SimOptions, data: GameData = defaultData): SimReport {
   const t = newTally();
-  for (let g = 0; g < opts.games; g++) opts.onGameEnd?.(playOne(t, g, opts, data), g);
+  for (let g = 0; g < opts.games; g++) {
+    const game = playOne(t, g, opts, data);
+    opts.onGameEnd?.(game, g);
+  }
   return report(t, opts);
 }

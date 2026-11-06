@@ -2,7 +2,7 @@
   "version": "0.8",
   "rounds": 12,
   "startStones": 1500,
-  "seatBonusStones": [0, 100, 200, 300],
+  "seatBonusStones": [0, 25, 50, 75],
   "startPills": 0,
   "startHerbs": 0,
   "startHand": 1,
@@ -12,10 +12,10 @@
   "altarToll": 1,
   "rentRate": 0.1,
   "realms": [
-    { "name": "练气", "bar": 3, "target": 8, "ability": null },
+    { "name": "练气", "bar": 4, "target": 8, "ability": null },
     { "name": "筑基", "bar": 4, "target": 9, "ability": "steer" },
-    { "name": "结丹", "bar": 5, "target": 10, "ability": "sense" },
-    { "name": "元婴", "bar": 6, "target": 11, "ability": "escape" },
+    { "name": "结丹", "bar": 4, "target": 10, "ability": "sense" },
+    { "name": "元婴", "bar": 4, "target": 11, "ability": "escape" },
     { "name": "化神", "bar": 0, "target": 0, "ability": null }
   ],
   "landLevels": [
@@ -56,7 +56,7 @@
   "duel": {
     "senseBonus": 1,
     "swordAttack": 1,
-    "bodyDefense": 1,
+    "bodyDefense": 2,
     "glowBonus": 1,
     "glowAt": 3,
     "steal": 1,
@@ -73,6 +73,6 @@
     "skillCooldownTurns": 2,
     "roadblockRange": 6,
     "swapRange": 8,
-    "swordDashRange": 8
+    "swordDashRange": 5
   }
 }

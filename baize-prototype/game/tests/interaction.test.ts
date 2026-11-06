@@ -137,7 +137,8 @@ describe('§12 主动技能', () => {
     const g = ringGame();
     spread(g);
     const c = g.state.players[2];
-    g.state.players[1].pos = 'R5';
+    c.pos = 'R1';
+    g.state.players[1].pos = 'R5'; // 4 steps, inside swordDashRange
     g.state.rng = rngFor([6, 1]);
     let r: string | undefined;
     const flow = g.testUseSkill(2);
