@@ -6,7 +6,7 @@
 
 | 路径 | 内容 |
 |---|---|
-| `assets/atlas.png` + `atlas.json` | Phaser 纹理图集（JSON Hash 格式，1× 像素，81 帧） |
+| `assets/atlas.png` + `atlas.json` | Phaser 纹理图集（JSON Hash 格式，1× 像素，85 帧），由 `tools/art/pack.py` 从 `sprites/` 重建 |
 | `assets/sprites/*.png` | 每一帧的 1× 单图，文件名即帧名 |
 | `assets/sprites_x4/*.png` | 4 倍最近邻放大的预览图，给美术和策划看 |
 | `assets/mockups/` | 主界面效果图（1280×720 与 1080p）、地图路线图、3 个弹窗样稿 |
@@ -28,10 +28,11 @@
 | `altar` | 192×252 | 棋盘原点 +(192,132)，上方溢出 60px |
 | `baize` | 100×104 | 白泽单独形象（立绘、弹窗用） |
 | `demon` | 60×68 | 天魔，底部居中，放在 (x+32, y+46) |
-| `tok_body` `tok_magic` `tok_sword` `tok_alch` | 32×48 | 修士棋子，底部居中，放在 (x+32, y+48) |
-| `por_body` … `por_alch` | 64×64 | 界面头像 |
+| `tok_body` `tok_magic` `tok_sword` `tok_alch` | 约 35×64 | 修士棋子（HD 像素，`tools/art`），底部居中，放在 (x+32, y+48) |
+| `por_body` … `por_alch` | 64×64 | 大头像，只按 1×/2×/3× 整数倍显示 |
+| `por_body_s` … `por_alch_s` | 40×40 | 小头像（玩家卡、行动栏、高级设置），1× 显示 |
 | `ic_stone` `ic_pill` `ic_cult` `ic_demon` `ic_baize` | 16×16 | 灵石、灵丹、修为、天魔、白泽图标 |
-| `die_1`–`die_6` | 30×30 | 立体骰子 |
+| `die_1`–`die_6` | 24×24 | 正面骰子，4px 点数，2× 显示 |
 | `card_attack` `card_guard` `card_move` `card_wealth` | 88×120 | 符箓卡底（含插画，不含文字）；卡名约在 y=80，费用写在右上角 |
 | `card_divine` `card_heaven` | 80×108 | 神通卡、天赐卡空白底框 |
 | `div_<id>` / `hv_<id>` | 24×24 | 神通与天赐图标，id 见 `data/blessings.json`；放大 2 倍贴在卡底 (16,24) |

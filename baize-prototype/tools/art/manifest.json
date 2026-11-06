@@ -52,5 +52,57 @@
     "colors": 32,
     "ref": "tile_land_wood",
     "prompt": "Single isometric game tile sprite in exactly the same shape, size, angle, stone rim and HD pixel art style as the reference tile (2:1 isometric raised block, crisp pixels, clean dark outline), but themed as a misty purple swamp region: dark violet-green boggy moss top with small murky puddles, a few glowing purple mushrooms and reeds at the back edge, a mossy dark stone rim along the top edges, dark purple-brown mud side faces with roots on the two front sides. Centered, occupying about 80% of the width. Plain solid pure magenta background (#FF00FF) everywhere else, no shadow, no text."
+  },
+  "por_body": {
+    "fit": "frame",
+    "size": 64,
+    "colors": 40,
+    "ref": "tok_body",
+    "prompt": "Head-and-shoulders portrait, HD pixel art (crisp square pixels, limited palette, clean dark outline), same character as the reference sprite. Shi Zheng, 16, blacksmith's son: tanned, short black topknot with red cloth band, small cheek scar, stubborn grin, sleeveless brown-orange martial robe, bandaged forearm raised in a fist. Face and shoulders fill the square frame, 3/4 view facing slightly right, eyes large and readable at small size. Plain solid pure magenta background (#FF00FF), no gradient, shadow, scenery, text or border."
+  },
+  "por_body_s": {
+    "src": "por_body",
+    "fit": "frame",
+    "size": 40,
+    "colors": 32
+  },
+  "por_magic": {
+    "fit": "frame",
+    "size": 64,
+    "colors": 40,
+    "ref": "tok_magic",
+    "prompt": "Head-and-shoulders portrait, HD pixel art (crisp square pixels, limited palette, clean dark outline), same character as the reference sprite. Shen Qingyan, 17, village schoolteacher's daughter: long black hair half-up with green jade hairpin and tassel, ink smudge on cheek, calm clever eyes, white and pale blue scholar hanfu, blue lightning sparks at raised fingertips. Face and shoulders fill the square frame, 3/4 view facing slightly right, eyes large and readable at small size. Plain solid pure magenta background (#FF00FF), no gradient, shadow, scenery, text or border."
+  },
+  "por_magic_s": {
+    "src": "por_magic",
+    "fit": "frame",
+    "size": 40,
+    "colors": 32
+  },
+  "por_sword": {
+    "fit": "frame",
+    "size": 64,
+    "colors": 40,
+    "ref": "tok_sword",
+    "prompt": "Head-and-shoulders portrait, HD pixel art (crisp square pixels, limited palette, clean dark outline), same character as the reference sprite. Yan Hui, 17, escort-agency orphan: high black ponytail with long red ribbon, sharp unsmiling eyes, dark red and black martial outfit with leather strap, worn hilt of her master's plain jian over the shoulder. Face and shoulders fill the square frame, 3/4 view facing slightly right, eyes large and readable at small size. Plain solid pure magenta background (#FF00FF), no gradient, shadow, scenery, text or border."
+  },
+  "por_sword_s": {
+    "src": "por_sword",
+    "fit": "frame",
+    "size": 40,
+    "colors": 32
+  },
+  "por_alch": {
+    "fit": "frame",
+    "size": 64,
+    "colors": 40,
+    "ref": "tok_alch",
+    "prompt": "Head-and-shoulders portrait, HD pixel art (crisp square pixels, limited palette, clean dark outline), same character as the reference sprite. Chen Banxia, 16, apothecary apprentice: youthful clean-shaven face, black bun tied with green cloth, shrewd friendly smile, green and beige apothecary robe, herb sprig in hand, herb basket on his back, gourd at hip. Face and shoulders fill the square frame, 3/4 view facing slightly right, eyes large and readable at small size. Plain solid pure magenta background (#FF00FF), no gradient, shadow, scenery, text or border."
+  },
+  "por_alch_s": {
+    "src": "por_alch",
+    "fit": "frame",
+    "size": 40,
+    "colors": 32
   }
 }
