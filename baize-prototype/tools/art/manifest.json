@@ -1,31 +1,4 @@
 {
-  "tile_land_wood": {
-    "fit": "w",
-    "size": 128,
-    "colors": 32,
-    "prompt": "Single isometric game tile sprite, high-definition pixel art (HD-2D style, detailed 32-bit pixel art, crisp pixels, clean dark outline): one isometric diamond-shaped square board tile seen from a 2:1 isometric angle, a small raised block of earth with grassy top in a jade bamboo forest theme: lush green grass, a few small bamboo shoots and tiny herbs at the back edge, a light stone rim along the top edges, visible brown soil side faces on the two front sides. The diamond top is exactly twice as wide as it is tall. Centered, occupying about 80% of the width. Plain solid pure magenta background (#FF00FF) everywhere else, no shadow on background, no text."
-  },
-  "tile_land_fire": {
-    "fit": "w",
-    "size": 128,
-    "colors": 32,
-    "ref": "tile_land_wood",
-    "prompt": "Single isometric game tile sprite in exactly the same shape, size, angle, stone rim and HD pixel art style as the reference tile (2:1 isometric raised block, crisp pixels, clean dark outline), but themed as a red volcanic fire region: dark reddish-brown scorched earth top with glowing orange lava cracks, a few small black rocks and a tiny smoking vent at the back edge, a dark basalt stone rim along the top edges, dark rock side faces with glowing magma veins on the two front sides. Centered, occupying about 80% of the width. Plain solid pure magenta background (#FF00FF) everywhere else, no shadow, no text."
-  },
-  "tile_land_water": {
-    "fit": "w",
-    "size": 128,
-    "colors": 32,
-    "ref": "tile_land_wood",
-    "prompt": "Single isometric game tile sprite in exactly the same shape, size, angle, stone rim and HD pixel art style as the reference tile (2:1 isometric raised block, crisp pixels, clean dark outline), but themed as a frozen icy snow region: fresh white snow top with pale blue shadows, a couple of small ice crystal spikes and a tiny frosted pine at the back edge, a pale grey frosted stone rim along the top edges, icy blue-grey rock side faces with icicles on the two front sides. Centered, occupying about 80% of the width. Plain solid pure magenta background (#FF00FF) everywhere else, no shadow, no text."
-  },
-  "tile_land_earth": {
-    "fit": "w",
-    "size": 128,
-    "colors": 32,
-    "ref": "tile_land_wood",
-    "prompt": "Single isometric game tile sprite in exactly the same shape, size, angle, stone rim and HD pixel art style as the reference tile (2:1 isometric raised block, crisp pixels, clean dark outline), but themed as a misty purple swamp region: dark violet-green boggy moss top with small murky puddles, a few glowing purple mushrooms and reeds at the back edge, a mossy dark stone rim along the top edges, dark purple-brown mud side faces with roots on the two front sides. Centered, occupying about 80% of the width. Plain solid pure magenta background (#FF00FF) everywhere else, no shadow, no text."
-  },
   "por_body": {
     "fit": "frame",
     "size": 64,
@@ -77,44 +50,6 @@
     "fit": "frame",
     "size": 40,
     "colors": 32
-  },
-  "iso_land_wood": {
-    "src": "tile_land_wood",
-    "fit": "w",
-    "size": 96,
-    "colors": 32
-  },
-  "iso_land_fire": {
-    "src": "tile_land_fire",
-    "fit": "w",
-    "size": 96,
-    "colors": 32
-  },
-  "iso_land_water": {
-    "src": "tile_land_water",
-    "fit": "w",
-    "size": 96,
-    "colors": 32
-  },
-  "iso_land_earth": {
-    "src": "tile_land_earth",
-    "fit": "w",
-    "size": 96,
-    "colors": 32
-  },
-  "iso_jade": {
-    "fit": "w",
-    "size": 96,
-    "colors": 32,
-    "ref": "tile_land_wood",
-    "prompt": "HD pixel art, 2:1 isometric view from the upper right, same style as tile_land_wood, on solid magenta (#FF00FF), no ground unless stated, no shadow, no text: white jade paved iso path block, gold inlay, carved cloud, marble sides; same shape as tile_land_wood."
-  },
-  "iso_altar": {
-    "fit": "w",
-    "size": 288,
-    "colors": 48,
-    "ref": "tile_land_wood",
-    "prompt": "HD pixel art, 2:1 isometric view from the upper right, same style as tile_land_wood, on solid magenta (#FF00FF), no ground unless stated, no shadow, no text: 3x3 white jade Baize altar platform, stairs on each side, bronze incense burners, Baize statue with golden halo."
   },
   "lm_start": {
     "fit": "w",
@@ -178,27 +113,6 @@
     "colors": 32,
     "aspect": "3:4",
     "prompt": "HD-2D pixel art game sprite (Octopath Traveler style), crisp square pixels, clean 1px dark outline, limited palette, light from the upper left. Front view from in front and above (about 45 degrees down), symmetric, no isometric or diagonal angle. Subject: a spirit eye shrine: five carved white standing stones in a semicircle on a low round stone dais, each carved with a glowing gold eye symbol, a glowing golden qi orb with soft light rays floating above the centre. Single object centred, occupying about 85% of the image. Background: flat bright pure magenta #FF00FF (255,0,255) everywhere else, not maroon, not dark red. No ground plane, no cast shadow, no scenery, no text."
-  },
-  "iso_bld_1": {
-    "fit": "w",
-    "size": 72,
-    "colors": 32,
-    "ref": "tile_land_wood",
-    "prompt": "HD pixel art, 2:1 isometric view from the upper right, same style as tile_land_wood, on solid magenta (#FF00FF), no ground unless stated, no shadow, no text: herb garden: bamboo-fenced plot, rows of glowing spirit herbs, post with straw hat."
-  },
-  "iso_bld_2": {
-    "fit": "w",
-    "size": 64,
-    "colors": 32,
-    "ref": "tile_land_wood",
-    "prompt": "HD pixel art, 2:1 isometric view from the upper right, same style as tile_land_wood, on solid magenta (#FF00FF), no ground unless stated, no shadow, no text: cave dwelling: rock outcrop with round wooden door, small awning, lantern, cushion, incense burner."
-  },
-  "iso_bld_3": {
-    "fit": "h",
-    "size": 72,
-    "colors": 40,
-    "ref": "tile_land_wood",
-    "prompt": "HD pixel art, 2:1 isometric view from the upper right, same style as tile_land_wood, on solid magenta (#FF00FF), no ground unless stated, no shadow, no text: spirit-vein estate: small two-storey pavilion on a white stone plinth with a glowing green vein, pine tree."
   },
   "ic_stone": {
     "fit": "h",

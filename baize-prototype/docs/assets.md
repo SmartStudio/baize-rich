@@ -6,12 +6,12 @@
 
 | 路径 | 内容 |
 |---|---|
-| `assets/atlas.png` + `atlas.json` | Phaser 纹理图集（JSON Hash 格式，1× 像素，56 帧），由 `tools/art/pack.py` 从 `sprites/` 重建 |
+| `assets/atlas.png` + `atlas.json` | Phaser 纹理图集（JSON Hash 格式，1× 像素，104 帧），由 `tools/art/pack.py` 从 `sprites/` 重建 |
 | `assets/sprites/*.png` | 每一帧的 1× 单图，文件名即帧名 |
 | `assets/sprites_x4/*.png` | 4 倍最近邻放大的预览图，给美术和策划看 |
 | `assets/mockups/` | 主界面效果图（1280×720 与 1080p）、地图路线图、3 个弹窗样稿 |
 
-## 2b. 正面斜俯视棋盘帧（v1.0，取代 2a）
+## 2b. 正面斜俯视棋盘帧（v1.0）
 
 镜头从正前上方斜看，格子横平竖直，类似 HD-2D。网格 (c, r) 的格子在世界坐标里占 x ∈ [c·64, c·64+64)，顶面 y ∈ [r·48, r·48+48)，前侧面再往下 16px。行号越大越靠前，越晚画。镜头只停在 1 倍或 2 倍。
 
@@ -25,20 +25,6 @@
 | `tok_<hero>_<dir><n>` | 48×64 | 修士行走帧。dir 为 `d`（朝下，面向镜头）、`u`（朝上，背对镜头）、`s`（侧面，面朝右；朝左时水平翻转）。n 为 0–3，0 是站立帧，0→1→2→3 循环为走路。脚点在帧内 (24, 62) |
 | `tok_<hero>` | 48×64 | 等于 `tok_<hero>_d0`，给头像以外的界面用 |
 
-## 2a. 45° 等距棋盘帧（v0.9，已被 2b 取代）
-
-格子是 96×48 的 2:1 菱形。网格 (c, r) 的菱形中心在世界坐标 x = (c − r)·48、y = (c + r)·24（再加棋盘原点）。镜头只停在 1 倍或 2 倍。
-
-| 帧名 | 尺寸 | 锚点与摆放 |
-|---|---|---|
-| `iso_land_wood` / `_fire` / `_water` / `_earth` | 96×120 | 凸起的地块，菱形中心在帧内 (48, 64) |
-| `iso_jade` | 96×120 | 神道白玉地块（W18/F18/S18/E18），锚点同上 |
-| `iso_altar` | 288×352 | 3×3 的白泽灵台，3×3 菱形中心在帧内 (144, 230) |
-| `lm_start` `lm_gate` `lm_alchemy` `lm_market` `lm_secret` `lm_spring` `lm_beast` `lm_ruins` `lm_eye` | 宽 47–72，高 ≤ 76 | 特殊格地标，底部居中，放在菱形中心下方 6px |
-| `iso_bld_1` / `_2` / `_3` | 宽 61–72，高 ≤ 72 | 药圃、洞府、灵脉福地，摆放同地标 |
-
-这些帧由 `tools/art/pack.py` 生成：`pixelize.py` 先把源图抠底、缩小、减色，`pack.py` 再按菱形左右顶点那一行把地块对齐到锚点。
-
 ## 2. 其他图集帧
 
 | 帧名 | 尺寸 | 用途与摆放 |
@@ -47,7 +33,7 @@
 | `centre_bg` | 448×448 | 标题画面的底图 |
 | `baize` | 100×104 | 白泽单独形象（白泽现世横幅、突破过场） |
 | `obj_furnace` | 40×40 | 炼丹小游戏里的丹炉，3× 显示 |
-| `tok_body` `tok_magic` `tok_sword` `tok_alch` | 约 35×64 | 修士棋子（HD 像素，`tools/art`），底部居中，脚底落在菱形中心，1× 显示 |
+| `tok_body` `tok_magic` `tok_sword` `tok_alch` | 48×64 | 等于各自的 `_d0` 行走帧，给棋盘以外的界面用 |
 | `por_body` … `por_alch` | 64×64 | 大头像，只按 1×/2×/3× 整数倍显示 |
 | `por_body_s` … `por_alch_s` | 40×40 | 小头像（玩家卡、行动栏、高级设置），1× 显示 |
 | `ic_stone` `ic_herb` `ic_pill` `ic_cult` `ic_mind` | 16×16 | 灵石、灵草、丹药、修为、心境（HD 像素，`tools/art`） |

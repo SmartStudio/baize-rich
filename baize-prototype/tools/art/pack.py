@@ -34,10 +34,8 @@ FACE_SHADE = (214, 196, 160, 255)
 EDGE = (168, 146, 110, 255)
 RED = (217, 67, 75, 255)
 DIE = 24
-ISO_TILE, ISO_TILE_CENTRE = (96, 120), (48, 64)
-ISO_ALTAR, ISO_ALTAR_CENTRE = (288, 352), (144, 230)
 PROPS = [f'lm_{t}' for t in ('start', 'gate', 'alchemy', 'market', 'secret', 'spring', 'beast', 'ruins', 'eye')] + [
-    f'iso_bld_{n}' for n in (1, 2, 3)] + [f'bld_{n}' for n in (1, 2, 3)] + [
+    f'bld_{n}' for n in (1, 2, 3)] + [
     f'ic_{n}' for n in ('stone', 'herb', 'pill', 'cult', 'mind')]
 
 # Front-tilt blocks (docs/assets.md 2b): a 48px top face over a 16px front face. Per block, how many rows the
@@ -106,20 +104,6 @@ def die(n: int) -> Image.Image:
     return Image.fromarray(a, 'RGBA')
 
 
-def side_row(im: Image.Image) -> int:
-    """Row of an iso block's left and right diamond vertices: the first row as wide as the block."""
-    widths = (np.asarray(im)[..., 3] > 0).sum(1)
-    return int(np.argmax(widths >= im.width - 2))
-
-
-def iso_block(name: str, size: tuple[int, int], centre: tuple[int, int]) -> Image.Image:
-    """Place a pixelized iso block so its top-face diamond centre lands on `centre` of a fixed frame."""
-    art = Image.open(ROOT / 'out' / f'{name}.png').convert('RGBA')
-    frame = Image.new('RGBA', size, (0, 0, 0, 0))
-    frame.alpha_composite(art, (centre[0] - art.width // 2, centre[1] - side_row(art)))
-    return frame
-
-
 def out_rgba(name: str) -> np.ndarray:
     return np.asarray(Image.open(ROOT / 'out' / f'{name}.png').convert('RGBA')).astype(float)
 
@@ -163,9 +147,6 @@ def ft_altar() -> Image.Image:
 def frames() -> dict[str, Image.Image]:
     made: dict[str, Image.Image] = {name: ft_block(name, overhang) for name, overhang in FT_BLOCKS.items()}
     made['ft_altar'] = ft_altar()
-    for name in [f'iso_land_{r}' for r in ('wood', 'fire', 'water', 'earth')] + ['iso_jade']:
-        made[name] = iso_block(name, ISO_TILE, ISO_TILE_CENTRE)
-    made['iso_altar'] = iso_block('iso_altar', ISO_ALTAR, ISO_ALTAR_CENTRE)
     for name in PROPS:
         made[name] = Image.open(ROOT / 'out' / f'{name}.png').convert('RGBA')
     for h in HEROES:

@@ -15,8 +15,8 @@ import { DEPTH, FACE, facingFor, seam, TD, tokenSpots, TW, WorldMap, type Facing
 
 /** Token feet on the altar: cells of its footprint (offsets from its back-left cell) beside the statue, by arrival. */
 const ALTAR_SEATS: [number, number][] = [[0, 2], [2, 2], [0, 1], [2, 1]];
-/** The altar statue's feet stand this far behind the altar's top-face centre. */
-const STATUE_BACK = TD;
+/** The altar statue's feet stand this far in front of the altar's top-face centre (ft_altar draws them at (96, 168)). */
+const STATUE_DY = 16;
 /** Neighbours on a shared cell step aside or back this fast, at most. */
 const MAKE_ROOM_MS = 140;
 
@@ -98,7 +98,7 @@ export class BoardView {
     }
     this.drawChevrons();
     const c = this.world.centre(ALTAR);
-    const statue = { x: c.x, y: c.y - STATUE_BACK };
+    const statue = { x: c.x, y: c.y + STATUE_DY };
     this.manifest = new Manifest(s, statue);
     addAmbient(s, this.world, board, statue);
     this.breatheRims();
