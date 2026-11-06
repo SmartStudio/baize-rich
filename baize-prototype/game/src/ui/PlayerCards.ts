@@ -3,7 +3,7 @@
 import Phaser from 'phaser';
 import type { Game } from '../core/engine';
 import { skillTerms } from '../core/heroes';
-import { barFull, barSize, insightBonus, isGlowing, realmName, winRealm } from '../core/rules';
+import { barFull, barSize, closurePlaces, insightBonus, isGlowing, realmName, winRealm } from '../core/rules';
 import type { GameState } from '../core/types';
 import { addImg } from './assets';
 import { LEFT, type Rect } from './layout';
@@ -130,9 +130,9 @@ export class PlayerCards {
     const top = p.realm >= winRealm(g.data);
     const lines = [
       '先突破到化神者获胜；否则秘境关闭时比境界。',
-      top ? '已化神。' : `修为条满 ${realm.bar} 后，在白泽灵台或自家洞府闭关：2D6 + 加成 ≥ ${realm.target} 即突破。`,
+      top ? '已化神。' : `修为条满 ${realm.bar} 后，在${closurePlaces(g.data)}闭关：2D6 + 加成 ≥ ${realm.target} 即突破。`,
       '',
-      '修为来源：每回合吐纳 +1、洞府打坐、灵泉、阵眼、服丹。条满后多余的修为会溢出。',
+      '修为来源：每回合吐纳 +1、洞府打坐、灵泉、灵眼、服丹。条满后多余的修为会溢出。',
       '突破失败：修为条减半，心境 +1（下次突破更稳）。',
     ];
     return { title: `${realmName(g.data, p.realm)} · 修为 ${p.cult}/${realm.bar}`, body: lines.join('\n') };

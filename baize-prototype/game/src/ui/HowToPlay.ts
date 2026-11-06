@@ -2,6 +2,7 @@
 import Phaser from 'phaser';
 import { defaultData } from '../core/data';
 import { HERO_IDS } from '../core/heroes';
+import { closurePlaces } from '../core/rules';
 import { addImg } from './assets';
 import { COLORS, HEX, panel, txt } from './theme';
 import { Button } from './widgets';
@@ -104,7 +105,7 @@ const PAGES: Page[] = [
   {
     title: '闭关突破',
     lines: [
-      '修为条满后，在白泽灵台或自家洞府闭关：2D6 + 加成 ≥ 目标值即突破。',
+      `修为条满后，在${closurePlaces(defaultData)}闭关（掷骰前或行动阶段，每回合 1 次）：2D6 + 加成 ≥ 目标值即突破。`,
       `每押 1 颗丹药 +${cfg.breakthrough.pillBonus}（最多 ${cfg.breakthrough.maxPills} 颗，成败都消耗）；白泽灵台 +${cfg.breakthrough.altarBonus}。`,
       `失败走火入魔：修为条减半，心境 +1（之后每次突破 +${cfg.breakthrough.mindBonus}）。`,
       `步数没走完时，可付 ${cfg.altarToll} 颗丹药借道穿过灵台。`,

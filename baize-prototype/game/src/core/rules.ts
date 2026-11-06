@@ -112,6 +112,12 @@ export function closureSite(state: GameState, data: GameData, seat: number, node
   return landLevel(data, t.level).closureBonus ?? (hasTrait(data, state.players[seat], 'homeClosure') ? 0 : null);
 }
 
+/** Where 闭关 is allowed, in words for the rules screens. */
+export function closurePlaces(data: GameData): string {
+  const lowest = data.config.landLevels.findIndex((l) => l.closureBonus !== null);
+  return `白泽灵台或自家${data.board.buildings[lowest].name}以上的灵田`;
+}
+
 export function canClose(state: GameState, data: GameData, seat: number): boolean {
   const p = state.players[seat];
   return barFull(data, p) && closureSite(state, data, seat, p.pos) !== null;
