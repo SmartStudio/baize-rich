@@ -182,8 +182,8 @@ describe('闭关突破', () => {
       p.cult = g.data.config.realms[0].bar;
       return seen.find((c) => c.kind === 'stake')!.options.map((o) => o.value);
     };
-    expect(stakes(5)).toEqual([0, 1, 2, 3]);
-    expect(stakes(1)).toEqual([0, 1]);
+    expect(stakes(5)).toEqual([0, 1, 2, 3, null]);
+    expect(stakes(1)).toEqual([0, 1, null]);
   });
 
   it('清心符 and 前辈指点 each add their bonus and are used up', () => {

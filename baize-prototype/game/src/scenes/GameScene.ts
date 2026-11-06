@@ -104,6 +104,7 @@ export class GameScene extends Phaser.Scene {
   private session!: SessionConfig;
   private engine!: Game;
   private ais: (AIController | null)[] = [];
+  private humans = new Set<number>();
   private boardView!: BoardView;
   private cards!: PlayerCards;
   private top!: TopBar;
@@ -162,6 +163,7 @@ export class GameScene extends Phaser.Scene {
       : new Game(session.setup, defaultData, { snapshots: true });
     (window as unknown as { __baize: Game }).__baize = this.engine; // debugging handle
     this.ais = session.seats.map((s, i) => (s.human ? null : new AIController(this.engine, i, { difficulty: s.difficulty, personality: s.personality, seed: session.setup.seed })));
+    this.humans = new Set(session.seats.flatMap((s, i) => (s.human ? [i] : [])));
     const labels = session.seats.map((s) => (s.human ? '玩家' : `AI·${DIFFICULTY_LABEL[s.difficulty]}·${PERSONALITY_LABEL[s.personality]}`));
 
     // The board lives in this scene's world; every widget lives on the Hud overlay scene, whose camera
@@ -174,7 +176,7 @@ export class GameScene extends Phaser.Scene {
     this.cam = new BoardCamera(this, this.boardView.world, (seat) => this.boardView.tokenFocus(seat), () => this.speed);
     this.tip = new Tooltip(hud);
     this.top = new TopBar(hud, this.engine, this.tip);
-    this.cards = new PlayerCards(hud, this.engine, labels, this.tip);
+    this.cards = new PlayerCards(hud, this.engine, labels, this.humans, this.tip);
     this.side = new ActionDock(hud, this.engine, this.tip, session.seats.some((s) => s.human));
     this.modal = new ChoiceModal(hud);
     this.logPanel = new LogPanel(hud);

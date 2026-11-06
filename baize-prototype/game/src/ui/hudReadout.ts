@@ -1,8 +1,8 @@
 // What a seat chip and a land tooltip say. Rules stay in core/rules; this file only formats them.
+import { closureOdds, type ClosureOdds } from '../core/closureOdds';
 import { skillTerms } from '../core/heroes';
 import {
-  barFull, barSize, canClose, chance2d6, closureBonus, closurePlaces, closureSite,
-  fixedBonuses, hasTrait, insightBonus, isGlowing, realmName, realmOf, winRealm,
+  barFull, barSize, canClose, closurePlaces, closureSite, hasTrait, insightBonus, isGlowing, realmName, realmOf, winRealm,
 } from '../core/rules';
 import type { GameData, GameState, PlayerState } from '../core/types';
 
@@ -49,26 +49,24 @@ export function barSegments(width: number, count: number, gap = 2): number[] {
   return out;
 }
 
-/** Unstaked breakthrough chance when this seat can close where it stands. */
-export function closeReadout(state: GameState, data: GameData, seat: number): CloseReadout | null {
+/** Unstaked breakthrough chance when this seat can close where it stands. A held 清心符 counts only if `seesHand`. */
+export function closeReadout(state: GameState, data: GameData, seat: number, seesHand = false): CloseReadout | null {
   const p = state.players[seat];
   const site = closureSite(state, data, seat, p.pos);
   if (site === null || !canClose(state, data, seat)) return null;
-  const target = realmOf(data, p.realm).target;
-  const bonus = closureBonus(state, data, seat, site);
-  const pct = Math.round(chance2d6(target - bonus) * 100);
-  const extra = bonusText(state, data, seat, site);
+  const odds = closureOdds(state, data, seat, site, { seesHand });
+  const pct = Math.round(odds.stakes[0].chance * 100);
   return {
     label: `可闭关 ${pct}%`,
     pct,
-    detail: `不押丹约 ${pct}%。2D6 + ${bonus} ≥ ${target}，${extra}。`,
+    detail: `不押丹约 ${pct}%。2D6 + ${odds.bonus} ≥ ${odds.target}，${bonusText(odds)}。`,
   };
 }
 
-export function chipFace(state: GameState, data: GameData, seat: number): ChipFace {
+export function chipFace(state: GameState, data: GameData, seat: number, seesHand = false): ChipFace {
   const p = state.players[seat];
   const total = barSize(data, p);
-  const close = closeReadout(state, data, seat);
+  const close = closeReadout(state, data, seat, seesHand);
   const note = realmNote(state, data, seat, close);
   return {
     realm: realmName(data, p.realm),
@@ -86,8 +84,8 @@ export function chipFace(state: GameState, data: GameData, seat: number): ChipFa
   };
 }
 
-export function closeDetail(state: GameState, data: GameData, seat: number): string {
-  const close = closeReadout(state, data, seat);
+export function closeDetail(state: GameState, data: GameData, seat: number, seesHand = false): string {
+  const close = closeReadout(state, data, seat, seesHand);
   if (close) return close.detail;
   const p = state.players[seat];
   if (p.realm >= winRealm(data)) return '已化神。';
@@ -143,14 +141,15 @@ function realmNote(
   return { text: '', gold: false };
 }
 
-function bonusText(state: GameState, data: GameData, seat: number, site: number): string {
-  const b = fixedBonuses(state, data, seat, site);
+function bonusText(odds: ClosureOdds): string {
+  const b = odds.fixed;
   const parts: [string, number][] = [
     ['地点', b.site],
     ['心境', b.mind],
     ['指点', b.guidance],
     ['感悟', b.insight],
     ['战意', b.momentum],
+    ['清心符', odds.calm],
   ];
   const shown = parts.filter(([, n]) => n !== 0).map(([name, n]) => `${name} ${n > 0 ? '+' : ''}${n}`);
   return shown.length === 0 ? '无额外加成' : shown.join('，');

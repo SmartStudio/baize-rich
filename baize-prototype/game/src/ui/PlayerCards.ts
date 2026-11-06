@@ -41,7 +41,8 @@ export class PlayerCards {
   private views: ChipView[] = [];
   private state: GameState;
 
-  constructor(scene: Phaser.Scene, private game: Game, private labels: string[], private tip: Tooltip) {
+  /** `humans`: seats whose own hand counts in their 闭关 odds; an AI's hand stays hidden. */
+  constructor(scene: Phaser.Scene, private game: Game, private labels: string[], private humans: ReadonlySet<number>, private tip: Tooltip) {
     ensureHudIcons(scene);
     this.state = game.state;
     game.state.players.forEach((p, i) => this.views.push(this.buildChip(scene, i, p.hero)));
@@ -107,7 +108,7 @@ export class PlayerCards {
   }
 
   private paint(state: GameState, i: number): void {
-    const face = chipFace(state, this.game.data, i);
+    const face = chipFace(state, this.game.data, i, this.humans.has(i));
     const v = this.views[i];
     const active = state.current === i && !state.over;
     this.paintFrame(v, i, active, face.glow);
@@ -182,11 +183,11 @@ export class PlayerCards {
 
   private detailTip(i: number): TipContent {
     const data = this.game.data;
-    const face = chipFace(this.state, data, i);
+    const face = chipFace(this.state, data, i, this.humans.has(i));
     const lines = [
       `${this.labels[i]} · 修为 ${this.state.players[i].cult}/${face.total}`,
       resourceTip(this.state, data, i),
-      closeDetail(this.state, data, i),
+      closeDetail(this.state, data, i, this.humans.has(i)),
       '',
       face.tags.map((t) => `${t.label}：${t.desc}`).join('\n'),
     ];
@@ -200,11 +201,11 @@ export class PlayerCards {
 
   private cultTip(i: number): TipContent {
     const data = this.game.data;
-    const face = chipFace(this.state, data, i);
+    const face = chipFace(this.state, data, i, this.humans.has(i));
     const c = data.config.cultivation;
     const lines = [
       '先突破到化神者获胜。否则秘境关闭时比境界，再比修为，再比资产。',
-      closeDetail(this.state, data, i),
+      closeDetail(this.state, data, i, this.humans.has(i)),
       `修为来源：吐纳 +${c.breath}、打坐、灵泉 +${c.spring}、灵眼 +${c.eye}、服丹 +${c.pill}。`,
       failLine(data),
     ];

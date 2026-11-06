@@ -18,12 +18,13 @@ import type {
   ActionAct, AdjustValue, ChoiceKind, ChoiceOption, ChoicePurpose, ChoiceSpec, ChoiceValueMap, ManifestGift,
   MarketBuy, PendingChoice, PendingChoiceOf, PreRollAct, Target, ThreatKind,
 } from './choices';
+import { closureOdds, percent } from './closureOdds';
 import { defaultData } from './data';
 import type { BreakthroughBonuses, BreakthroughResult, CultChange, CultSource, DuelResult, GameEvent, GameEventType } from './events';
 import { skillTerms } from './heroes';
 import { hashSeed, nextFloat } from './rng';
 import {
-  barFull, barSize, canClose, closureBonus, closureSite, compareStanding, duelBonus, fixedBonuses, hasAbility, hasTrait, herbYield,
+  barFull, barSize, canClose, chance2d6, closureSite, compareStanding, duelBonus, fixedBonuses, hasAbility, hasTrait, herbYield,
   insightRoom, isGlowing, maxLevel,
   realmName, realmOf, rentFor, sitGain, upgradeCost, winRealm,
 } from './rules';
@@ -1027,15 +1028,21 @@ export class Game {
 
   // --------------------------------------------------------- 闭关突破 ---
 
-  /** 闭关突破 (GDD §5.3): stake 0–3 pills, roll 2D6 + bonuses against the realm's target. */
-  private *closure(seat: number, site = closureSite(this.state, this.data, seat, this.state.players[seat].pos)!): Flow {
+  /**
+   * 闭关突破 (GDD §5.3): stake 0–3 pills, roll 2D6 + bonuses against the realm's target.
+   * Nothing is spent until a stake is picked, so the stake ask offers 返回; `viaSkill` (引雷破境) pays the skill only then.
+   * Returns false when the player backed out.
+   */
+  private *closure(seat: number, site = closureSite(this.state, this.data, seat, this.state.players[seat].pos)!, viaSkill = false): Flow<boolean> {
     const st = this.state;
     const p = st.players[seat];
+    const skillPills = viaSkill ? this.heroOf(seat).skill.pillCost : 0;
+    const stake = yield* this.askStake(seat, site, p.pills - skillPills);
+    if (stake === null) return false;
+    if (viaSkill) this.spendSkill(seat);
     st.turn.closed = true;
-    const target = realmOf(this.data, p.realm).target;
-    const stake = yield* this.askStake(seat, site, target);
-    const calm = yield* this.askCalm(seat);
-    const r = this.rollBreakthrough(seat, site, stake, calm, target);
+    const calm = yield* this.askCalm(seat, site, stake);
+    const r = this.rollBreakthrough(seat, site, stake, calm, realmOf(this.data, p.realm).target);
     p.pills -= stake;
     p.insight = 0;
     p.momentum = false;
@@ -1043,27 +1050,33 @@ export class Game {
     p.stats.breakthroughs++;
     if (r.success) this.ascendRealm(seat, r);
     else this.failBreakthrough(seat, r);
+    return true;
   }
 
-  private *askStake(seat: number, site: number, target: number): Flow<number> {
+  private *askStake(seat: number, site: number, pills: number): Flow<number | null> {
     const p = this.state.players[seat];
     const b = this.cfg.breakthrough;
-    const fixed = closureBonus(this.state, this.data, seat, site);
-    const opts: ChoiceOption<number>[] = [];
-    for (let k = 0; k <= Math.min(b.maxPills, p.pills); k++) {
-      opts.push({ id: `s${k}`, label: k === 0 ? '不押丹' : `押 ${k} 颗（+${k * b.pillBonus}）`, value: k, hint: `需掷出 ${target - fixed - k * b.pillBonus} 以上` });
-    }
+    const odds = closureOdds(this.state, this.data, seat, site, { pills });
+    const opts: ChoiceOption<number | null>[] = odds.stakes.map((s) => ({
+      id: `s${s.pills}`, label: s.pills === 0 ? '不押丹' : `押 ${s.pills} 颗（+${s.pills * b.pillBonus}）`, value: s.pills,
+      hint: `需掷出 ${s.need} 以上，成功 ${percent(s.chance)}`,
+    }));
+    opts.push({ id: 'back', label: '返回', value: null });
+    const calm = odds.calm ? `（含清心符 +${odds.calm}）` : '';
     return yield* this.ask({
       player: seat, kind: 'stake', title: `闭关 · ${this.realmLabel(seat)}冲${realmName(this.data, p.realm + 1)}`,
-      desc: `2D6 + 加成 ≥ ${target}。地点与心境等加成 ${fixed >= 0 ? '+' : ''}${fixed}，每颗丹药 +${b.pillBonus}，押上的丹药无论成败都会消耗。`,
-      options: opts, defaultId: 's0', ctx: { bonus: fixed, target, site },
+      desc: `2D6 + 加成 ≥ ${odds.target}。地点与心境等加成 ${odds.bonus >= 0 ? '+' : ''}${odds.bonus}${calm}，每颗丹药 +${b.pillBonus}，押上的丹药无论成败都会消耗。`,
+      options: opts, defaultId: 's0', cancelId: 'back', ctx: { bonus: odds.bonus, target: odds.target, site },
     });
   }
 
-  private *askCalm(seat: number): Flow<boolean> {
+  private *askCalm(seat: number, site: number, stake: number): Flow<boolean> {
     if (!this.hasCard(this.state.players[seat], 'calm')) return false;
+    const odds = closureOdds(this.state, this.data, seat, site).stakes[stake];
+    const without = chance2d6(odds.need + this.cfg.breakthrough.calmBonus);
     const use = yield* this.ask({
-      player: seat, kind: 'calm', title: '清心符', desc: `本次突破 +${this.cfg.breakthrough.calmBonus}？`,
+      player: seat, kind: 'calm', title: '清心符',
+      desc: `本次突破 +${this.cfg.breakthrough.calmBonus}？用：成功 ${percent(odds.chance)}；不用：${percent(without)}`,
       options: [
         { id: 'calm', label: '使用清心符', value: true },
         { id: 'no', label: '不用', value: false },
@@ -1284,11 +1297,7 @@ export class Game {
   private *useSkill(seat: number): Flow<'moved' | 'ok' | 'cancel'> {
     const sk = this.heroOf(seat).skill;
     if (sk.id === 'roadblock') return yield* this.placeRoadblock(seat);
-    if (sk.id === 'thunder') {
-      this.spendSkill(seat);
-      yield* this.closure(seat, this.cfg.breakthrough.thunderSite);
-      return 'ok';
-    }
+    if (sk.id === 'thunder') return (yield* this.closure(seat, this.cfg.breakthrough.thunderSite, true)) ? 'ok' : 'cancel';
     const seats = this.skillTargets(seat) as number[];
     const tg = yield* this.askTarget(seat, sk.name, sk.desc, seats.map((x) => ({ t: 'player' as const, seat: x })), sk.id);
     if (tg.t !== 'player') return 'cancel';
@@ -1441,7 +1450,7 @@ export class Game {
   testUseSkill(seat: number): Flow<'moved' | 'ok' | 'cancel'> { return this.useSkill(seat); }
   testSettle(seat: number, node: NodeId): Flow { this.state.current = seat; return this.settle(seat, node); }
   testActionPhase(seat: number): Flow { this.state.current = seat; return this.actionPhase(seat); }
-  testClosure(seat: number): Flow { this.state.current = seat; return this.closure(seat); }
+  testClosure(seat: number): Flow<boolean> { this.state.current = seat; return this.closure(seat); }
   testRoundStart(): Flow { return this.roundStart(); }
   testTurnEnd(seat: number): void { this.turnEnd(seat); }
   testFortune(seat: number, id: string): Flow { return this.resolveFortune(seat, id, 0); }

@@ -3,6 +3,7 @@ import Phaser from 'phaser';
 import { addImg } from '../assets';
 import { H, W } from '../layout';
 import { COLORS, FS, HEX, txt } from '../theme';
+import { Button } from '../widgets';
 import { header, keyHelp, modalFrame, placeX, TONE_FILL, TONE_HEX, type SheetBuilder } from './panel';
 import { optionKey, type ModalOption } from './spec';
 
@@ -38,6 +39,9 @@ export const buildTiles: SheetBuilder = (s, spec, pick, hover) => {
     return { id: o.id, focus: t.focus };
   });
   layer.add(keyHelp(s, spec, Math.round(px + pw / 2), py + ph - 16));
+  if (spec.closable) {
+    layer.add(new Button(s, px + PAD, py + ph - 32, { w: 72, h: 24, label: '返回', size: FS.sm, fill: 0xb4b8cc, textColor: HEX.ink }).onClick(() => pick('__close')));
+  }
   return { layer, highlight: (id) => tiles.forEach((t) => t.focus(t.id === id)) };
 };
 
