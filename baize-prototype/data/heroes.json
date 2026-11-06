@@ -1,7 +1,7 @@
 [
   {
     "id": "body", "name": "体修", "role": "铁匠之子 · 土灵根", "color": "gold",
-    "passive": { "id": "ironskin", "name": "铜皮铁骨", "desc": "斗法守方 +1；妖兽谷必胜" },
+    "passive": { "id": "ironskin", "name": "铜皮铁骨", "desc": "斗法守方 +2；妖兽谷必胜" },
     "skill": { "id": "roadblock", "name": "镇山", "timing": "action", "desc": "在前方 1–6 格落下山岳：下一个走进这格的他人被拦停于此并结算；你下回合开始时消散" }
   },
   {
@@ -12,7 +12,7 @@
   {
     "id": "sword", "name": "剑修", "role": "镖局孤儿 · 金灵根", "color": "red",
     "passive": { "id": "swordqi", "name": "剑气", "desc": "斗法攻方 +1" },
-    "skill": { "id": "sworddash", "name": "剑遁", "timing": "preroll", "desc": "代替掷骰：瞬移到 8 格内一名他人身边，立即向其斗法，再结算该格" }
+    "skill": { "id": "sworddash", "name": "剑遁", "timing": "preroll", "desc": "代替掷骰：瞬移到 5 格内一名他人身边，立即向其斗法，再结算该格" }
   },
   {
     "id": "alch", "name": "丹师", "role": "药铺学徒 · 木灵根", "color": "blue",
