@@ -562,20 +562,15 @@ export class Game {
       case 'market': yield* this.market(seat); break;
       case 'secret': yield* this.drawFortune(seat, depth); break;
       case 'spring':
-        this.addCult(seat, c.spring + this.magicBonus(seat), 'spring', '灵泉');
+        this.addCult(seat, c.spring, 'spring', '灵泉');
         this.gainHerbs(seat, this.cfg.spring.herbs, '灵泉');
         break;
       case 'beast': this.beast(seat); break;
       case 'ruins': yield* this.ruins(seat, depth); break;
-      case 'eye': this.addCult(seat, c.eye + this.magicBonus(seat), 'eye', '灵眼'); break;
+      case 'eye': this.addCult(seat, c.eye, 'eye', '灵眼'); break;
       case 'altar': this.landAltar(seat); break;
       case 'gate': break;
     }
-  }
-
-  /** 引雷淬体: 法修 gains extra 修为 at 灵泉 and 灵眼. */
-  private magicBonus(seat: number): number {
-    return this.state.players[seat].hero === 'magic' ? this.cfg.cultivation.magicBonus : 0;
   }
 
   private landAltar(seat: number): void {
@@ -770,15 +765,14 @@ export class Game {
     else for (let k = 0; k < buy.n; k++) this.drawSpell(seat);
   }
 
-  /** 妖兽谷: 2D6 + realm ≥ target wins herbs, else lose stones. 体修 always wins. */
+  /** 妖兽谷: 2D6 + realm ≥ target wins herbs, else lose stones. */
   private beast(seat: number): void {
     const p = this.state.players[seat];
     const b = this.cfg.beast;
     const dice = this.roll2d6();
     const total = dice[0] + dice[1] + p.realm;
-    const win = p.hero === 'body' || total >= b.target;
-    const how = p.hero === 'body' ? '铜皮铁骨' : `${dice[0]} + ${dice[1]} + 境界 ${p.realm} = ${total}`;
-    this.emit('beast', `${this.pn(seat)} 斗妖兽（${how}），${win ? '得胜' : '败退'}`, { player: seat, dice, amount: total });
+    const win = total >= b.target;
+    this.emit('beast', `${this.pn(seat)} 斗妖兽（${dice[0]} + ${dice[1]} + 境界 ${p.realm} = ${total}），${win ? '得胜' : '败退'}`, { player: seat, dice, amount: total });
     if (win) this.gainHerbs(seat, b.herbs, '斩获妖兽');
     else this.loseStones(seat, b.loss, '被妖兽所伤');
   }

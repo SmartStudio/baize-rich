@@ -90,12 +90,11 @@ export function herbYield(state: GameState, board: Board, data: GameData, seat: 
   return n;
 }
 
-/** 打坐: 修为 for ending the turn on `node` (0 unless it is the player's own land). 铜皮铁骨 adds to it. */
+/** 打坐: 修为 for ending the turn on `node` (0 unless it is the player's own land). */
 export function sitGain(state: GameState, data: GameData, seat: number, node: NodeId): number {
   const t = state.tiles[node];
   if (!t || t.owner !== seat) return 0;
-  const body = state.players[seat].hero === 'body' ? data.config.cultivation.bodySit : 0;
-  return landLevel(data, t.level).sit + body;
+  return landLevel(data, t.level).sit;
 }
 
 // ---- breakthrough ---------------------------------------------------------

@@ -83,19 +83,6 @@ describe('修为', () => {
     expect(p.cult).toBe(Math.min(1 + 1 + lv[3].sit, g.data.config.realms[0].bar));
   });
 
-  it('铜皮铁骨: 体修 gains 1 more 修为 than others when sitting on own land', () => {
-    const g = ringGame();
-    const lv = g.data.config.landLevels;
-    g.state.tiles.R1 = { owner: 0, level: 0 };
-    g.state.tiles.R2 = { owner: 1, level: 0 };
-    g.state.players[0].pos = 'R1';
-    g.state.players[1].pos = 'R2';
-    g.testTurnEnd(0);
-    g.testTurnEnd(1);
-    expect(g.state.players[0].cult).toBe(1 + lv[0].sit + 1);
-    expect(g.state.players[1].cult).toBe(1 + lv[0].sit);
-  });
-
   it('the bar caps 修为; the overflow is wasted and counted', () => {
     const g = ringGame();
     const p = g.state.players[1];
@@ -107,14 +94,12 @@ describe('修为', () => {
     expect(p.stats.cultWasted).toBe(2);
   });
 
-  it('灵泉 gives 修为 and a herb; 法修 gets +1 more', () => {
+  it('灵泉 gives 修为 and a herb, the same for every hero', () => {
     const g = ringGame();
     const c = g.data.config;
     g.runFlow(g.testSettle(0, 'S2'), script({}));
     g.runFlow(g.testSettle(1, 'S2'), script({}));
-    expect(g.state.players[0].cult).toBe(c.cultivation.spring);
-    expect(g.state.players[1].cult).toBe(c.cultivation.spring + c.cultivation.magicBonus);
-    expect(g.state.players[1].herbs).toBe(c.spring.herbs);
+    for (const p of g.state.players.slice(0, 2)) expect([p.cult, p.herbs]).toEqual([c.cultivation.spring, c.spring.herbs]);
   });
 
   it('服丹 turns one pill into 修为, once per turn', () => {
@@ -253,14 +238,14 @@ describe('丹房', () => {
 });
 
 describe('妖兽谷', () => {
-  it('2D6 + realm ≥ target wins herbs, else costs stones; 体修 always wins', () => {
+  it('2D6 + realm ≥ target wins herbs, else costs stones, the 体修 included', () => {
     const g = ringGame();
     const b = g.data.config.beast;
     const [a, c] = [g.state.players[0], g.state.players[2]];
-    const c0 = c.stones;
+    const [a0, c0] = [a.stones, c.stones];
     g.state.rng = rngFor([1, 1]);
     g.runFlow(g.testSettle(0, 'R8'), script({}));
-    expect(a.herbs).toBe(b.herbs);
+    expect([a.herbs, a.stones]).toEqual([0, a0 - b.loss]);
     g.state.rng = rngFor([1, 1]);
     g.runFlow(g.testSettle(2, 'R8'), script({}));
     expect(c.stones).toBe(c0 - b.loss);

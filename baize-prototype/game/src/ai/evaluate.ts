@@ -96,17 +96,16 @@ export function lootValue(st: GameState, data: GameData, loser: number): number 
 export function tileValue(v: View, node: NodeId): number {
   const p = me(v);
   const cfg = v.data.config;
-  const magic = p.hero === 'magic' ? cfg.cultivation.magicBonus : 0;
   switch (v.board.node(node).type) {
     case 'start': return cfg.salaryLand;
     case 'land': return landValue(v, node);
     case 'alchemy': return Math.floor(p.herbs / cfg.alchemy.herbsPerPill) * VALUE.pill * 0.9 + (p.hero === 'alch' && p.herbs >= 2 ? VALUE.pill : 0);
     case 'market': return p.stones > 900 ? 60 : 0;
     case 'secret': return deckValue(v);
-    case 'spring': return cultValue(v, cfg.cultivation.spring + magic) + cfg.spring.herbs * VALUE.herb;
+    case 'spring': return cultValue(v, cfg.cultivation.spring) + cfg.spring.herbs * VALUE.herb;
     case 'beast': return beastValue(v);
     case 'ruins': return deckValue(v) + 120;
-    case 'eye': return cultValue(v, cfg.cultivation.eye + magic);
+    case 'eye': return cultValue(v, cfg.cultivation.eye);
     case 'altar': return nearlyFull(v) ? 900 : cultValue(v, cfg.cultivation.altarCalm);
     case 'gate': return 0;
   }
@@ -115,7 +114,7 @@ export function tileValue(v: View, node: NodeId): number {
 function beastValue(v: View): number {
   const p = me(v);
   const b = v.data.config.beast;
-  const win = p.hero === 'body' ? 1 : chance2d6(b.target - p.realm);
+  const win = chance2d6(b.target - p.realm);
   return win * b.herbs * VALUE.herb - (1 - win) * Math.min(b.loss, p.stones);
 }
 

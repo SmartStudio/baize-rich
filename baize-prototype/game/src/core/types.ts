@@ -61,16 +61,12 @@ export interface ConfigData {
   cultivation: {
     /** 吐纳：每个自己的回合结束 */
     breath: number;
-    /** 体修铜皮铁骨：在自家地上打坐额外所得 */
-    bodySit: number;
     spring: number;
     eye: number;
     /** 服丹：每颗 */
     pill: number;
     /** 白泽问心：停在灵台但不突破 */
     altarCalm: number;
-    /** 引雷淬体：法修在灵泉、灵眼额外所得 */
-    magicBonus: number;
   };
   breakthrough: {
     /** 每颗押上的丹药 */

@@ -26,12 +26,10 @@
   ],
   "cultivation": {
     "breath": 1,
-    "bodySit": 1,
     "spring": 1,
     "eye": 2,
     "pill": 2,
-    "altarCalm": 1,
-    "magicBonus": 1
+    "altarCalm": 1
   },
   "breakthrough": {
     "pillBonus": 2,
