@@ -3,10 +3,11 @@ import type { Game } from '../core/engine';
 import type { GameState } from '../core/types';
 import { addImg } from './assets';
 import { LEFT } from './layout';
+import { roundChip, type ChipTone } from './raceReadout';
 import { COLORS, FLOAT_ALPHA, FS, HEX, txt } from './theme';
 import type { Tooltip } from './Tooltip';
 
-/** Slim round line floating at the top-left: round and 白泽 countdown. Hover for the win rules. */
+/** Slim round line floating at the top-left: round and the next milestone (白泽现世, then 秘境关闭). Hover for the win rules. */
 export class TopBar {
   private round: Phaser.GameObjects.Text;
   private baize: Phaser.GameObjects.Text;
@@ -31,7 +32,7 @@ export class TopBar {
         `不会淘汰：付不起时破产重整，灵田归还，领 ${cfg.bankrupt.resetStones} 灵石，修为条清空。`,
         '一轮 = 每位玩家各行动一个回合。点击左侧修士查看详情。',
         '',
-        this.statusDetail(),
+        this.state ? roundChip(this.state, game.data).detail : '',
       ].join('\n'),
     }));
   }
@@ -41,22 +42,9 @@ export class TopBar {
     const cfg = this.game.data.config;
     const r = Math.max(1, state.round);
     this.round.setText(`第 ${r}/${cfg.rounds} 轮${r === cfg.rounds ? ' 终' : ''}`);
-    const m = cfg.manifest.round;
-    if (state.manifested && state.round === m) this.baize.setText('现世').setColor(HEX.gold);
-    else if (state.manifested) this.baize.setText('已现').setColor(HEX.dim);
-    else this.baize.setText(`${m - r}轮后`).setColor(HEX.parchment);
-  }
-
-  /** Long-form 白泽 status for the tooltip. */
-  private statusDetail(): string {
-    const st = this.state;
-    if (!st) return '';
-    const cfg = this.game.data.config;
-    const r = Math.max(1, st.round);
-    const m = cfg.manifest.round;
-    const baize = st.manifested
-      ? (st.round === m ? '白泽现世：落后者先挑一份机缘。' : '白泽已现世。')
-      : `白泽将于第 ${m} 轮现世（还有 ${m - r} 轮）。`;
-    return baize;
+    const chip = roundChip(state, this.game.data);
+    this.baize.setText(chip.text).setColor(TONE_HEX[chip.tone]);
   }
 }
+
+const TONE_HEX: Record<ChipTone, string> = { gold: HEX.gold, text: HEX.parchment, dim: HEX.dim };

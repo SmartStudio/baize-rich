@@ -178,23 +178,6 @@ export function titleNarration(data: GameData): string[] {
 
 export const TITLE_SUBTITLE = '凡人问道，就从今天开始。';
 
-export function resultNarration(data: GameData, state: GameState): { title: string; sub: string; footer: string } {
-  const winningPlayer = state.players[state.winner!];
-  const winner = data.heroes.find((hero) => hero.id === winningPlayer.hero)!.name;
-  if (state.endReason === 'ascend') {
-    return {
-      title: '渡劫化神',
-      sub: `${winner}渡劫化神。凡人，也能成仙。`,
-      footer: '余下的人记住了这一天。',
-    };
-  }
-  return {
-    title: '秘境关闭',
-    sub: `${data.config.rounds} 轮已尽。${winner}走得最远。`,
-    footer: '下一个甲子，秘境还会再开。',
-  };
-}
-
 export interface TutorialCopy {
   id: 'goal' | 'turn' | 'land' | 'alchemy' | 'breakthrough' | 'duel' | 'heroes' | 'baize';
   title: string;

@@ -15,8 +15,8 @@ export const LEFT = { x: M, w: SIDE_W, lineY: M, lineH: 30, chipY: 48, chipH: 88
 export const RIGHT = { x: W - M - SIDE_W, w: SIDE_W, utilY: M, utilH: 28 };
 /** Dock rows, top to bottom. The dock is bottom-anchored; AI-only games show only the header. */
 export const DOCK = { pad: 10, headH: 46, rollH: 58, btnH: 32, handH: 64, gap: 8 };
-/** Minimap under the utility pills. */
-export const MINI = { maxH: 150, gap: 6, btnH: 24 };
+/** Realm race under the utility pills. 回到棋子 sits under it, only while the camera is zoomed in. */
+export const RACE = { y: RIGHT.utilY + RIGHT.utilH + 6, h: 170, gap: 4, btnH: 24 };
 /**
  * Transient overlays in screen space: dice, ribbons, toasts.
  * The dice row sits under the turn ribbon and the cutscene strip sits under that row,
