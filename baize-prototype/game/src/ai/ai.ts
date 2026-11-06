@@ -56,6 +56,9 @@ const ALCHEMY_ODDS: Record<Difficulty, Record<MiniGameTier, number>> = {
 /** A failure that keeps the bar only costs the stake, so 闭关 here is worth trying at lower odds. */
 const STEADY_BAR_EASE = 0.15;
 
+/** Walking on to the altar costs turns of overflowing 修为; skip a closure here only for more than this gain in odds. */
+const ALTAR_EDGE = 0.15;
+
 /** Minimum duel EV (stones) worth a challenge, by difficulty. */
 const DUEL_BAR: Record<Difficulty, number> = { easy: 150, normal: 20, hard: 0 };
 
@@ -93,7 +96,7 @@ export class AIController implements Controller {
 
   private policy(): WalkPolicy {
     return {
-      fork: (node, _remaining, options) => this.forkRule(node, options, 1),
+      fork: (node, remaining, options) => this.forkRule(node, remaining, options, 1),
       altar: () => 'stop',
       canPayToll: false,
     };
@@ -240,11 +243,11 @@ export class AIController implements Controller {
     return e;
   }
 
-  // Fork rule (normal): bar about to fill → toward the altar; heavy rent in the next 6
-  // main-line cells → toward the altar; else stay on the main line.
-  private forkRule(node: NodeId, options: NodeId[], dir: 1 | -1): NodeId {
+  // Fork rule (normal): bar about to fill → toward the altar, unless the main line ends this move
+  // on an own closure site; heavy rent in the next 6 main-line cells → toward the altar; else stay.
+  private forkRule(node: NodeId, remaining: number, options: NodeId[], dir: 1 | -1): NodeId {
     const detour = this.board.altarward(options);
-    if (this.wantsAltar()) return detour;
+    if (this.wantsAltar()) return this.mainLineEndsOnOwnSite(node, remaining, dir) ? options[0] : detour;
     let cur = node;
     for (let k = 0; k < 6; k++) {
       cur = this.board.mainStep(cur, dir);
@@ -255,6 +258,11 @@ export class AIController implements Controller {
       }
     }
     return options[0];
+  }
+
+  private mainLineEndsOnOwnSite(node: NodeId, remaining: number, dir: 1 | -1): boolean {
+    const end = predictWalk(this.board, this.st, this.seat, remaining, dir, passive, node).node;
+    return end !== ALTAR && closureSite(this.st, this.data, this.seat, end) !== null;
   }
 
   private hardFork(node: NodeId, remaining: number, options: NodeId[]): NodeId {
@@ -321,7 +329,7 @@ export class AIController implements Controller {
     const options = c.options.map((o) => o.value);
     const pick = this.difficulty === 'hard'
       ? this.hardFork(node, c.ctx.remaining ?? 1, options)
-      : this.forkRule(node, options, this.st.turn.reverse ? -1 : 1);
+      : this.forkRule(node, c.ctx.remaining ?? 1, options, this.st.turn.reverse ? -1 : 1);
     return c.options.find((o) => o.value === pick)?.id;
   }
 
@@ -363,11 +371,16 @@ export class AIController implements Controller {
   /** Close here now, or walk on toward a better site (the altar). */
   private shouldClose(): boolean {
     if (this.me.pos === ALTAR || this.roundsLeft <= 1) return true;
-    const site = closureSite(this.st, this.data, this.seat, this.me.pos)!;
-    const chance = closureChance(this.view, site, stakeFor(this.view, this.stakeTarget(), site));
+    const chance = this.closeOdds(closureSite(this.st, this.data, this.seat, this.me.pos)!);
     if (this.difficulty === 'easy') return chance >= 0.4;
     const failCheap = hasTrait(this.data, this.me, 'steadyBar') ? STEADY_BAR_EASE : 0;
-    return chance >= this.persona.closeAt - failCheap || this.board.distance(this.me.pos, ALTAR) > 10;
+    const altarEdge = this.closeOdds(this.data.config.breakthrough.altarBonus) - chance;
+    return chance >= this.persona.closeAt - failCheap || altarEdge <= ALTAR_EDGE || this.board.distance(this.me.pos, ALTAR) > 10;
+  }
+
+  /** Breakthrough odds at site bonus `site` with the stake this AI would put down. */
+  private closeOdds(site: number): number {
+    return closureChance(this.view, site, stakeFor(this.view, this.stakeTarget(), site));
   }
 
   /**
@@ -376,8 +389,7 @@ export class AIController implements Controller {
    */
   private shouldThunder(): boolean {
     if (this.roundsLeft <= 1) return true;
-    const site = this.data.config.breakthrough.thunderSite;
-    const chance = closureChance(this.view, site, stakeFor(this.view, this.stakeTarget(), site));
+    const chance = this.closeOdds(this.data.config.breakthrough.thunderSite);
     return chance >= (this.difficulty === 'easy' ? 0.4 : this.persona.closeAt);
   }
 

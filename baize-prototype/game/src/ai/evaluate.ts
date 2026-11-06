@@ -105,7 +105,7 @@ export function tileValue(v: View, node: NodeId): number {
     case 'beast': return beastValue(v);
     case 'ruins': return deckValue(v) + 120;
     case 'eye': return cultValue(v, cfg.cultivation.eye);
-    case 'altar': return nearlyFull(v) ? 900 : cultValue(v, cfg.cultivation.altarCalm);
+    case 'altar': return nearlyFull(v) ? closureSiteValue(v, node) : cultValue(v, cfg.cultivation.altarCalm);
     case 'gate': return 0;
   }
 }
