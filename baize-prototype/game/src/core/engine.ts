@@ -617,7 +617,7 @@ export class Game {
     const paid = this.pay(seat, ownerSeat, rent, `【${this.nodeName(node)}】租金`);
     st.players[ownerSeat].stats.rentCollected += paid;
     st.players[seat].stats.rentPaid += paid;
-    this.emit('rent', `${this.pn(seat)} 向 ${this.pn(ownerSeat)} 支付租金 ${paid}`, { player: seat, node, amount: paid });
+    this.emit('rent', `${this.pn(seat)} 向 ${this.pn(ownerSeat)} 支付租金 ${paid}`, { player: seat, payee: ownerSeat, node, amount: paid });
   }
 
   /** 避劫符. Returns true when the rent is waived. */

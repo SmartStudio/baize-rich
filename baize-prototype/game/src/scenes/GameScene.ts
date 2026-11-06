@@ -8,7 +8,7 @@ import { defaultData } from '../core/data';
 import { Game } from '../core/engine';
 import type { GameEvent, GameEventType } from '../core/events';
 import { toRecord, type GameRecord } from '../core/record';
-import { isGlowing, realmName, totalAssets } from '../core/rules';
+import { isGlowing } from '../core/rules';
 import { ALTAR } from '../core/board';
 import type { GameState, NodeId } from '../core/types';
 import { BoardCamera } from '../ui/BoardCamera';
@@ -27,6 +27,7 @@ import { playMiniGame } from '../ui/MiniGame';
 import { aiTurnNarration, heroNameForSeat, narrateEvent, resumeNarration, roundNarration, turnNarration } from '../ui/narration';
 import { PlayerCards } from '../ui/PlayerCards';
 import { RealmRace } from '../ui/RealmRace';
+import { resultView } from '../ui/resultReadout';
 import { downloadRecord, loadCoach, saveAutosave, saveCoach } from '../ui/saves';
 import type { SessionConfig } from '../ui/session';
 import { ActionDock } from '../ui/ActionDock';
@@ -454,20 +455,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private resultData(): ResultData {
-    const g = this.engine;
-    const st = g.state;
-    return {
-      record: this.record(),
-      state: structuredClone(st),
-      ranking: g.ranking(),
-      rows: st.players.map((_, i) => {
-        const s = this.session.seats[i];
-        return {
-          cult: st.players[i].cult, realm: realmName(g.data, st.players[i].realm), assets: totalAssets(st, g.board, g.data, i),
-          label: s.human ? '玩家' : `AI·${PERSONALITY_LABEL[s.personality]}`,
-        };
-      }),
-    };
+    return { record: this.record(), view: resultView(this.engine, this.session.seats) };
   }
 
   // -------------------------------------------------------------- humans

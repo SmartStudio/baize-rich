@@ -79,6 +79,8 @@ export interface GameEvent {
   type: GameEventType;
   text: string;
   player?: number;
+  /** rent: the owner who was paid. */
+  payee?: number;
   node?: NodeId;
   from?: NodeId;
   amount?: number;

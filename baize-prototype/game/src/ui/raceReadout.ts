@@ -66,11 +66,16 @@ export function raceView(state: GameState, board: Board, data: GameData): RaceVi
   return { realms, goal: data.config.realms[top].name, rows, lead: leadLine(state, board, data, rows) };
 }
 
-function leadLine(state: GameState, board: Board, data: GameData, rows: RaceRow[]): string {
-  const [first, second] = rows.map((r) => r.seat);
-  const why = { realm: '境界最高', cult: '同境界中修为最多', assets: '境界修为相同，资产最多', seat: '' }[
+/** Why first place is ahead of second, or '' when only the seat order separates them. */
+export function leadReason(state: GameState, board: Board, data: GameData, first: number, second: number): string {
+  return { realm: '境界最高', cult: '同境界中修为最多', assets: '境界修为相同，资产最多', seat: '' }[
     decidingStat(state, board, data, first, second)
   ];
+}
+
+function leadLine(state: GameState, board: Board, data: GameData, rows: RaceRow[]): string {
+  const [first, second] = rows.map((r) => r.seat);
+  const why = leadReason(state, board, data, first, second);
   return why ? `${state.players[first].name} 领先：${why}` : '众人并肩，尚无人领先';
 }
 
