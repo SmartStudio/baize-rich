@@ -165,6 +165,12 @@ describe('斗法', () => {
   });
 });
 
+const actionIds = (g: Game, seat: number) => {
+  const seen: PendingChoice[] = [];
+  g.runFlow(g.testActionPhase(seat), script({ action: 'end' }, seen));
+  return seen[0].options.map((o) => o.id);
+};
+
 describe('§12 主动技能', () => {
   it('剑遁 teleports onto the target, duels at once, settles the tile and replaces the roll', () => {
     const g = ringGame();
@@ -183,11 +189,19 @@ describe('§12 主动技能', () => {
     expect(seen.map((x) => x.kind)).toEqual(['target', 'buy']); // settles the unowned land it landed on
   });
 
-  const actionIds = (g: Game, seat: number) => {
-    const seen: PendingChoice[] = [];
-    g.runFlow(g.testActionPhase(seat), script({ action: 'end' }, seen));
-    return seen[0].options.map((o) => o.id);
-  };
+  it('迷魂丹 costs pillCost pills: not offered without them, paid on use', () => {
+    const g = ringGame();
+    spread(g);
+    const d = g.state.players[3];
+    d.turnsTaken = 1;
+    const cost = g.heroOf(3).skill.pillCost;
+    expect(cost).toBeGreaterThan(0);
+    d.pills = cost - 1;
+    expect(actionIds(g, 3)).not.toContain('skill');
+    d.pills = cost;
+    g.runFlow(g.testActionPhase(3), script({ action: ['skill', 'end'], target: 'p1' }));
+    expect([d.pills, g.state.players[1].dazed]).toEqual([0, true]);
+  });
 
   it('引雷破境: a full bar off every closure site closes on the spot at the thunder site bonus, then cools down', () => {
     const g = ringGame();
@@ -257,6 +271,7 @@ describe('§12 主动技能', () => {
   it('迷魂丹 halves the target next move (rounded down, at least 1)', () => {
     const g = ringGame();
     spread(g);
+    g.state.players[3].pills = 1;
     g.runFlow(g.testUseSkill(3), script({ target: 'p1' }));
     const b = g.state.players[1];
     expect(b.dazed).toBe(true);
@@ -274,6 +289,7 @@ describe('§12 主动技能', () => {
     spread(g);
     const d = g.state.players[3];
     d.turnsTaken = 1;
+    d.pills = 1;
     expect(g.skillReady(3)).toBe(true);
     g.runFlow(g.testUseSkill(3), script({ target: 'p1' }));
     expect(d.stats.skillUses).toBe(1);
@@ -288,6 +304,7 @@ describe('§12 主动技能', () => {
   it('the action menu offers the skill only when ready', () => {
     const g = ringGame();
     spread(g);
+    g.state.players[3].pills = 1;
     const seen: PendingChoice[] = [];
     g.runFlow(g.testPlayTurn(3), script({ buy: 'no', action: 'end', duel: 'none' }, seen));
     const acts = seen.filter((c) => c.kind === 'action').flatMap((c) => c.options.map((o) => o.id));

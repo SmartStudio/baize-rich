@@ -229,7 +229,7 @@ export class Game {
 
   private freshTurn(seat: number): TurnState {
     return {
-      seat, upgraded: false, ate: false, closed: false, landedAltar: false, reverse: false,
+      seat, upgraded: false, ate: false, brewed: false, closed: false, landedAltar: false, reverse: false,
       lastPath: [], lastDir: 1, duelDone: false, passed: [], diceCard: false,
     };
   }
@@ -699,7 +699,7 @@ export class Game {
       this.emit('info', `${this.pn(seat)} 灵草不足，无法炼丹`, { player: seat, node });
       return;
     }
-    const n = yield* this.askBrew(seat, max);
+    const n = yield* this.askBrew(seat, max, '丹房', '第一炉看火候');
     if (n === 0) return;
     p.herbs -= n * a.herbsPerPill;
     const tier = (yield* this.askHeat(seat)).tier;
@@ -713,14 +713,35 @@ export class Game {
     });
   }
 
-  private *askBrew(seat: number, max: number): Flow<number> {
+  /** 随身药炉: brew where the 丹师 stands, as at a 丹房 but without 火候 or 丹道. */
+  private *furnace(seat: number): Flow {
+    const p = this.state.players[seat];
+    const per = this.cfg.alchemy.herbsPerPill;
+    const n = yield* this.askBrew(seat, Math.floor(p.herbs / per), '随身药炉', '不看火候');
+    if (n === 0) return;
+    this.state.turn.brewed = true;
+    p.herbs -= n * per;
+    p.pills += n;
+    p.stats.pillsMade += n;
+    this.emit('pills', `${this.pn(seat)} 随身药炉炼丹 ${n} 炉，得 ${n} 颗丹药`, { player: seat, node: p.pos, amount: n });
+  }
+
+  private canFurnace(seat: number): boolean {
+    const st = this.state;
+    const p = st.players[seat];
+    const t = st.tiles[p.pos];
+    return hasTrait(this.data, p, 'furnace') && !st.turn.brewed && p.herbs >= this.cfg.alchemy.herbsPerPill
+      && t?.owner === seat && t.level >= this.cfg.alchemy.furnaceLevel;
+  }
+
+  private *askBrew(seat: number, max: number, title: string, heat: string): Flow<number> {
     const per = this.cfg.alchemy.herbsPerPill;
     const opts: ChoiceOption<number>[] = [];
     for (let k = max; k >= 0; k--) {
       opts.push({ id: `b${k}`, label: k === 0 ? '不炼' : `炼 ${k} 炉（${k * per} 灵草）`, value: k });
     }
     return yield* this.ask({
-      player: seat, kind: 'brew', title: '丹房', desc: `每 ${per} 灵草炼 1 颗丹药；第一炉看火候`,
+      player: seat, kind: 'brew', title, desc: `每 ${per} 灵草炼 1 颗丹药；${heat}`,
       options: opts, defaultId: `b${max}`, cancelId: 'b0',
     });
   }
@@ -891,6 +912,7 @@ export class Game {
     if (!st.turn.ate && p.pills > 0) {
       opts.push({ id: 'eat', label: `服丹（+${this.cfg.cultivation.pill} 修为）`, value: { t: 'eat' } });
     }
+    if (this.canFurnace(seat)) opts.push({ id: 'brew', label: '随身药炉 · 炼丹', value: { t: 'brew' }, hint: '不看火候' });
     if (this.hasCard(p, 'drain') && this.drainTargets(seat).length > 0) opts.push(this.cardOption('drain', { t: 'cast', card: 'drain' }));
     if (this.hasCard(p, 'bind') && this.bindTargets(seat).length > 0) opts.push(this.cardOption('bind', { t: 'cast', card: 'bind' }));
     if (this.skillAvailable(seat, 'action')) opts.push(this.skillOption(seat));
@@ -909,6 +931,7 @@ export class Game {
         case 'end': return;
         case 'upgrade': this.upgrade(seat, act.node); break;
         case 'eat': this.eatPill(seat); break;
+        case 'brew': yield* this.furnace(seat); break;
         case 'cast': yield* this.castAction(seat, act.card); break;
         case 'skill': yield* this.useSkill(seat); break;
         case 'closure': yield* this.closure(seat); break;
@@ -1231,7 +1254,7 @@ export class Game {
 
   private skillAvailable(seat: number, phase: 'preroll' | 'action'): boolean {
     const sk = this.heroOf(seat).skill;
-    if (sk.timing !== phase || !this.skillReady(seat)) return false;
+    if (sk.timing !== phase || !this.skillReady(seat) || this.state.players[seat].pills < sk.pillCost) return false;
     return sk.id === 'thunder' ? this.canThunder(seat) : this.skillTargets(seat).length > 0;
   }
 
@@ -1249,9 +1272,12 @@ export class Game {
 
   private spendSkill(seat: number): void {
     const p = this.state.players[seat];
-    p.skillReadyTurn = p.turnsTaken + this.heroOf(seat).skill.cooldown;
+    const sk = this.heroOf(seat).skill;
+    p.skillReadyTurn = p.turnsTaken + sk.cooldown;
+    p.pills -= sk.pillCost;
     p.stats.skillUses++;
-    this.emit('skill', `${this.pn(seat)} 施展技能【${this.heroOf(seat).skill.name}】`, { player: seat });
+    const cost = sk.pillCost > 0 ? `，耗 ${sk.pillCost} 颗丹药` : '';
+    this.emit('skill', `${this.pn(seat)} 施展技能【${sk.name}】${cost}`, { player: seat });
   }
 
   /** Returns 'moved' when the skill replaced this turn's roll (剑遁), 'cancel' when backed out. */

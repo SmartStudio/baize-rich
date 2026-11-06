@@ -94,6 +94,8 @@ export interface ConfigData {
     perfectBonus: number;
     /** 丹道：丹师每次停在丹房多出的丹药 */
     alchBonus: number;
+    /** 随身药炉：自家灵田至少这个等级才能炼丹 */
+    furnaceLevel: number;
   };
   market: { pillPrice: number; pillMax: number; cardPrice: number; cardMax: number };
   spring: { herbs: number };
@@ -195,7 +197,9 @@ export type HeroTrait =
   /** 修为条满后溢出的修为存为感悟，突破时折成加成 */
   | 'insight'
   /** 作为攻方斗法得胜后，下次突破 +breakthrough.momentumBonus（最多 1 层） */
-  | 'momentum';
+  | 'momentum'
+  /** 随身药炉：行动阶段在自家 Lv ≥ alchemy.furnaceLevel 的灵田上炼丹，不看火候、没有丹道加成 */
+  | 'furnace';
 export interface HeroSkillData {
   id: HeroSkillId;
   name: string;
@@ -203,6 +207,8 @@ export interface HeroSkillData {
   timing: 'preroll' | 'action';
   /** 用后隔多少个自己的回合再次可用：本回合用掉，第 turnsTaken + cooldown 个回合起就绪。 */
   cooldown: number;
+  /** 每次施展消耗的丹药。 */
+  pillCost: number;
 }
 export type HeroSkillId = 'sworddash' | 'thunder' | 'roadblock' | 'daze';
 
@@ -328,6 +334,8 @@ export interface TurnState {
   upgraded: boolean;
   /** 本回合已服丹。 */
   ate: boolean;
+  /** 本回合已用随身药炉炼过丹。 */
+  brewed: boolean;
   /** 本回合已闭关突破。 */
   closed: boolean;
   /** 本回合在白泽灵台停下结算过（白泽问心）。 */

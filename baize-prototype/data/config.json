@@ -46,7 +46,8 @@
   "alchemy": {
     "herbsPerPill": 2,
     "perfectBonus": 1,
-    "alchBonus": 1
+    "alchBonus": 1,
+    "furnaceLevel": 2
   },
   "market": {
     "pillPrice": 200,

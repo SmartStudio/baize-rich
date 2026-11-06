@@ -16,6 +16,7 @@ export type PreRollAct =
 export type ActionAct =
   | { t: 'upgrade'; node: NodeId }
   | { t: 'eat' }
+  | { t: 'brew' }
   | { t: 'cast'; card: string }
   | { t: 'skill' }
   | { t: 'closure' }

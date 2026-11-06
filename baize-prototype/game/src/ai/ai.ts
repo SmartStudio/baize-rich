@@ -196,10 +196,17 @@ export class AIController implements Controller {
     const st = this.st;
     switch (this.game.heroOf(this.seat).skill.id) {
       case 'sworddash': return this.challengeValue(t as number) + this.landingScore(st.players[t as number].pos) - this.expectedRoll(1);
-      case 'daze': return 40 + (t === this.leaderOpponent() ? 40 : 0) + this.standing(t as number) * 2;
+      case 'daze': return this.dazeValue(t as number);
       case 'roadblock': return this.roadblockValue(t as NodeId);
       default: return 0;
     }
+  }
+
+  /** 迷魂丹 pays off against a rival racing to a closure site; its pill must buy more than a stake would. */
+  private dazeValue(target: number): number {
+    const racing = nearlyFull({ ...this.view, seat: target }) ? 250 : 0;
+    const leader = target === this.leaderOpponent() ? 60 : 0;
+    return racing + leader + this.standing(target) * 2 - this.game.heroOf(this.seat).skill.pillCost * VALUE.pill;
   }
 
   /** Expected gain of a 镇山 mountain on `node`: the next opponent to move is stopped there. */
@@ -405,6 +412,7 @@ export class AIController implements Controller {
 
   private action(c: PendingChoiceOf<'action'>): string {
     const find = (pred: (v: ActionAct) => boolean) => c.options.find((o) => pred(o.value));
+    if (find((v) => v.t === 'brew')) return 'brew';
     const close = find((v) => v.t === 'closure');
     if (close && this.shouldClose()) return close.id;
     const skill = find((v) => v.t === 'skill');

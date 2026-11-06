@@ -294,6 +294,30 @@ describe('丹房', () => {
     expect(brew(3, 4, 'ok')).toEqual([3, 0]);
   });
 
+  it('随身药炉: the 丹师 brews on his own land of furnaceLevel+, no 火候 and no 丹道, once per turn', () => {
+    const g = ringGame();
+    const lv = g.data.config.alchemy.furnaceLevel;
+    const [a, d] = [g.state.players[0], g.state.players[3]];
+    g.state.tiles.R1 = { owner: 3, level: lv - 1 };
+    g.state.tiles.R2 = { owner: 3, level: lv };
+    g.state.tiles.R3 = { owner: 0, level: lv };
+    [a.herbs, d.herbs] = [5, 5];
+    [a.pos, d.pos] = ['R3', 'R1'];
+    const offers = (seat: number) => {
+      const seen: PendingChoice[] = [];
+      g.runFlow(g.testActionPhase(seat), script({ action: 'end' }, seen));
+      return seen[0].options.some((o) => o.id === 'brew');
+    };
+    expect(offers(0)).toBe(false);
+    expect(offers(3)).toBe(false);
+    d.pos = 'R2';
+    const seen: PendingChoice[] = [];
+    g.runFlow(g.testActionPhase(3), script({ action: ['brew', 'end'] }, seen));
+    expect([d.pills, d.herbs]).toEqual([2, 1]);
+    expect(seen.map((c) => c.kind)).toEqual(['action', 'brew', 'action']);
+    expect(seen[2].options.some((o) => o.id === 'brew')).toBe(false);
+  });
+
   it('without herbs nothing is asked', () => {
     const g = ringGame();
     const seen: PendingChoice[] = [];
