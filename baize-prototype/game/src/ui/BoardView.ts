@@ -93,6 +93,8 @@ function chevronKey(scene: Phaser.Scene, dir: Facing): string {
 export class BoardView {
   private buildings = new Map<NodeId, Phaser.GameObjects.Image>();
   private tokens: Token[] = [];
+  /** Where labels are still rising, so a new one near them stacks above instead of on top. */
+  private rising: { x: number; y: number }[] = [];
   private tokenNode: NodeId[] = [];
   private occluders: Occluders;
   private owners: OwnerMarks;
@@ -270,11 +272,18 @@ export class BoardView {
   /** A short gain / loss label that rises from a seat's token. */
   floatText(seat: number, text: string, color: string, delay = 0): void {
     const tok = this.tokens[seat];
-    const t = txt(this.scene, tok.x, tok.y - TOKEN_BOX.h, text, { size: FS.md, bold: true, color, stroke: HEX.ink, origin: [0.5, 1] })
+    const spot = { x: tok.x, y: tok.y };
+    const above = this.rising.filter((r) => Math.abs(r.x - spot.x) < TOKEN_BOX.w && Math.abs(r.y - spot.y) < TOKEN_BOX.h).length;
+    this.rising.push(spot);
+    const t = txt(this.scene, tok.x, tok.y - TOKEN_BOX.h - above * (FS.md + 4), text, { size: FS.md, bold: true, color, stroke: HEX.ink, origin: [0.5, 1] })
       .setDepth(DEPTH.top + 1).setAlpha(0);
+    const done = (): void => {
+      t.destroy();
+      this.rising.splice(this.rising.indexOf(spot), 1);
+    };
     this.scene.tweens.add({ targets: t, alpha: 1, duration: 120, delay });
     this.scene.tweens.add({ targets: t, y: t.y - 30, duration: 1100, delay, ease: 'Sine.easeOut' });
-    this.scene.tweens.add({ targets: t, alpha: 0, duration: 300, delay: delay + 900, onComplete: () => t.destroy() });
+    this.scene.tweens.add({ targets: t, alpha: 0, duration: 300, delay: delay + 900, onComplete: done });
   }
 
   /** Refresh ownership marks, buildings and markers from a (snapshot) state. */
