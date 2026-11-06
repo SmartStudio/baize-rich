@@ -85,6 +85,7 @@ export class ChoiceModal {
   }
 }
 
+const PREVIEW_BOX = 132;
 const PRIMARY = { fill: COLORS.gold, text: HEX.ink, hint: '#5A4A2A' };
 const SECONDARY = { fill: 0xb4b8cc, text: HEX.ink, hint: '#4A4766' };
 
@@ -113,13 +114,10 @@ function buildList(s: Phaser.Scene, spec: ModalSpec, pick: (id: string) => void)
   const layer = modalFrame(s, spec.title, px, py, pw, ph, !side);
   const cx = px + 14 + previewW;
   if (spec.preview) {
-    layer.add(s.add.rectangle(px + 14, py + 32, 132, 132, COLORS.ink).setOrigin(0, 0));
-    const [tk, tf] = frameRef(s, spec.preview.tile);
-    layer.add(s.add.image(px + 16, py + 34, tk, tf).setOrigin(0, 0).setScale(2));
-    if (spec.preview.obj) {
-      const [ok, of] = frameRef(s, spec.preview.obj);
-      layer.add(s.add.image(px + 80, py + 130, ok, of).setOrigin(0.5, 1).setScale(2));
-    }
+    layer.add(s.add.rectangle(px + 14, py + 32, PREVIEW_BOX, PREVIEW_BOX, COLORS.ink).setOrigin(0, 0));
+    const [tk, tf] = frameRef(s, spec.preview);
+    const img = s.add.image(px + 14 + PREVIEW_BOX / 2, py + 32 + PREVIEW_BOX / 2, tk, tf);
+    layer.add(img.setScale(Math.max(1, Math.floor((PREVIEW_BOX - 4) / Math.max(img.width, img.height)))));
   }
   if (descText) layer.add(descText.setPosition(cx, py + 30));
   const all: ModalOption[] = [...spec.options];

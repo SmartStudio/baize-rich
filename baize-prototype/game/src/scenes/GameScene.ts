@@ -218,7 +218,6 @@ export class GameScene extends Phaser.Scene {
       this.cam.visibleRect(),
       st.players.map((_, i) => this.boardView.tokenFocus(i)),
       st.current,
-      this.cam.fits(),
     );
   }
 

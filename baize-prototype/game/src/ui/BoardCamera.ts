@@ -4,9 +4,10 @@
 //   frame  — fit a world rect (choice targets, both ends of a teleport) into the SAFE area,
 //   free   — the player dragged / zoomed / used the minimap; nothing moves the camera until the next
 //            turn start or 回到棋子.
+// The goal zoom is always one of ZOOMS; the view tweens between them and snaps onto the goal when it settles.
 import Phaser from 'phaser';
 import { H, SAFE, W, type Rect } from './layout';
-import { keepInside, rectCentre, rectToScreen, toWorld, viewRect, type Point, type View, type WorldMap } from './world';
+import { keepInside, rectCentre, rectToScreen, toWorld, viewRect, ZOOMS, type Point, type View, type WorldMap, type Zoom } from './world';
 
 type Mode =
   | { kind: 'follow'; seat: number }
@@ -20,17 +21,23 @@ const KEEP: Rect = { x: SAFE.x + 40, y: SAFE.y + 50, w: SAFE.w - 80, h: SAFE.h -
 /** Easing time constant at 1× speed, in ms; faster game speeds ease proportionally faster. */
 const EASE_MS = 160;
 const DRAG_START_PX = 6;
-/** A teleport is framed only when both ends fit at this fraction of the player's zoom or closer. */
-const TELEPORT_MIN_ZOOM = 0.6;
+/** Wheel travel (summed deltaY) that steps one zoom level; a trackpad flick sums many small deltas. */
+const WHEEL_STEP = 60;
+/** Pinch spread ratio that steps one zoom level. */
+const PINCH_STEP = 1.25;
+/** Below this distance (screen px) and zoom difference the view lands exactly on its goal. */
+const SNAP_PX = 0.5;
+const SNAP_ZOOM = 1e-3;
 
 export class BoardCamera {
   private view: View;
   private goal: View;
   /** The zoom the player chose; follow mode returns to it. */
-  private userZoom = 1;
+  private userZoom: Zoom = 1;
   private mode: Mode = { kind: 'free' };
   private press: { start: Point; view: View } | null = null;
-  private pinch: { dist: number; zoom: number } | null = null;
+  private pinch: { dist: number } | null = null;
+  private wheel = 0;
   /** The last press turned into a drag (stays set until the next press, so its release is not a click). */
   dragged = false;
   private manualFn: (() => void) | null = null;
@@ -72,14 +79,15 @@ export class BoardCamera {
 
   /** Show a pending choice's targets (and the deciding seat's token), even if the player had panned away. */
   frameChoice(rect: Rect, seat: number): void {
-    this.setFrame(rect, seat);
+    this.setFrame(rect, seat, this.world.fitZoom(rect, this.userZoom) ?? ZOOMS[0]);
   }
 
-  /** Show both ends of a teleport or swap when they fit at a reasonable zoom; otherwise just follow. */
+  /** Show both ends of a teleport or swap when they fit on screen at a resting zoom; otherwise just follow. */
   frameTeleport(rect: Rect, seat: number): void {
     if (this.mode.kind === 'free') return;
-    if (this.world.fitZoom(rect, this.userZoom) < this.userZoom * TELEPORT_MIN_ZOOM) this.follow(seat);
-    else this.setFrame(rect, seat);
+    const zoom = this.world.fitZoom(rect, this.userZoom);
+    if (zoom === null) this.follow(seat);
+    else this.setFrame(rect, seat, zoom);
   }
 
   /** A framed choice or teleport is over: go back to following that seat from where the camera is. */
@@ -93,11 +101,6 @@ export class BoardCamera {
   panTo(p: Point): void {
     this.mode = { kind: 'free' };
     this.goal = this.world.clamp({ cx: p.x, cy: p.y, zoom: this.goal.zoom });
-  }
-
-  /** True when the whole world is on screen. */
-  fits(): boolean {
-    return this.world.fits(this.view);
   }
 
   /** World rect the whole screen shows right now. */
@@ -124,17 +127,29 @@ export class BoardCamera {
     const zoom = Math.exp(Math.log(this.view.zoom) + (Math.log(this.goal.zoom) - Math.log(this.view.zoom)) * k);
     let v: View = { cx: this.view.cx + (this.goal.cx - this.view.cx) * k, cy: this.view.cy + (this.goal.cy - this.view.cy) * k, zoom };
     if (m.kind === 'follow') v = this.world.clamp(keepInside(v, this.focus(m.seat), KEEP));
-    const moved = Math.abs(v.cx - this.view.cx) * v.zoom > 0.05 || Math.abs(v.cy - this.view.cy) * v.zoom > 0.05
-      || Math.abs(v.zoom - this.view.zoom) > 1e-4;
+    v = this.settle(v);
+    const moved = v.cx !== this.view.cx || v.cy !== this.view.cy || v.zoom !== this.view.zoom;
     this.view = v;
     if (moved) this.apply();
     return moved;
   }
 
-  private setFrame(rect: Rect, seat: number): void {
+  /**
+   * A view within a hair of the goal lands on it: exactly its zoom, and a centre on the screen pixel grid,
+   * so a resting camera maps every art pixel to whole screen pixels.
+   */
+  private settle(v: View): View {
+    const g = this.goal;
+    const near = Math.abs(v.zoom - g.zoom) < SNAP_ZOOM
+      && Math.abs(v.cx - g.cx) * g.zoom < SNAP_PX && Math.abs(v.cy - g.cy) * g.zoom < SNAP_PX;
+    const onGrid = (x: number): number => Math.round(x * g.zoom) / g.zoom;
+    return near ? { cx: onGrid(g.cx), cy: onGrid(g.cy), zoom: g.zoom } : v;
+  }
+
+  private setFrame(rect: Rect, seat: number, zoom: Zoom): void {
     this.mode = { kind: 'frame', rect, seat };
     const c = rectCentre(rect);
-    this.goal = this.world.clamp({ cx: c.x, cy: c.y, zoom: this.world.fitZoom(rect, this.userZoom) });
+    this.goal = this.world.clamp({ cx: c.x, cy: c.y, zoom });
   }
 
   private apply(): void {
@@ -148,10 +163,9 @@ export class BoardCamera {
     this.mode = { kind: 'free' };
   }
 
-  /** Zoom by `factor`; while following, about the screen centre, otherwise keeping `anchor` (screen px) still. */
-  private zoomBy(factor: number, anchor: Point): void {
-    const { min, max } = this.world.zoomRange();
-    const zoom = Phaser.Math.Clamp(this.goal.zoom * factor, min, max);
+  /** Step to a resting zoom; while following, about the screen centre, otherwise keeping `anchor` (screen px) still. */
+  private zoomTo(zoom: Zoom, anchor: Point): void {
+    if (zoom === this.userZoom && zoom === this.goal.zoom) return;
     this.userZoom = zoom;
     if (this.mode.kind === 'follow') {
       this.goal = { ...this.goal, zoom };
@@ -160,6 +174,11 @@ export class BoardCamera {
     this.takeOver();
     const at = toWorld(this.goal, anchor);
     this.goal = this.world.clamp({ cx: at.x - (anchor.x - W / 2) / zoom, cy: at.y - (anchor.y - H / 2) / zoom, zoom });
+  }
+
+  private zoomStep(dir: 1 | -1, anchor: Point): void {
+    const i = Phaser.Math.Clamp(ZOOMS.indexOf(this.userZoom) + dir, 0, ZOOMS.length - 1);
+    this.zoomTo(ZOOMS[i], anchor);
   }
 
   private bindInput(): void {
@@ -178,10 +197,7 @@ export class BoardCamera {
     input.on('pointermove', (p: Phaser.Input.Pointer) => {
       const [a, b] = [input.pointer1, input.pointer2];
       if (a?.isDown && b?.isDown) {
-        const dist = Phaser.Math.Distance.Between(a.x, a.y, b.x, b.y);
-        if (!this.pinch) this.pinch = { dist, zoom: this.goal.zoom };
-        else this.zoomBy((this.pinch.zoom * dist) / this.pinch.dist / this.goal.zoom, { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
-        this.dragged = true;
+        this.onPinch(a, b);
         return;
       }
       if (!this.press || !p.isDown) {
@@ -197,7 +213,24 @@ export class BoardCamera {
       this.goal = this.world.clamp({ cx: this.press.view.cx - dx / z, cy: this.press.view.cy - dy / z, zoom: this.goal.zoom });
     });
     input.on('wheel', (p: Phaser.Input.Pointer, _over: unknown, _dx: number, dy: number) => {
-      this.zoomBy(Math.exp(-dy * 0.0015), { x: p.x, y: p.y });
+      this.wheel = Math.sign(dy) === Math.sign(this.wheel) ? this.wheel + dy : dy;
+      if (Math.abs(this.wheel) < WHEEL_STEP) return;
+      this.zoomStep(this.wheel < 0 ? 1 : -1, { x: p.x, y: p.y });
+      this.wheel = 0;
     });
+  }
+
+  /** A pinch steps one zoom level each time the fingers spread or close by PINCH_STEP. */
+  private onPinch(a: Phaser.Input.Pointer, b: Phaser.Input.Pointer): void {
+    const dist = Phaser.Math.Distance.Between(a.x, a.y, b.x, b.y);
+    this.dragged = true;
+    if (!this.pinch) {
+      this.pinch = { dist };
+      return;
+    }
+    const ratio = dist / this.pinch.dist;
+    if (ratio < PINCH_STEP && ratio > 1 / PINCH_STEP) return;
+    this.zoomStep(ratio > 1 ? 1 : -1, { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+    this.pinch = { dist };
   }
 }

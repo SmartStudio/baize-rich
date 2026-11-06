@@ -105,8 +105,29 @@ async function choiceShots(page) {
   }
 }
 
+// Point at a node's top face, k of the way from its diamond centre to its left corner, and screenshot its popover.
+// Fails the run unless that node is the one hovered and its popover is showing, so hit zones must match the art.
+async function hoverNode(page, errors, id, k, file) {
+  const at = await page.evaluate(([id, k]) => {
+    const sc = window.__phaser.scene.getScene('Game');
+    const w = sc.boardView.world;
+    const c = w.centre(id);
+    const left = w.diamond(id)[3];
+    return sc.cam.toScreen({ x: c.x + (left.x - c.x) * k, y: c.y + (left.y - c.y) * k, w: 0, h: 0 });
+  }, [id, k]);
+  await page.mouse.move(at.x, at.y);
+  await sleep(500);
+  await shot(page, file);
+  const seen = await page.evaluate(() => {
+    const sc = window.__phaser.scene.getScene('Game');
+    return { hovered: sc.hovered, shown: sc.tip.layer.visible, title: sc.tip.title.text };
+  });
+  console.log(`hover ${id}:`, JSON.stringify(seen));
+  if (seen.hovered !== id || !seen.shown) errors.push(`hover ${id} at ${JSON.stringify(at)}: ${JSON.stringify(seen)}`);
+}
+
 // Title → first human turn, an all-AI game and a 45 s human soak.
-async function tourShots(page) {
+async function tourShots(page, errors) {
   // 1) title → 玩法说明 → hero select → versus (seed 2: 你's first roll lands on unowned land -> buy dialog)
   await startQuickGame(page, `${BASE}?seed=2`, {
     title: '00-title.png',
@@ -133,6 +154,12 @@ async function tourShots(page) {
   await shot(page, '04b-cast-menu.png');
   await page.keyboard.press('Escape');
   await sleep(300);
+
+  const land = await page.evaluate(() => window.__baize.state.players[0].pos);
+  await hoverNode(page, errors, land, 0.85, '04c-hover-land.png');
+  await page.evaluate(() => { const sc = window.__phaser.scene.getScene('Game'); sc.cam.panTo(sc.boardView.world.centre('ALTAR')); });
+  await sleep(1500);
+  await hoverNode(page, errors, 'ALTAR', 0.9, '04d-hover-altar.png');
 
   // 3) 4-AI auto game
   await page.goto(`${BASE}?auto=1&seed=7&speed=2`);
@@ -194,7 +221,7 @@ async function waitForServer(url, tries = 50) {
     page.on('console', (m) => { if (m.type() === 'error') errors.push(`console: ${m.text()}`); });
     page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
 
-    if (ONLY !== 'choices') await tourShots(page);
+    if (ONLY !== 'choices') await tourShots(page, errors);
 
     await choiceShots(page);
   } finally {

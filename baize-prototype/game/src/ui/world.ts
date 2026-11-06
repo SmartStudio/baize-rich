@@ -1,10 +1,11 @@
-// World geometry and camera math for the board, kept free of Phaser so it can be unit-tested.
+// Board geometry on a 2:1 isometric grid and camera math, kept free of Phaser so it can be unit-tested.
 //
-// World space: grid cell (col,row) of board.json spans [col*CELL, (col+1)*CELL) × [row*CELL, …).
-// A node fills its `pos` cell, or the cells of its `rect` [c0,r0,c1,r1] (inclusive) when it has one.
+// Grid cell (c,r) of board.json is a diamond TW wide and TH tall; its centre projects to world
+// ((c−r)·TW/2, (c+r)·TH/2), so cell (0,0) is centred on the world origin. A node's footprint is its
+// `pos` cell, or the cells of its `rect` [c0,r0,c1,r1] (inclusive) when it has one.
 // A view is the world point at the screen centre plus a zoom; screen = (world − centre)·zoom + screen centre.
 import type { BoardData, NodeId } from '../core/types';
-import { CELL, H, SAFE, W, type Rect } from './layout';
+import { H, SAFE, W, type Rect } from './layout';
 
 export interface Point {
   x: number;
@@ -24,15 +25,74 @@ export interface Edge {
   twoWay: boolean;
 }
 
-export const ZOOM_MAX = 2;
-const ZOOM_FLOOR = 0.35;
-/** How far past the grid the camera may pan, in world px. */
-const PAD = CELL / 2;
-/** Ground painted past the board, in world px. Five cells contain every clamped view of the 11×11 board. */
-export const TERRAIN_MARGIN = 5 * CELL;
+/** Inclusive cell range a node covers. */
+export interface Footprint {
+  c0: number;
+  r0: number;
+  c1: number;
+  r1: number;
+}
 
-export function cellsRect(c0: number, r0: number, c1: number, r1: number): Rect {
-  return { x: c0 * CELL, y: r0 * CELL, w: (c1 - c0 + 1) * CELL, h: (r1 - r0 + 1) * CELL };
+/** Diamond width and height of one grid cell, in world px. */
+export const TW = 96;
+export const TH = 48;
+/** The camera rests only at these zooms, so every art pixel covers a whole number of screen pixels. */
+export const ZOOMS = [1, 2] as const;
+export type Zoom = (typeof ZOOMS)[number];
+/** Margin kept around a framed rect inside the SAFE area, in screen px. */
+const FRAME_MARGIN = 40;
+/** Landmarks and buildings rise up to this far above the back row's top faces. */
+const HEADROOM = 2 * TH;
+/** How far past the board the camera may pan, in world px. */
+const PAD = TW / 2;
+/** Ground painted past the board's bounding rect, in world px. Four cells each way contain every clamped view. */
+export const TERRAIN_MARGIN = { x: 4 * TW, y: 4 * TH };
+
+/**
+ * Draw order. `y` is the centre y of the cell a thing belongs to: rows further front (larger c+r) have larger y,
+ * and everything a cell owns stays inside (y, y + TH/2), below the blocks of the row in front.
+ */
+export const DEPTH = {
+  ground: -1e5,
+  /** Same-row blocks never overlap; c breaks the tie so the order is total. */
+  block: (c: number, r: number): number => project(c, r).y + c * 1e-3,
+  /** Overlays painted on a top face: ownership rims, marks, chevrons. */
+  face: (y: number): number => y + 0.5,
+  /** Landmarks, buildings and ground props. */
+  stand: (y: number): number => y + 1,
+  /** A token sorts by its feet, a quarter cell forward so it stays above whatever stands on its own cell. */
+  token: (footY: number, seat: number): number => footY + TH / 4 + seat * 0.01,
+  /** Labels and markers above the whole board. */
+  top: 1e5,
+};
+
+/** World position of a grid point; integer (c,r) is a cell centre, half-integers are its corners. */
+export function project(c: number, r: number): Point {
+  return { x: ((c - r) * TW) / 2, y: ((c + r) * TH) / 2 };
+}
+
+/** Inverse of `project`: the fractional grid point under world point p. */
+export function unproject(p: Point): { c: number; r: number } {
+  const u = p.x / (TW / 2);
+  const v = p.y / (TH / 2);
+  return { c: (v + u) / 2, r: (v - u) / 2 };
+}
+
+/** The grid cell whose diamond holds world point p. */
+export function cellAt(p: Point): { c: number; r: number } {
+  const g = unproject(p);
+  return { c: Math.floor(g.c + 0.5), r: Math.floor(g.r + 0.5) };
+}
+
+/** A footprint's diamond corners in world px: top, right, bottom, left. */
+export function diamondOf(f: Footprint): [Point, Point, Point, Point] {
+  return [project(f.c0 - 0.5, f.r0 - 0.5), project(f.c1 + 0.5, f.r0 - 0.5), project(f.c1 + 0.5, f.r1 + 0.5), project(f.c0 - 0.5, f.r1 + 0.5)];
+}
+
+/** Screen-aligned bounding rect of a footprint's diamond. */
+export function footprintRect(f: Footprint): Rect {
+  const [top, right, bottom, left] = diamondOf(f);
+  return { x: left.x, y: top.y, w: right.x - left.x, h: bottom.y - top.y };
 }
 
 export function unionRect(rs: Rect[]): Rect {
@@ -49,27 +109,29 @@ export function rectCentre(r: Rect): Point {
 
 /** Board bounds plus TERRAIN_MARGIN on every side. The ground texture covers this rect. */
 export function terrainRect(bounds: Rect): Rect {
-  return {
-    x: bounds.x - TERRAIN_MARGIN,
-    y: bounds.y - TERRAIN_MARGIN,
-    w: bounds.w + 2 * TERRAIN_MARGIN,
-    h: bounds.h + 2 * TERRAIN_MARGIN,
-  };
+  const m = TERRAIN_MARGIN;
+  return { x: bounds.x - m.x, y: bounds.y - m.y, w: bounds.w + 2 * m.x, h: bounds.h + 2 * m.y };
 }
 
-/** Where every node sits in world px, the drawable world bounds and the road edges between nodes. */
+const cellKey = (c: number, r: number): string => `${c},${r}`;
+
+/** Where every node sits on the grid and in world px, the drawable world bounds and the road edges between nodes. */
 export class WorldMap {
-  /** The grid (and any node footprint past it). */
+  /** Bounding rect of the grid's diamond (and any node footprint past it), plus HEADROOM above. */
   readonly bounds: Rect;
   readonly edges: Edge[] = [];
-  private readonly rects = new Map<NodeId, Rect>();
+  private readonly feet = new Map<NodeId, Footprint>();
+  private readonly byCell = new Map<string, NodeId>();
 
   constructor(data: BoardData) {
     for (const n of data.nodes) {
       const [c0, r0, c1, r1] = n.rect ?? [n.pos[0], n.pos[1], n.pos[0], n.pos[1]];
-      this.rects.set(n.id, cellsRect(c0, r0, c1, r1));
+      this.feet.set(n.id, { c0, r0, c1, r1 });
+      for (let c = c0; c <= c1; c++) for (let r = r0; r <= r1; r++) this.byCell.set(cellKey(c, r), n.id);
     }
-    this.bounds = unionRect([{ x: 0, y: 0, w: data.grid.cols * CELL, h: data.grid.rows * CELL }, ...this.rects.values()]);
+    const grid = { c0: 0, r0: 0, c1: data.grid.cols - 1, r1: data.grid.rows - 1 };
+    const faces = unionRect([grid, ...this.feet.values()].map(footprintRect));
+    this.bounds = { ...faces, y: faces.y - HEADROOM, h: faces.h + HEADROOM };
     const next = new Map(data.nodes.map((n) => [n.id, n.next]));
     const seen = new Set<string>();
     for (const n of data.nodes) {
@@ -83,36 +145,40 @@ export class WorldMap {
     }
   }
 
-  /** The node's full footprint (one cell, or its `rect`). */
-  cellRect(id: NodeId): Rect {
-    const r = this.rects.get(id);
-    if (!r) throw new Error(`unknown node ${id}`);
-    return { ...r };
+  footprint(id: NodeId): Footprint {
+    const f = this.feet.get(id);
+    if (!f) throw new Error(`unknown node ${id}`);
+    return { ...f };
   }
 
+  /** The diamond centre of the node's footprint, in world px. */
   centre(id: NodeId): Point {
-    return rectCentre(this.cellRect(id));
+    const f = this.footprint(id);
+    return project((f.c0 + f.c1) / 2, (f.r0 + f.r1) / 2);
+  }
+
+  /** The node's top-face diamond corners: top, right, bottom, left. */
+  diamond(id: NodeId): [Point, Point, Point, Point] {
+    return diamondOf(this.footprint(id));
+  }
+
+  /** Screen-aligned box around the node's top-face diamond, for camera framing and popover anchors. */
+  rect(id: NodeId): Rect {
+    return footprintRect(this.footprint(id));
   }
 
   nodeIds(): NodeId[] {
-    return [...this.rects.keys()];
+    return [...this.feet.keys()];
   }
 
-  /** The node whose footprint holds world point p, if any. */
+  nodeAtCell(c: number, r: number): NodeId | null {
+    return this.byCell.get(cellKey(c, r)) ?? null;
+  }
+
+  /** The node whose top-face diamond holds world point p, if any. */
   nodeAt(p: Point): NodeId | null {
-    for (const [id, r] of this.rects) if (p.x >= r.x && p.x < r.x + r.w && p.y >= r.y && p.y < r.y + r.h) return id;
-    return null;
-  }
-
-  /** Zoom range: never closer than ZOOM_MAX, never further out than needed to see the whole world. */
-  zoomRange(): { min: number; max: number } {
-    const fit = Math.min(W / this.bounds.w, H / this.bounds.h);
-    return { min: Math.max(ZOOM_FLOOR, Math.min(1, fit)), max: ZOOM_MAX };
-  }
-
-  /** True when the whole world is on screen at this view. */
-  fits(v: View): boolean {
-    return this.bounds.w * v.zoom <= W + 0.5 && this.bounds.h * v.zoom <= H + 0.5;
+    const { c, r } = cellAt(p);
+    return this.nodeAtCell(c, r);
   }
 
   /**
@@ -121,8 +187,7 @@ export class WorldMap {
    * A longer axis pans until the board edge plus PAD meets the SAFE edge.
    */
   clamp(v: View): View {
-    const { min, max } = this.zoomRange();
-    const zoom = Math.min(max, Math.max(min, v.zoom));
+    const zoom = Math.min(ZOOMS[ZOOMS.length - 1], Math.max(ZOOMS[0], v.zoom));
     const b = this.bounds;
     const axis = (c: number, lo: number, size: number, safe: number): number => {
       if (size * zoom <= safe) return lo + size / 2;
@@ -132,11 +197,10 @@ export class WorldMap {
     return { cx: axis(v.cx, b.x, b.w, SAFE.w), cy: axis(v.cy, b.y, b.h, SAFE.h), zoom };
   }
 
-  /** The largest zoom (≤ cap) at which world rect r fits inside the SAFE area, within the zoom range. */
-  fitZoom(r: Rect, cap: number): number {
-    const { min, max } = this.zoomRange();
-    const z = Math.min(cap, (SAFE.w - 40) / r.w, (SAFE.h - 40) / r.h);
-    return Math.min(max, Math.max(min, z));
+  /** The largest resting zoom (≤ cap) at which world rect r fits inside the SAFE area, or null if none does. */
+  fitZoom(r: Rect, cap: Zoom): Zoom | null {
+    const fits = (z: Zoom): boolean => z <= cap && r.w * z <= SAFE.w - FRAME_MARGIN && r.h * z <= SAFE.h - FRAME_MARGIN;
+    return [...ZOOMS].reverse().find(fits) ?? null;
   }
 }
 

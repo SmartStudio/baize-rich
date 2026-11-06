@@ -24,7 +24,7 @@ export const buy: Presenter<'buy'> = (c, { game }) => {
   const n = game.board.node(c.ctx.node!);
   return listSpec(c, {
     desc: [c.desc, `基础租金 ${nominalRent(game.data, n.price!, 0)} 灵石`].filter(Boolean).join('\n'),
-    preview: { tile: `tile_land_${n.region!}`, obj: `decor_${n.region!}` },
+    preview: `iso_land_${n.region!}`,
   });
 };
 

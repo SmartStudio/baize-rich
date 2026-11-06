@@ -1,32 +1,29 @@
-// The world under the tiles: region ground painted procedurally from node positions, scenery props in
-// empty cells, and the roads (with direction chevrons on one-way edges) between each node and its `next`.
-// Everything is a pure function of board.json, so the same board always looks the same.
+// The world under the path: a flat iso plane DROP px below the raised path blocks, one region per grid cell
+// (the nearest regional node, ragged by a hash), darker than the path with dithered noise and faint cell
+// seams, and scenery props on empty cells. Everything is a pure function of board.json, so the same board
+// always looks the same.
 import Phaser from 'phaser';
 import type { BoardData, RegionId } from '../core/types';
 import { addImg } from './assets';
-import { CELL, INSET, type Rect } from './layout';
-import { rectCentre, terrainRect, type Point, type WorldMap } from './world';
+import type { Rect } from './layout';
+import { cellAt, DEPTH, project, terrainRect, unproject, type Point, type WorldMap } from './world';
 
-/** World px per ground texel; the texture is drawn small and scaled up with nearest filtering. */
-const TEXEL = 2;
-/** Region membership is decided per block of BLOCK×BLOCK texels. */
-const BLOCK = 4;
-const OUTLINE = [0x0f, 0x0e, 0x1a];
-const ROAD_EDGE = 0x3a2c22;
-const ROAD_FILL = 0xc9b58a;
+/** Height of the path blocks' walls: the plane lies this far below their top faces. */
+const DROP = 24;
+const OUTLINE: Rgb = [0x0f, 0x0e, 0x1a];
+/** How far a cell's region seed may wander, in cells; borders follow the cell seams but stay ragged. */
+const JITTER = 1.4;
 
-type Ground = RegionId | 'none';
+type Rgb = [number, number, number];
+interface Shade { base: Rgb; seam: Rgb; dark: Rgb; fleck: Rgb }
 
-/** Colours sampled from the hand-painted centre art (centre_bg), so painted ground matches it. */
-const PALETTE: Record<Ground, { base: string; dark: string; fleck: string; hatch: boolean }> = {
-  wood: { base: '#6dbe52', dark: '#3f8f4a', fleck: '#b8e07a', hatch: false },
-  fire: { base: '#5e3a42', dark: '#3a2228', fleck: '#e0663a', hatch: true },
-  water: { base: '#d6f2fb', dark: '#8fcdeb', fleck: '#ffffff', hatch: false },
-  earth: { base: '#4a3e5c', dark: '#3e3450', fleck: '#3fa8a0', hatch: true },
-  none: { base: '#2e2b4a', dark: '#23213a', fleck: '#3c3860', hatch: false },
+/** Each region's ground, a few steps darker than its path blocks so the path reads on top of it. */
+const PALETTE: Record<RegionId, Shade> = {
+  wood: { base: rgb('#2c4a2a'), seam: rgb('#243e23'), dark: rgb('#1f361f'), fleck: rgb('#4a7338') },
+  fire: { base: rgb('#3e2124'), seam: rgb('#341b1e'), dark: rgb('#2b1518'), fleck: rgb('#8e3c26') },
+  water: { base: rgb('#45515e'), seam: rgb('#3b4652'), dark: rgb('#333c47'), fleck: rgb('#94aebe') },
+  earth: { base: rgb('#28213a'), seam: rgb('#211b31'), dark: rgb('#1b1629'), fleck: rgb('#463765') },
 };
-
-export const DEPTH = { ground: -30, roads: -20, arrows: 1.5 };
 
 function hash(x: number, y: number, salt = 0): number {
   let h = Math.imul(x, 374761393) + Math.imul(y, 668265263) + Math.imul(salt, 2246822519);
@@ -34,63 +31,62 @@ function hash(x: number, y: number, salt = 0): number {
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
 
-function rgb(hex: string): [number, number, number] {
+function rgb(hex: string): Rgb {
   const v = parseInt(hex.slice(1), 16);
   return [(v >> 16) & 255, (v >> 8) & 255, v & 255];
 }
 
-/** Which region's ground lies under each block: the nearest node that has a region, with a ragged border. */
-function regionField(world: WorldMap, data: BoardData, area: Rect, cols: number, rows: number): Ground[] {
-  const seeds = data.nodes.filter((n) => n.region).map((n) => ({ region: n.region!, ...world.centre(n.id) }));
-  const field: Ground[] = new Array(cols * rows);
-  const size = TEXEL * BLOCK;
-  // Hashes stay in board-block space, so the margin does not slide borders that are already on the board.
-  const ox = Math.floor((area.x - world.bounds.x) / size);
-  const oy = Math.floor((area.y - world.bounds.y) / size);
-  for (let by = 0; by < rows; by++) {
-    for (let bx = 0; bx < cols; bx++) {
-      const x = area.x + (bx + 0.5) * size;
-      const y = area.y + (by + 0.5) * size;
-      let best: Ground = 'none';
-      let bestD = Infinity;
-      seeds.forEach((s, i) => {
-        const d = Math.hypot(s.x - x, s.y - y) + (hash((bx + ox) >> 1, (by + oy) >> 1, i) - 0.5) * CELL * 0.35;
-        if (d < bestD) { bestD = d; best = s.region; }
-      });
-      field[by * cols + bx] = best;
+/** Region of every grid cell: the nearest node that has one, measured in cells with a per-cell jitter. */
+function regionOf(data: BoardData): (c: number, r: number) => RegionId {
+  const seeds = data.nodes.filter((n) => n.region).map((n, i) => ({ region: n.region!, c: n.pos[0], r: n.pos[1], i }));
+  const memo = new Map<number, RegionId>();
+  return (c, r) => {
+    const key = c * 4096 + r;
+    let g = memo.get(key);
+    if (!g) {
+      let best = Infinity;
+      for (const s of seeds) {
+        const d = Math.hypot(s.c - c, s.r - r) + (hash(c, r, s.i) - 0.5) * JITTER;
+        if (d < best) { best = d; g = s.region; }
+      }
+      memo.set(key, g!);
     }
-  }
-  return field;
+    return g!;
+  };
 }
 
-function paintGround(scene: Phaser.Scene, world: WorldMap, data: BoardData, area: Rect): { key: string; field: (p: Point) => Ground } {
-  const tw = Math.ceil(area.w / TEXEL);
-  const th = Math.ceil(area.h / TEXEL);
-  const cols = Math.ceil(tw / BLOCK);
-  const rows = Math.ceil(th / BLOCK);
-  const field = regionField(world, data, area, cols, rows);
-  const at = (tx: number, ty: number): Ground => field[Math.min(rows - 1, Math.floor(ty / BLOCK)) * cols + Math.min(cols - 1, Math.floor(tx / BLOCK))];
-  const colours = Object.fromEntries(Object.entries(PALETTE).map(([k, p]) => [k, { base: rgb(p.base), dark: rgb(p.dark), fleck: rgb(p.fleck), hatch: p.hatch }]));
-  const fx = Math.floor((area.x - world.bounds.x) / TEXEL);
-  const fy = Math.floor((area.y - world.bounds.y) / TEXEL);
+/** The ground cell under world point p: the plane is the grid shifted DROP px down. */
+const groundCell = (p: Point): { c: number; r: number } => cellAt({ x: p.x, y: p.y - DROP });
 
+function paintPlane(scene: Phaser.Scene, area: Rect, region: (c: number, r: number) => RegionId): string {
+  const w = Math.ceil(area.w);
+  const h = Math.ceil(area.h);
   const key = 'world_ground';
   if (scene.textures.exists(key)) scene.textures.remove(key);
-  const tex = scene.textures.createCanvas(key, tw, th)!;
+  const tex = scene.textures.createCanvas(key, w, h)!;
   const ctx = tex.getContext();
-  const img = ctx.createImageData(tw, th);
-  for (let ty = 0; ty < th; ty++) {
-    for (let tx = 0; tx < tw; tx++) {
-      const g = at(tx, ty);
-      const c = colours[g];
-      const border = (tx + 1 < tw && at(tx + 1, ty) !== g) || (ty + 1 < th && at(tx, ty + 1) !== g);
-      const n = hash((tx + fx) >> 1, (ty + fy) >> 1, 99);
+  const img = ctx.createImageData(w, h);
+  const x0 = area.x;
+  const y0 = area.y;
+  for (let ty = 0; ty < h; ty++) {
+    for (let tx = 0; tx < w; tx++) {
+      const wx = x0 + tx;
+      const wy = y0 + ty;
+      const cell = groundCell({ x: wx + 0.5, y: wy + 0.5 });
+      const right = groundCell({ x: wx + 1.5, y: wy + 0.5 });
+      const below = groundCell({ x: wx + 0.5, y: wy + 1.5 });
+      const g = region(cell.c, cell.r);
+      const shade = PALETTE[g];
+      const seamTo = (o: { c: number; r: number }): boolean => o.c !== cell.c || o.r !== cell.r;
+      const border = (seamTo(right) && region(right.c, right.r) !== g) || (seamTo(below) && region(below.c, below.r) !== g);
+      const n = hash(wx >> 1, wy >> 1, 99);
+      const dithered = hash(cell.c, cell.r, 7) < 0.4 && (wx & 1) === 0 && (wy & 1) === 0;
       const px = border ? OUTLINE
-        : c.hatch && (tx + ty) % 8 < 2 ? c.dark
-          : n < 0.07 ? c.dark
-            : n > 0.975 ? c.fleck
-              : c.base;
-      const o = (ty * tw + tx) * 4;
+        : seamTo(right) || seamTo(below) ? shade.seam
+          : n < 0.05 || dithered ? shade.dark
+            : n > 0.985 ? shade.fleck
+              : shade.base;
+      const o = (ty * w + tx) * 4;
       img.data[o] = px[0];
       img.data[o + 1] = px[1];
       img.data[o + 2] = px[2];
@@ -99,74 +95,36 @@ function paintGround(scene: Phaser.Scene, world: WorldMap, data: BoardData, area
   }
   ctx.putImageData(img, 0, 0);
   tex.refresh();
-  return { key, field: (p) => at(Math.floor((p.x - area.x) / TEXEL), Math.floor((p.y - area.y) / TEXEL)) };
+  return key;
 }
 
-/** Distance from a rect's centre to its edge along unit direction (ux, uy). */
-function exitDistance(r: Rect, ux: number, uy: number): number {
-  const hx = Math.abs(ux) > 1e-6 ? r.w / 2 / Math.abs(ux) : Infinity;
-  const hy = Math.abs(uy) > 1e-6 ? r.h / 2 / Math.abs(uy) : Infinity;
-  return Math.min(hx, hy);
-}
-
-/** A node's drawn tile: its footprint minus the INSET gap the roads show through. */
-export function tileRect(world: WorldMap, id: string): Rect {
-  const r = world.cellRect(id);
-  return { x: r.x + INSET, y: r.y + INSET, w: r.w - 2 * INSET, h: r.h - 2 * INSET };
-}
-
-function drawRoads(scene: Phaser.Scene, world: WorldMap): void {
-  const roads = scene.add.graphics().setDepth(DEPTH.roads);
-  const arrows = scene.add.graphics().setDepth(DEPTH.arrows);
-  for (const [width, colour] of [[18, ROAD_EDGE], [12, ROAD_FILL]] as const) {
-    roads.lineStyle(width, colour, 1);
-    for (const e of world.edges) {
-      const a = world.centre(e.from);
-      const c = world.centre(e.to);
-      roads.lineBetween(a.x, a.y, c.x, c.y);
-    }
-  }
-  for (const e of world.edges) {
-    if (e.twoWay) continue;
-    const a = world.centre(e.from);
-    const c = world.centre(e.to);
-    const len = Math.hypot(c.x - a.x, c.y - a.y);
-    if (len === 0) continue;
-    const ux = (c.x - a.x) / len;
-    const uy = (c.y - a.y) / len;
-    const t0 = exitDistance(tileRect(world, e.from), ux, uy);
-    const t1 = len - exitDistance(tileRect(world, e.to), ux, uy);
-    const m = { x: a.x + ux * (t0 + t1) / 2, y: a.y + uy * (t0 + t1) / 2 };
-    const pts = [
-      { x: m.x + ux * 5, y: m.y + uy * 5 },
-      { x: m.x - ux * 4 - uy * 6, y: m.y - uy * 4 + ux * 6 },
-      { x: m.x - ux * 4 + uy * 6, y: m.y - uy * 4 - ux * 6 },
-    ];
-    arrows.fillStyle(0xf4e9d0, 1).fillTriangle(pts[0].x, pts[0].y, pts[1].x, pts[1].y, pts[2].x, pts[2].y);
-    arrows.lineStyle(1.5, 0x0f0e1a, 1).strokeTriangle(pts[0].x, pts[0].y, pts[1].x, pts[1].y, pts[2].x, pts[2].y);
-  }
-}
-
-/** Scenery: one in three empty cells gets its region's prop, placed by a hash of the cell. */
-function scatterProps(scene: Phaser.Scene, world: WorldMap, field: (p: Point) => Ground, area: Rect): void {
-  for (let r = Math.floor(area.y / CELL); r < (area.y + area.h) / CELL; r++) {
-    for (let c = Math.floor(area.x / CELL); c < (area.x + area.w) / CELL; c++) {
-      const centre = rectCentre({ x: c * CELL, y: r * CELL, w: CELL, h: CELL });
-      if (world.nodeAt(centre) || hash(c, r, 3) > 0.34) continue;
-      const g = field(centre);
-      if (g === 'none') continue;
-      const x = c * CELL + 18 + hash(c, r, 4) * (CELL - 36);
-      const y = r * CELL + 36 + hash(c, r, 5) * (CELL - 44);
-      addImg(scene, x, y, `decor_${g}`).setOrigin(0.5, 1).setDepth(y);
+/**
+ * Scenery: about one empty cell in four gets its region's prop. Cells just in front of a path block stay bare,
+ * so no prop stands over the path's top faces.
+ */
+function scatterProps(scene: Phaser.Scene, world: WorldMap, region: (c: number, r: number) => RegionId, area: Rect): void {
+  const corners = [unproject({ x: area.x, y: area.y }), unproject({ x: area.x + area.w, y: area.y }),
+    unproject({ x: area.x, y: area.y + area.h }), unproject({ x: area.x + area.w, y: area.y + area.h })];
+  const span = (k: 'c' | 'r'): [number, number] => [Math.floor(Math.min(...corners.map((p) => p[k]))), Math.ceil(Math.max(...corners.map((p) => p[k])))];
+  const [c0, c1] = span('c');
+  const [r0, r1] = span('r');
+  for (let c = c0; c <= c1; c++) {
+    for (let r = r0; r <= r1; r++) {
+      if (hash(c, r, 3) > 0.26) continue;
+      if (world.nodeAtCell(c, r) || world.nodeAtCell(c - 1, r) || world.nodeAtCell(c, r - 1)) continue;
+      const centre = project(c, r);
+      const x = Math.round(centre.x + (hash(c, r, 4) - 0.5) * 28);
+      const y = Math.round(centre.y + DROP + (hash(c, r, 5) - 0.5) * 10);
+      if (x < area.x || x > area.x + area.w || y < area.y || y > area.y + area.h) continue;
+      addImg(scene, x, y, `decor_${region(c, r)}`).setOrigin(0.5, 1).setDepth(DEPTH.stand(centre.y));
     }
   }
 }
 
-/** Ground, roads and scenery for a board. Ground runs past the grid so the viewport never shows empty backdrop. */
-export function drawWorld(scene: Phaser.Scene, world: WorldMap, data: BoardData): void {
+/** The ground plane and its props. It runs past the board so the viewport never shows empty backdrop. */
+export function drawGround(scene: Phaser.Scene, world: WorldMap, data: BoardData): void {
   const area = terrainRect(world.bounds);
-  const ground = paintGround(scene, world, data, area);
-  scene.add.image(area.x, area.y, ground.key).setOrigin(0, 0).setScale(TEXEL).setDepth(DEPTH.ground);
-  drawRoads(scene, world);
-  scatterProps(scene, world, ground.field, area);
+  const region = regionOf(data);
+  scene.add.image(area.x, area.y, paintPlane(scene, area, region)).setOrigin(0, 0).setDepth(DEPTH.ground);
+  scatterProps(scene, world, region, area);
 }

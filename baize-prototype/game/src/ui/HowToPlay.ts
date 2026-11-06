@@ -54,9 +54,9 @@ const ART_BY_PAGE: Record<TutorialCopy['id'], Page['art']> = {
     ...chip(s, cx, cy + 100, '行动 · 吐纳打坐'),
   ],
   land: (s, cx, cy) => [
-    ...captioned(s, cx - 100, cy - 70, 'bld_1', 1.5, defaultData.board.buildings[1].name),
-    ...captioned(s, cx, cy - 70, 'bld_2', 1.5, defaultData.board.buildings[2].name),
-    ...captioned(s, cx + 100, cy - 70, 'bld_3', 1.5, defaultData.board.buildings[3].name),
+    ...captioned(s, cx - 100, cy - 70, 'iso_bld_1', 1, defaultData.board.buildings[1].name),
+    ...captioned(s, cx, cy - 70, 'iso_bld_2', 1, defaultData.board.buildings[2].name),
+    ...captioned(s, cx + 100, cy - 70, 'iso_bld_3', 1, defaultData.board.buildings[3].name),
   ],
   alchemy: (s, cx, cy) => [
     addImg(s, cx - 70, cy - 70, 'ic_herb').setScale(4),
@@ -65,7 +65,7 @@ const ART_BY_PAGE: Record<TutorialCopy['id'], Page['art']> = {
     ...chip(s, cx, cy + 30, '看准金火 · 收炉成丹'),
   ],
   breakthrough: (s, cx, cy) => [
-    addImg(s, cx, cy - 70, 'altar').setScale(0.75),
+    addImg(s, cx, cy - 90, 'iso_altar'),
     ...chip(s, cx, cy + 90, '押丹 · 掷骰 · 听天命'),
   ],
   duel: (s, cx, cy) => [

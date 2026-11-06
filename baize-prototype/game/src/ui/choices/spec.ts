@@ -61,8 +61,8 @@ export interface ModalSpec {
   /** Card frame for 'cards' layout ('card_divine' / 'card_heaven'). */
   cardFrame?: string;
   cardLabel?: string;
-  /** Frames stacked into a 2× preview at the left (e.g. tile + decor for 购买灵田). */
-  preview?: { tile: string; obj?: string };
+  /** A frame shown at the left at the largest whole scale that fits (e.g. the land block for 购买灵田). */
+  preview?: string;
   /** false hides the "1. " key prefix when the label already is the number. */
   numbered?: boolean;
   avoid?: Rect;

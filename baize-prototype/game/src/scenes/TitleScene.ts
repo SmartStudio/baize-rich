@@ -29,7 +29,7 @@ export class TitleScene extends Phaser.Scene {
     this.help = null;
     this.cameras.main.setBackgroundColor(COLORS.bg).fadeIn(600);
     this.backdrop();
-    this.altar = addImg(this, 640, 300, 'altar').setAlpha(0).setScale(0.9);
+    this.altar = addImg(this, 640, 280, 'iso_altar').setAlpha(0).setScale(0.9);
     this.tweens.add({ targets: this.altar, alpha: 1, scale: 1, duration: 2400, ease: 'Sine.easeOut' });
     this.narration = txt(this, 640, 560, '', { size: 22, origin: [0.5, 0.5], stroke: HEX.ink, wrap: 1000, align: 'center' }).setAlpha(0);
     this.skipHint = txt(this, 1256, 700, '任意键 / 点击跳过', { size: 13, color: HEX.dim, origin: [1, 1] });
@@ -96,7 +96,7 @@ export class TitleScene extends Phaser.Scene {
     this.narration.destroy();
     this.skipHint.destroy();
     this.altar.setAlpha(1).setScale(1);
-    this.tweens.add({ targets: this.altar, y: 290, duration: 2600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    this.tweens.add({ targets: this.altar, y: 272, duration: 2600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
 
     const title = txt(this, 640, 96, '白泽秘境大富翁', { size: 60, bold: true, color: HEX.gold, origin: [0.5, 0.5], stroke: HEX.ink });
     const sub = txt(this, 640, 150, TITLE_SUBTITLE, { size: 20, origin: [0.5, 0.5], color: HEX.parchment, stroke: HEX.ink });
