@@ -14,7 +14,7 @@ const DIST = process.env.DIST || 'dist';
 const PREFIX = process.env.SHOT_PREFIX || '';
 const outDir = path.join(root, 'screenshots');
 const shot = (page, name) => page.screenshot({ path: path.join(outDir, PREFIX + name) });
-const PORT = 4179;
+const PORT = Number(process.env.PORT) || 4179;
 const BASE = `http://localhost:${PORT}/`;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
