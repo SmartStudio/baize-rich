@@ -1,6 +1,7 @@
 // Board rendering in the front-tilt view: the ground plane (Ground.ts), a block per node with its landmark,
-// buildings by land level, ownership rims, one-way chevrons, rect hit zones, walking tokens (Token.ts), ambient
-// effects and the 白泽现世 light (Ambient.ts). Everything lives in world coordinates (WorldMap) and draws at 1×;
+// buildings by land level, ownership marks (OwnerMarks.ts), one-way chevrons, rect hit zones, walking tokens
+// (Token.ts) that outline themselves behind tall art (Occluders.ts), ambient effects and the 白泽现世 light
+// (Ambient.ts). Everything lives in world coordinates (WorldMap) and draws at 1×;
 // GameScene's camera scrolls and zooms it at integer zoom. Draw order comes from world.DEPTH.
 import Phaser from 'phaser';
 import { ALTAR, type Board } from '../core/board';
@@ -9,6 +10,8 @@ import { addAmbient, Manifest, STAND_DY } from './Ambient';
 import { addImg, ensureCanvas, setFrame } from './assets';
 import { drawGround } from './Ground';
 import type { Rect } from './layout';
+import { Occluders } from './Occluders';
+import { OwnerMarks } from './OwnerMarks';
 import { COLORS, FS, HEX, PLAYER_COLORS, PLAYER_HEX, txt } from './theme';
 import { Token, TOKEN_BOX } from './Token';
 import { DEPTH, FACE, facingFor, seam, TD, tokenSpots, TW, WorldMap, type Facing, type Point } from './world';
@@ -17,16 +20,15 @@ import { DEPTH, FACE, facingFor, seam, TD, tokenSpots, TW, WorldMap, type Facing
 const ALTAR_SEATS: [number, number][] = [[0, 2], [2, 2], [0, 1], [2, 1]];
 /** The altar statue's feet stand this far in front of the altar's top-face centre (ft_altar draws them at (96, 168)). */
 const STATUE_DY = 16;
+/** The statue ft_altar draws above its feet: the part of the altar that can hide a token on the row behind. */
+const STATUE_SIZE = { w: 70, h: 112 };
 /** Neighbours on a shared cell step aside or back this fast, at most. */
 const MAKE_ROOM_MS = 140;
 
-/** Face overlay textures: what is drawn on a top face and how. All are white, tinted at use. */
-type Overlay = 'rim' | 'rim2' | 'mark';
-
-interface LandView {
-  bld: Phaser.GameObjects.Image;
-  rim: Phaser.GameObjects.Image;
-}
+/** Face overlay textures: what is drawn on a top face and how. Light parts are white, tinted at use. */
+type Overlay = 'mark' | 'focus';
+/** Corner brackets on a cell the player can pick: arm length and stroke, in px. */
+const BRACKET = { arm: 12, thick: 2 };
 
 /** A rect ring `thick` px wide, `inset` px inside a w×h face; `open` leaves out the back edge. */
 function ring(ctx: CanvasRenderingContext2D, w: number, h: number, inset: number, thick: number, open: boolean): void {
@@ -36,16 +38,32 @@ function ring(ctx: CanvasRenderingContext2D, w: number, h: number, inset: number
   ctx.fillRect(w - inset - thick, inset, thick, h - 2 * inset);
 }
 
+/** Four ink-edged L brackets in a w×h face's corners, over a faint fill. */
+function brackets(ctx: CanvasRenderingContext2D, w: number, h: number): void {
+  const { arm, thick } = BRACKET;
+  const paint = (colour: string, grow: number): void => {
+    ctx.fillStyle = colour;
+    const at = 1 - grow;
+    for (const [bw, bh] of [[arm + 2 * grow, thick + 2 * grow], [thick + 2 * grow, arm + 2 * grow]]) {
+      for (const [x, y] of [[at, at], [w - at - bw, at], [at, h - at - bh], [w - at - bw, h - at - bh]]) ctx.fillRect(x, y, bw, bh);
+    }
+  };
+  ctx.fillStyle = '#ffffff';
+  ctx.globalAlpha = 0.16;
+  ctx.fillRect(1, 1, w - 2, h - 2);
+  ctx.globalAlpha = 1;
+  paint('#0f0e1a', 1);
+  paint('#ffffff', 0);
+}
+
 /** The altar's statue stands on the back of its top face, so the altar's overlays leave that edge open. */
 function overlayKey(scene: Phaser.Scene, kind: Overlay, r: Rect, open: boolean): string {
   const key = `face_${kind}_${r.w}x${r.h}${open ? '_open' : ''}`;
   ensureCanvas(scene, key, r.w, r.h, (ctx) => {
+    if (kind === 'focus') return brackets(ctx, r.w, r.h);
     ctx.fillStyle = '#ffffff';
-    if (kind === 'rim2') {
-      ring(ctx, r.w, r.h, 1, 2, open);
-      ring(ctx, r.w, r.h, 5, 2, open);
-    } else ring(ctx, r.w, r.h, kind === 'mark' ? 0 : 2, 2, open);
-    if (kind === 'mark' && !open) {
+    ring(ctx, r.w, r.h, 0, 2, open);
+    if (!open) {
       ctx.globalAlpha = 0.3;
       ctx.fillRect(2, 2, r.w - 4, r.h - 4);
     }
@@ -73,9 +91,11 @@ function chevronKey(scene: Phaser.Scene, dir: Facing): string {
 }
 
 export class BoardView {
-  private lands = new Map<NodeId, LandView>();
+  private buildings = new Map<NodeId, Phaser.GameObjects.Image>();
   private tokens: Token[] = [];
   private tokenNode: NodeId[] = [];
+  private occluders: Occluders;
+  private owners: OwnerMarks;
   private manifest: Manifest;
   private highlights: Phaser.GameObjects.Image[] = [];
   private hoverFn: ((n: NodeId | null) => void) | null = null;
@@ -91,17 +111,18 @@ export class BoardView {
     const s = scene;
     this.world = new WorldMap(board.data);
     drawGround(s, this.world, board.data);
+    this.occluders = new Occluders(s, this.tokens);
     for (const id of board.allNodeIds()) {
       if (id === ALTAR) this.mountAltar();
       else this.mountNode(id);
       this.addZone(id);
     }
     this.drawChevrons();
+    this.owners = new OwnerMarks(s, this.world, board);
     const c = this.world.centre(ALTAR);
     const statue = { x: c.x, y: c.y + STATUE_DY };
     this.manifest = new Manifest(s, statue);
     addAmbient(s, this.world, board, statue);
-    this.breatheRims();
     this.rock = txt(s, 0, 0, '山', { size: FS.lg, bold: true, color: HEX.gold, stroke: HEX.ink, origin: [0.5, 1] }).setDepth(DEPTH.top).setVisible(false);
     this.currentMark = s.add.image(0, 0, '__DEFAULT').setVisible(false);
     s.tweens.add({ targets: this.currentMark, alpha: 0.45, duration: 520, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
@@ -111,7 +132,7 @@ export class BoardView {
     });
   }
 
-  /** A node's block, plus its landmark (special nodes) or its hidden building and rim (land). */
+  /** A node's block, plus its landmark (special nodes) or its hidden building (land). */
   private mountNode(id: NodeId): void {
     const s = this.scene;
     const n = this.board.node(id);
@@ -119,19 +140,23 @@ export class BoardView {
     const f = this.world.footprint(id);
     addImg(s, r.x, r.y, n.region ? `ft_land_${n.region}` : 'ft_jade').setOrigin(0, 0).setDepth(DEPTH.block(f.r0));
     const feet = { x: r.x + r.w / 2, y: r.y + r.h / 2 + STAND_DY };
-    const stand = (frame: string): Phaser.GameObjects.Image => addImg(s, feet.x, feet.y, frame).setOrigin(0.5, 1).setDepth(DEPTH.stand(feet.y));
+    const stand = (frame: string): Phaser.GameObjects.Image =>
+      this.occluders.add(addImg(s, feet.x, feet.y, frame).setOrigin(0.5, 1).setDepth(DEPTH.stand(feet.y)));
     if (n.type !== 'land') {
       stand(`lm_${n.type}`);
       return;
     }
-    const rim = s.add.image(r.x, r.y, overlayKey(s, 'rim', r, false)).setOrigin(0, 0).setDepth(DEPTH.face(f.r0)).setVisible(false);
-    this.lands.set(id, { bld: stand('bld_1').setVisible(false), rim });
+    this.buildings.set(id, stand('bld_1').setVisible(false));
   }
 
-  /** The 3×3 altar frame: its bottom-left corner on the front face's bottom-left. */
+  /** The 3×3 altar frame: its bottom-left corner on the front face's bottom-left. Only its statue can cover a token. */
   private mountAltar(): void {
     const r = this.world.rect(ALTAR);
-    addImg(this.scene, r.x, r.y + r.h + FACE, 'ft_altar').setOrigin(0, 1).setDepth(DEPTH.block(this.world.footprint(ALTAR).r0));
+    const depth = DEPTH.block(this.world.footprint(ALTAR).r0);
+    addImg(this.scene, r.x, r.y + r.h + FACE, 'ft_altar').setOrigin(0, 1).setDepth(depth);
+    const c = this.world.centre(ALTAR);
+    const { w, h } = STATUE_SIZE;
+    this.occluders.add({ x: c.x, y: c.y + STATUE_DY, displayWidth: w, displayHeight: h, originX: 0.5, originY: 1, depth, visible: true });
   }
 
   /** One flat chevron on the seam between the two ends of every one-way road, pointing along it. */
@@ -144,12 +169,6 @@ export class BoardView {
       img.setPosition(Math.round(p.x - img.width / 2), Math.round(p.y - img.height / 2)).setOrigin(0, 0)
         .setDepth(DEPTH.face(Math.floor(p.y / TD)) + 0.05);
     }
-  }
-
-  /** Owned rims breathe slowly, so a claimed street reads as alive without flickering. */
-  private breatheRims(): void {
-    const rims = [...this.lands.values()].map((v) => v.rim);
-    this.scene.tweens.add({ targets: rims, alpha: 0.6, duration: 1700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
   }
 
   /** Hover and click land on the node's hit rect. A click lands on release, so a camera drag never counts. */
@@ -180,8 +199,7 @@ export class BoardView {
 
   /** World-space box around a seat's token, for keeping modals off it. */
   tokenRect(seat: number): Rect {
-    const t = this.tokens[seat];
-    return { x: t.x - TOKEN_BOX.w / 2, y: t.y - TOKEN_BOX.h, w: TOKEN_BOX.w, h: TOKEN_BOX.h };
+    return this.tokens[seat].box;
   }
 
   /** Seats standing on a node, in seat order. */
@@ -259,18 +277,14 @@ export class BoardView {
     this.scene.tweens.add({ targets: t, alpha: 0, duration: 300, delay: delay + 900, onComplete: () => t.destroy() });
   }
 
-  /** Refresh ownership rims, buildings and markers from a (snapshot) state. */
+  /** Refresh ownership marks, buildings and markers from a (snapshot) state. */
   render(state: GameState): void {
-    for (const [id, v] of this.lands) {
+    for (const [id, bld] of this.buildings) {
       const { owner, level } = state.tiles[id];
-      v.bld.setVisible(owner !== null && level > 0);
-      if (level > 0) setFrame(v.bld, `bld_${level}`);
-      v.rim.setVisible(owner !== null);
-      if (owner === null) continue;
-      const street = this.board.streetOf(id);
-      const whole = street.length > 0 && street.every((s) => state.tiles[s].owner === owner);
-      v.rim.setTexture(overlayKey(this.scene, whole ? 'rim2' : 'rim', this.world.rect(id), false)).setTint(PLAYER_COLORS[owner]);
+      bld.setVisible(owner !== null && level > 0);
+      if (level > 0) setFrame(bld, `bld_${level}`);
     }
+    this.owners.render(state);
     if (state.roadblock) {
       const p = this.world.centre(state.roadblock.node);
       this.rock.setVisible(true).setPosition(p.x, p.y - TD / 2).setColor(PLAYER_HEX[state.roadblock.seat]);
@@ -286,7 +300,7 @@ export class BoardView {
   setClickable(nodes: NodeId[]): void {
     for (const h of this.highlights) h.destroy();
     this.highlights = nodes.map((id) => {
-      const h = this.paintOverlay(this.scene.add.image(0, 0, '__DEFAULT'), id, 'mark', 0.2).setTint(COLORS.gold);
+      const h = this.paintOverlay(this.scene.add.image(0, 0, '__DEFAULT'), id, 'focus', 0.2).setTint(COLORS.focus);
       this.scene.tweens.add({ targets: h, alpha: 0.45, duration: 500, yoyo: true, repeat: -1 });
       return h;
     });
