@@ -5,7 +5,7 @@ import Phaser from 'phaser';
 import type { BoardData, RegionId } from '../core/types';
 import { addImg } from './assets';
 import { CELL, INSET, type Rect } from './layout';
-import { rectCentre, type Point, type WorldMap } from './world';
+import { rectCentre, terrainRect, type Point, type WorldMap } from './world';
 
 /** World px per ground texel; the texture is drawn small and scaled up with nearest filtering. */
 const TEXEL = 2;
@@ -40,19 +40,21 @@ function rgb(hex: string): [number, number, number] {
 }
 
 /** Which region's ground lies under each block: the nearest node that has a region, with a ragged border. */
-function regionField(world: WorldMap, data: BoardData, cols: number, rows: number): Ground[] {
+function regionField(world: WorldMap, data: BoardData, area: Rect, cols: number, rows: number): Ground[] {
   const seeds = data.nodes.filter((n) => n.region).map((n) => ({ region: n.region!, ...world.centre(n.id) }));
   const field: Ground[] = new Array(cols * rows);
-  const b = world.bounds;
   const size = TEXEL * BLOCK;
+  // Hashes stay in board-block space, so the margin does not slide borders that are already on the board.
+  const ox = Math.floor((area.x - world.bounds.x) / size);
+  const oy = Math.floor((area.y - world.bounds.y) / size);
   for (let by = 0; by < rows; by++) {
     for (let bx = 0; bx < cols; bx++) {
-      const x = b.x + (bx + 0.5) * size;
-      const y = b.y + (by + 0.5) * size;
+      const x = area.x + (bx + 0.5) * size;
+      const y = area.y + (by + 0.5) * size;
       let best: Ground = 'none';
       let bestD = Infinity;
       seeds.forEach((s, i) => {
-        const d = Math.hypot(s.x - x, s.y - y) + (hash(bx >> 1, by >> 1, i) - 0.5) * CELL * 0.35;
+        const d = Math.hypot(s.x - x, s.y - y) + (hash((bx + ox) >> 1, (by + oy) >> 1, i) - 0.5) * CELL * 0.35;
         if (d < bestD) { bestD = d; best = s.region; }
       });
       field[by * cols + bx] = best;
@@ -61,15 +63,16 @@ function regionField(world: WorldMap, data: BoardData, cols: number, rows: numbe
   return field;
 }
 
-function paintGround(scene: Phaser.Scene, world: WorldMap, data: BoardData): { key: string; field: (p: Point) => Ground } {
-  const b = world.bounds;
-  const tw = Math.ceil(b.w / TEXEL);
-  const th = Math.ceil(b.h / TEXEL);
+function paintGround(scene: Phaser.Scene, world: WorldMap, data: BoardData, area: Rect): { key: string; field: (p: Point) => Ground } {
+  const tw = Math.ceil(area.w / TEXEL);
+  const th = Math.ceil(area.h / TEXEL);
   const cols = Math.ceil(tw / BLOCK);
   const rows = Math.ceil(th / BLOCK);
-  const field = regionField(world, data, cols, rows);
+  const field = regionField(world, data, area, cols, rows);
   const at = (tx: number, ty: number): Ground => field[Math.min(rows - 1, Math.floor(ty / BLOCK)) * cols + Math.min(cols - 1, Math.floor(tx / BLOCK))];
   const colours = Object.fromEntries(Object.entries(PALETTE).map(([k, p]) => [k, { base: rgb(p.base), dark: rgb(p.dark), fleck: rgb(p.fleck), hatch: p.hatch }]));
+  const fx = Math.floor((area.x - world.bounds.x) / TEXEL);
+  const fy = Math.floor((area.y - world.bounds.y) / TEXEL);
 
   const key = 'world_ground';
   if (scene.textures.exists(key)) scene.textures.remove(key);
@@ -81,7 +84,7 @@ function paintGround(scene: Phaser.Scene, world: WorldMap, data: BoardData): { k
       const g = at(tx, ty);
       const c = colours[g];
       const border = (tx + 1 < tw && at(tx + 1, ty) !== g) || (ty + 1 < th && at(tx, ty + 1) !== g);
-      const n = hash(tx >> 1, ty >> 1, 99);
+      const n = hash((tx + fx) >> 1, (ty + fy) >> 1, 99);
       const px = border ? OUTLINE
         : c.hatch && (tx + ty) % 8 < 2 ? c.dark
           : n < 0.07 ? c.dark
@@ -96,7 +99,7 @@ function paintGround(scene: Phaser.Scene, world: WorldMap, data: BoardData): { k
   }
   ctx.putImageData(img, 0, 0);
   tex.refresh();
-  return { key, field: (p) => at(Math.floor((p.x - b.x) / TEXEL), Math.floor((p.y - b.y) / TEXEL)) };
+  return { key, field: (p) => at(Math.floor((p.x - area.x) / TEXEL), Math.floor((p.y - area.y) / TEXEL)) };
 }
 
 /** Distance from a rect's centre to its edge along unit direction (ux, uy). */
@@ -145,10 +148,9 @@ function drawRoads(scene: Phaser.Scene, world: WorldMap): void {
 }
 
 /** Scenery: one in three empty cells gets its region's prop, placed by a hash of the cell. */
-function scatterProps(scene: Phaser.Scene, world: WorldMap, field: (p: Point) => Ground): void {
-  const b = world.bounds;
-  for (let r = Math.floor(b.y / CELL); r < (b.y + b.h) / CELL; r++) {
-    for (let c = Math.floor(b.x / CELL); c < (b.x + b.w) / CELL; c++) {
+function scatterProps(scene: Phaser.Scene, world: WorldMap, field: (p: Point) => Ground, area: Rect): void {
+  for (let r = Math.floor(area.y / CELL); r < (area.y + area.h) / CELL; r++) {
+    for (let c = Math.floor(area.x / CELL); c < (area.x + area.w) / CELL; c++) {
       const centre = rectCentre({ x: c * CELL, y: r * CELL, w: CELL, h: CELL });
       if (world.nodeAt(centre) || hash(c, r, 3) > 0.34) continue;
       const g = field(centre);
@@ -160,12 +162,11 @@ function scatterProps(scene: Phaser.Scene, world: WorldMap, field: (p: Point) =>
   }
 }
 
-/** Ground, world frame, roads and scenery for a board. */
+/** Ground, roads and scenery for a board. Ground runs past the grid so the viewport never shows empty backdrop. */
 export function drawWorld(scene: Phaser.Scene, world: WorldMap, data: BoardData): void {
-  const b = world.bounds;
-  const ground = paintGround(scene, world, data);
-  scene.add.image(b.x, b.y, ground.key).setOrigin(0, 0).setScale(TEXEL).setDepth(DEPTH.ground);
-  scene.add.rectangle(b.x, b.y, b.w, b.h).setOrigin(0, 0).setStrokeStyle(4, 0x0f0e1a).setDepth(DEPTH.ground + 1);
+  const area = terrainRect(world.bounds);
+  const ground = paintGround(scene, world, data, area);
+  scene.add.image(area.x, area.y, ground.key).setOrigin(0, 0).setScale(TEXEL).setDepth(DEPTH.ground);
   drawRoads(scene, world);
-  scatterProps(scene, world, ground.field);
+  scatterProps(scene, world, ground.field, area);
 }

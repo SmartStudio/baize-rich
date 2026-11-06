@@ -28,6 +28,8 @@ export const ZOOM_MAX = 2;
 const ZOOM_FLOOR = 0.35;
 /** How far past the grid the camera may pan, in world px. */
 const PAD = CELL / 2;
+/** Ground painted past the board, in world px. Five cells contain every clamped view of the 11×11 board. */
+export const TERRAIN_MARGIN = 5 * CELL;
 
 export function cellsRect(c0: number, r0: number, c1: number, r1: number): Rect {
   return { x: c0 * CELL, y: r0 * CELL, w: (c1 - c0 + 1) * CELL, h: (r1 - r0 + 1) * CELL };
@@ -43,6 +45,16 @@ export function unionRect(rs: Rect[]): Rect {
 
 export function rectCentre(r: Rect): Point {
   return { x: r.x + r.w / 2, y: r.y + r.h / 2 };
+}
+
+/** Board bounds plus TERRAIN_MARGIN on every side. The ground texture covers this rect. */
+export function terrainRect(bounds: Rect): Rect {
+  return {
+    x: bounds.x - TERRAIN_MARGIN,
+    y: bounds.y - TERRAIN_MARGIN,
+    w: bounds.w + 2 * TERRAIN_MARGIN,
+    h: bounds.h + 2 * TERRAIN_MARGIN,
+  };
 }
 
 /** Where every node sits in world px, the drawable world bounds and the road edges between nodes. */
@@ -104,19 +116,20 @@ export class WorldMap {
   }
 
   /**
-   * Clamp a view to the world. An axis that fits the screen is centred on the world; a longer axis may pan
-   * until the world edge (plus PAD) meets the edge of the HUD-free SAFE area, so edge tiles never hide under the HUD.
+   * Clamp a view to the world. An axis fits when the board is no larger than the HUD-free SAFE span.
+   * A fitting axis is centred there. SAFE shares the screen midpoint, so the board midpoint lands on it.
+   * A longer axis pans until the board edge plus PAD meets the SAFE edge.
    */
   clamp(v: View): View {
     const { min, max } = this.zoomRange();
     const zoom = Math.min(max, Math.max(min, v.zoom));
     const b = this.bounds;
-    const axis = (c: number, lo: number, size: number, screen: number, safe: number): number => {
-      if (size * zoom <= screen) return lo + size / 2;
+    const axis = (c: number, lo: number, size: number, safe: number): number => {
+      if (size * zoom <= safe) return lo + size / 2;
       const half = safe / 2 / zoom;
       return Math.min(lo + size + PAD - half, Math.max(lo - PAD + half, c));
     };
-    return { cx: axis(v.cx, b.x, b.w, W, SAFE.w), cy: axis(v.cy, b.y, b.h, H, SAFE.h), zoom };
+    return { cx: axis(v.cx, b.x, b.w, SAFE.w), cy: axis(v.cy, b.y, b.h, SAFE.h), zoom };
   }
 
   /** The largest zoom (≤ cap) at which world rect r fits inside the SAFE area, within the zoom range. */
