@@ -21,12 +21,12 @@ import { Coach, coachHudRect } from '../ui/Coach';
 import { COACH_STEPS, coachCopy, dismiss, emptyBook, nudge, observe, type CoachBook, type CoachCue, type CoachMoment } from '../ui/coachTriggers';
 import { Cutscene, type BannerSpec } from '../ui/Cutscene';
 import { dockPlan, IDLE_PLAN, type DockPlan } from '../ui/dockPlan';
-import { LEFT, STAGE, type Rect } from '../ui/layout';
+import { LEFT, RACE, RIGHT, STAGE, W, type Rect } from '../ui/layout';
 import { LogPanel } from '../ui/LogPanel';
 import { playMiniGame } from '../ui/MiniGame';
-import { Minimap } from '../ui/Minimap';
 import { aiTurnNarration, heroNameForSeat, narrateEvent, resumeNarration, roundNarration, turnNarration } from '../ui/narration';
 import { PlayerCards } from '../ui/PlayerCards';
+import { RealmRace } from '../ui/RealmRace';
 import { downloadRecord, loadCoach, saveAutosave, saveCoach } from '../ui/saves';
 import type { SessionConfig } from '../ui/session';
 import { ActionDock } from '../ui/ActionDock';
@@ -34,6 +34,7 @@ import { COLORS, FS, HEX, PLAYER_COLORS, txt } from '../ui/theme';
 import { tileTip } from '../ui/TileInfo';
 import { Tooltip } from '../ui/Tooltip';
 import { TopBar } from '../ui/TopBar';
+import { Button } from '../ui/widgets';
 import { unionRect } from '../ui/world';
 import type { ResultData } from './ResultScene';
 
@@ -130,7 +131,8 @@ export class GameScene extends Phaser.Scene {
   private playedMini = false;
   private toastText!: Phaser.GameObjects.Text;
   private cam!: BoardCamera;
-  private minimap!: Minimap;
+  private race!: RealmRace;
+  private btnRecentre!: Button;
   /** Tile the current press started on, unless that press only closed its own pinned popover. */
   private pressed: NodeId | null = null;
   /** The camera moved since tile popovers were last placed. */
@@ -181,8 +183,9 @@ export class GameScene extends Phaser.Scene {
     this.fx = new Cutscene(hud);
     this.breakthrough = new Breakthrough(hud);
     this.lastSnap = null;
-    this.minimap = new Minimap(hud, this.boardView.world, this.engine.board.data, (p) => this.cam.panTo(p));
-    this.minimap.btnRecentre.onClick(() => this.recentre());
+    this.race = new RealmRace(hud, this.engine, this.tip);
+    this.btnRecentre = new Button(hud, RIGHT.x, RACE.y + RACE.h + RACE.gap, { w: RIGHT.w, h: RACE.btnH, label: '回到棋子 · H', size: FS.sm });
+    this.btnRecentre.onClick(() => this.recentre());
     this.cam.onManual(() => {
       if (this.tip.pinned?.startsWith('tile:')) this.tip.unpin();
       else this.tip.hide();
@@ -244,12 +247,7 @@ export class GameScene extends Phaser.Scene {
     if (moved && !this.camMoving) this.tip.hide();
     if (!moved && this.camMoving) this.showTile();
     this.camMoving = moved;
-    const st = this.shownState;
-    this.minimap.update(
-      this.cam.visibleRect(),
-      st.players.map((_, i) => this.boardView.tokenFocus(i)),
-      st.current,
-    );
+    this.btnRecentre.setVisible(this.cam.visibleRect().w < W);
   }
 
   // ------------------------------------------------------------ main loop
@@ -444,7 +442,7 @@ export class GameScene extends Phaser.Scene {
     this.side.btnSpeed.setLabel(`倍速 ×${this.speed} · F`);
     this.showTile();
     this.side.renderHand(state, this.handViewer(state));
-    this.minimap.render(state);
+    this.race.render(state);
   }
 
   /** Hand is only visible to a human, on their own turn (or when they must react). */
