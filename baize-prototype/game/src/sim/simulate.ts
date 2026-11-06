@@ -4,7 +4,7 @@ import { HERO_IDS } from '../core/heroes';
 import { Rng } from '../core/rng';
 import type { PendingChoice } from '../core/choices';
 import type { Game } from '../core/engine';
-import type { GameEventType } from '../core/events';
+import type { GameEvent, GameEventType } from '../core/events';
 import type { GameData, HeroId } from '../core/types';
 import { defaultData } from '../core/data';
 import { randomPersonality, type Difficulty } from '../ai/ai';
@@ -40,6 +40,17 @@ export interface PerPlayerStats {
   turns: number;
 }
 
+/** Spine diagnostics for the seat playing one hero, per game unless noted. */
+export interface HeroSpineStats {
+  /** Fraction of this hero's 闭关 attempts made on its own land (0 when it never closed). */
+  ownLandShare: number;
+  herbsLeft: number;
+  cultWasted: number;
+  /** Pills won in duels minus pills lost in duels. */
+  duelPillsNet: number;
+  skillUses: number;
+}
+
 /** Player-interaction counts, per game unless noted. */
 export interface InteractionStats {
   duels: number;
@@ -71,6 +82,7 @@ export interface SimReport {
   leaderWins: number;
   gamesReachingCheck: number;
   interaction: InteractionStats;
+  heroSpine: Record<HeroId, HeroSpineStats>;
 }
 
 function isDefaultOnly(c: PendingChoice): boolean {
@@ -92,6 +104,26 @@ interface Tally {
   ix: { duels: number; roadblockHits: number; miniGames: number };
   skillUses: Record<string, number>;
   turnHits: { rent: number; duel: number; cast: number; any: number; stolen: number };
+  spine: Record<string, SpineTally>;
+}
+
+interface SpineTally { closures: number; ownLand: number; herbsLeft: number; cultWasted: number; duelPillsNet: number }
+
+function spineOf(t: Tally, hero: HeroId): SpineTally {
+  return (t.spine[hero] ??= { closures: 0, ownLand: 0, herbsLeft: 0, cultWasted: 0, duelPillsNet: 0 });
+}
+
+function tallySpine(t: Tally, e: GameEvent, game: Game): void {
+  const st = game.state;
+  if (e.type === 'breakthrough' && e.player !== undefined) {
+    const p = st.players[e.player];
+    const s = spineOf(t, p.hero);
+    s.closures++;
+    if (st.tiles[p.pos]?.owner === p.seat) s.ownLand++;
+  } else if (e.type === 'duel' && e.duel) {
+    spineOf(t, st.players[e.duel.winner].hero).duelPillsNet += e.duel.pills;
+    spineOf(t, st.players[e.duel.loser].hero).duelPillsNet -= e.duel.pills;
+  }
 }
 
 function newTally(): Tally {
@@ -104,6 +136,7 @@ function newTally(): Tally {
     ix: { duels: 0, roadblockHits: 0, miniGames: 0 },
     skillUses: {},
     turnHits: { rent: 0, duel: 0, cast: 0, any: 0, stolen: 0 },
+    spine: {},
   };
 }
 
@@ -132,6 +165,7 @@ function playOne(t: Tally, g: number, opts: SimOptions, data: GameData): Game {
   const { game } = runHeadless(setup, seats, data, {
     onChoice: (c) => { if (turn && c.player === turn.seat && !isDefaultOnly(c)) turn.idle = false; },
     onEvent: (e, game) => {
+      tallySpine(t, e, game);
       if (e.type === 'duel') t.ix.duels++;
       else if (e.type === 'roadblockHit') t.ix.roadblockHits++;
       if (e.type === 'turnStart') turn = { seat: e.player!, idle: true, seen: new Set(), lost: pillsLost(game) };
@@ -170,6 +204,9 @@ function recordGame(t: Tally, game: Game, leader: number | null): void {
     tt.cultWasted += s.cultWasted;
     t.ix.miniGames += s.miniGames;
     t.skillUses[p.hero] = (t.skillUses[p.hero] ?? 0) + s.skillUses;
+    const sp = spineOf(t, p.hero);
+    sp.herbsLeft += p.herbs;
+    sp.cultWasted += s.cultWasted;
     t.players++;
   }
 }
@@ -198,6 +235,17 @@ function report(t: Tally, { games, seed, difficulty }: SimOptions): SimReport {
       interactionTurnRate: t.turnHits.any / turns,
       pillStolenTurnRate: t.turnHits.stolen / turns,
     },
+    heroSpine: Object.fromEntries(HERO_IDS.map((h) => [h, heroSpine(spineOf(t, h), t.plays[h] ?? 1, t.skillUses[h] ?? 0)])) as Record<HeroId, HeroSpineStats>,
+  };
+}
+
+function heroSpine(s: SpineTally, plays: number, skillUses: number): HeroSpineStats {
+  return {
+    ownLandShare: s.closures ? s.ownLand / s.closures : 0,
+    herbsLeft: s.herbsLeft / plays,
+    cultWasted: s.cultWasted / plays,
+    duelPillsNet: s.duelPillsNet / plays,
+    skillUses: skillUses / plays,
   };
 }
 

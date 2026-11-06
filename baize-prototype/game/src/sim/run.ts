@@ -56,4 +56,10 @@ if (json) {
   console.log(`  每局 山岳拦人 ${ix.roadblockHits.toFixed(2)} · 火候小游戏 ${ix.miniGames.toFixed(2)}`);
   console.log(`  技能使用 ${HERO_IDS.map((h) => `${heroName[h]} ${ix.skillUsesByHero[h].toFixed(2)}`).join(' / ')}`);
   console.log(`  回合占比 有互动 ${pct(ix.interactionTurnRate)} · 付租 ${pct(ix.rentTurnRate)} · 斗法 ${pct(ix.duelTurnRate)} · 用符 ${pct(ix.castTurnRate)}`);
+  console.log('—'.repeat(60));
+  console.log('主线诊断（每名修士每局）');
+  for (const h of HERO_IDS) {
+    const s = r.heroSpine[h];
+    console.log(`  ${heroName[h]}  自家灵田突破 ${pct(s.ownLandShare)} · 终局剩草 ${s.herbsLeft.toFixed(2)} · 作废修为 ${s.cultWasted.toFixed(2)} · 斗法净得丹 ${s.duelPillsNet >= 0 ? '+' : ''}${s.duelPillsNet.toFixed(2)} · 技能 ${s.skillUses.toFixed(2)} 次`);
+  }
 }
