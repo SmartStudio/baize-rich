@@ -106,6 +106,7 @@ export class PlayerCards {
     if (p.bound) tags.push({ label: '定身', desc: '中了定身符：下回合不能移动，原地结算。' });
     if (isGlowing(state, g.data, i)) tags.push({ label: '宝光', desc: `身怀 ${cfg.duel.glowAt} 颗以上丹药：斗法输了会被夺 ${cfg.duel.glowSteal} 颗。` });
     if (p.guidance > 0) tags.push({ label: '指点', desc: `下次闭关突破 +${cfg.breakthrough.guidanceBonus}。` });
+    if (p.momentum) tags.push({ label: '战意', desc: `斗法得胜的余势：下次闭关突破 +${cfg.breakthrough.momentumBonus}，闭关时用掉。` });
     if (p.insight > 0) tags.push({ label: `感悟 ${p.insight}`, desc: `过目不忘：下次闭关突破 +${insightBonus(g.data, p)}，闭关时用尽。` });
     if (p.dazed) tags.push({ label: '迷魂', desc: '中了迷魂丹：下一次掷骰移动的步数减半（向下取整，至少 1）。' });
     const hero = g.data.heroes.find((h) => h.id === p.hero)!;

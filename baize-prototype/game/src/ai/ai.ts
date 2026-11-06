@@ -147,9 +147,15 @@ export class AIController implements Controller {
   challengeValue(target: number): number {
     const [a, d] = duelBonus(this.st, this.data, this.seat, target);
     const p = duelWinChance(a - d);
-    const gain = lootValue(this.st, this.data, target) * this.persona.attack;
+    const gain = lootValue(this.st, this.data, target) * this.persona.attack + this.momentumValue();
     const risk = lootValue(this.st, this.data, this.seat);
     return p * gain - (1 - p) * risk + (target === this.leaderOpponent() ? 30 : 0);
+  }
+
+  /** 战意 a win would add while none is held, priced as the pill stake that buys the same bonus. */
+  private momentumValue(): number {
+    if (!hasTrait(this.data, this.me, 'momentum') || this.me.momentum) return 0;
+    return this.data.config.breakthrough.momentumBonus * VALUE.pill / this.data.config.breakthrough.pillBonus;
   }
 
   private duelChoice(c: PendingChoiceOf<'duel'>): string {

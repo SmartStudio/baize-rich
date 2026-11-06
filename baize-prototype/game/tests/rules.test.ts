@@ -149,7 +149,7 @@ describe('闭关突破', () => {
     g.state.rng = rngFor([2, 1]);
     g.runFlow(g.testClosure(0), script({ stake: 's2' }));
     const r = g.log.find((e) => e.type === 'breakthrough')!.breakthrough!;
-    expect(r.bonuses).toEqual({ pills: 2 * b.pillBonus, site: b.altarBonus, mind: b.mindBonus, guidance: 0, insight: 0, calm: 0 });
+    expect(r.bonuses).toEqual({ pills: 2 * b.pillBonus, site: b.altarBonus, mind: b.mindBonus, guidance: 0, insight: 0, momentum: 0, calm: 0 });
     expect(r.total).toBe(3 + 2 * b.pillBonus + b.altarBonus + b.mindBonus);
     expect(r.total).toBeGreaterThanOrEqual(g.data.config.realms[0].target);
     expect([p.realm, p.cult, p.mind, p.pills]).toEqual([1, 0, 0, 2]);

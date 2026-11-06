@@ -85,6 +85,8 @@ export interface ConfigData {
     insightMax: number;
     /** 引雷破境：在任意格闭关时的地点加成 */
     thunderSite: number;
+    /** 战意：燕回主动斗法得胜后的下一次突破加成 */
+    momentumBonus: number;
   };
   alchemy: {
     herbsPerPill: number;
@@ -191,7 +193,9 @@ export type HeroTrait =
   /** 每次停在丹房炼丹 +alchemy.alchBonus */
   | 'pillway'
   /** 修为条满后溢出的修为存为感悟，突破时折成加成 */
-  | 'insight';
+  | 'insight'
+  /** 作为攻方斗法得胜后，下次突破 +breakthrough.momentumBonus（最多 1 层） */
+  | 'momentum';
 export interface HeroSkillData {
   id: HeroSkillId;
   name: string;
@@ -297,6 +301,8 @@ export interface PlayerState {
   guidance: number;
   /** 过目不忘：存下的感悟，下一次闭关时用尽。 */
   insight: number;
+  /** 战意：主动斗法得胜后持有，下一次闭关时用掉。 */
+  momentum: boolean;
   /** 宝光外泄所在的轮次（本轮算作身怀宝光）。 */
   glowRound: number;
   /** 元婴遁最近一次生效的轮次（每轮 1 次）。 */

@@ -40,7 +40,8 @@
     "calmBonus": 2,
     "insightPer": 2,
     "insightMax": 2,
-    "thunderSite": -1
+    "thunderSite": -1,
+    "momentumBonus": 1
   },
   "alchemy": {
     "herbsPerPill": 2,

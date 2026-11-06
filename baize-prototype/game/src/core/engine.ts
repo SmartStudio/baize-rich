@@ -217,7 +217,7 @@ export class Game {
     return {
       seat, name, hero, pos: this.board.startId, cameFrom: null,
       stones: cfg.startStones + cfg.seatBonusStones[seat], herbs: cfg.startHerbs, pills: cfg.startPills,
-      realm: 0, cult: 0, mind: 0, guidance: 0, insight: 0, glowRound: 0, escapeRound: 0,
+      realm: 0, cult: 0, mind: 0, guidance: 0, insight: 0, momentum: false, glowRound: 0, escapeRound: 0,
       hand: [], bound: false, turnsTaken: 0, skillReadyTurn: 0, dazed: false,
       stats: {
         rentCollected: 0, rentPaid: 0, breakthroughs: 0, breakthroughFails: 0, roadEntries: 0, altarVisits: 0,
@@ -1015,6 +1015,7 @@ export class Game {
     const r = this.rollBreakthrough(seat, site, stake, calm, target);
     p.pills -= stake;
     p.insight = 0;
+    p.momentum = false;
     if (p.guidance > 0) p.guidance--;
     p.stats.breakthroughs++;
     if (r.success) this.ascendRealm(seat, r);
@@ -1065,7 +1066,7 @@ export class Game {
 
   private breakdown(r: BreakthroughResult): string {
     const names: [keyof BreakthroughResult['bonuses'], string][] = [
-      ['pills', '押丹'], ['site', '地点'], ['mind', '心境'], ['guidance', '指点'], ['insight', '感悟'], ['calm', '清心'],
+      ['pills', '押丹'], ['site', '地点'], ['mind', '心境'], ['guidance', '指点'], ['insight', '感悟'], ['momentum', '战意'], ['calm', '清心'],
     ];
     const parts = names.filter(([k]) => r.bonuses[k] !== 0).map(([k, n]) => `${r.bonuses[k] > 0 ? '+' : '−'} ${n} ${Math.abs(r.bonuses[k])}`);
     return `${r.dice[0]} + ${r.dice[1]}${parts.map((s) => ` ${s}`).join('')} = ${r.total}（目标 ${r.target}）`;
@@ -1162,6 +1163,14 @@ export class Game {
     this.emit('duel', `斗法：${this.pn(attacker)} ${part(0)} 对 ${this.pn(defender)} ${part(1)}，${this.pn(winner)} 胜${totals[0] === totals[1] ? '（平局守方胜）' : ''}${prize}`, {
       player: winner, node: st.players[defender].pos, amount: duel.pills || duel.stones, duel,
     });
+    if (winner === attacker) this.gainMomentum(attacker);
+  }
+
+  private gainMomentum(seat: number): void {
+    const p = this.state.players[seat];
+    if (!hasTrait(this.data, p, 'momentum') || p.momentum) return;
+    p.momentum = true;
+    this.emit('status', `${this.pn(seat)} 斗法得胜，战意未消：下次闭关突破 +${this.cfg.breakthrough.momentumBonus}`, { player: seat });
   }
 
   /** 夺宝 with 元婴遁 (once per round). */

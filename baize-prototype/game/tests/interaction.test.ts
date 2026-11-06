@@ -90,6 +90,40 @@ describe('斗法', () => {
     expect(b.pills).toBe(0);
   });
 
+  /** Bonuses of a 闭关 by `seat` on the altar with a full bar (dice 1 + 1). */
+  const closeOnAltar = (g: Game, seat: number) => {
+    const p = g.state.players[seat];
+    p.realm = 0;
+    p.cult = g.data.config.realms[0].bar;
+    p.pos = 'ALTAR';
+    g.state.rng = rngFor([1, 1]);
+    g.runFlow(g.testClosure(seat), script({}));
+    return g.log.filter((e) => e.type === 'breakthrough').pop()!.breakthrough!.bonuses;
+  };
+
+  it('战意: 燕回 winning as attacker gets +momentumBonus at her next breakthrough, one stack, spent on the attempt', () => {
+    const g = ringGame();
+    spread(g);
+    const bonus = g.data.config.breakthrough.momentumBonus;
+    g.state.rng = rngFor([6, 1, 6, 1]);
+    g.runFlow(g.testDuel(2, 3), script({}));
+    g.runFlow(g.testDuel(2, 3), script({}));
+    expect(g.log.filter((e) => e.type === 'duel').map((e) => e.duel!.winner)).toEqual([2, 2]);
+    expect(closeOnAltar(g, 2).momentum).toBe(bonus);
+    expect(closeOnAltar(g, 2).momentum).toBe(0);
+  });
+
+  it('no 战意 from winning as the defender, nor for an attacker without the passive', () => {
+    const g = ringGame();
+    spread(g);
+    g.state.rng = rngFor([1, 6, 6, 1]);
+    g.runFlow(g.testDuel(3, 2), script({}));
+    g.runFlow(g.testDuel(3, 1), script({}));
+    expect(g.log.filter((e) => e.type === 'duel').map((e) => e.duel!.winner)).toEqual([2, 3]);
+    expect(closeOnAltar(g, 2).momentum).toBe(0);
+    expect(closeOnAltar(g, 3).momentum).toBe(0);
+  });
+
   it('金光符 blocks the duel before any dice are rolled', () => {
     const g = ringGame();
     spread(g);

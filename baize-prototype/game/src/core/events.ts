@@ -45,6 +45,8 @@ export interface BreakthroughBonuses {
   guidance: number;
   /** 过目不忘 */
   insight: number;
+  /** 战意 */
+  momentum: number;
   calm: number;
 }
 

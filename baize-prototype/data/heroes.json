@@ -14,7 +14,7 @@
   {
     "id": "sword", "name": "燕回", "school": "剑修", "origin": "镖局孤女 · 金灵根",
     "quote": "「秘境里的东西，谁抢到算谁的。」", "color": "red",
-    "passive": { "id": "swordqi", "name": "剑气", "desc": "斗法攻方 +1", "traits": ["swordQi"] },
+    "passive": { "id": "swordqi", "name": "剑气", "desc": "斗法攻方 +1；主动斗法得胜后有了战意，下次闭关突破 +1（最多存 1 层，一闭关就用掉）", "traits": ["swordQi", "momentum"] },
     "skill": { "id": "sworddash", "name": "剑遁", "timing": "preroll", "cooldown": 2, "desc": "代替掷骰：瞬移到 5 格内一名他人身边，立即向其斗法，再结算该格" }
   },
   {

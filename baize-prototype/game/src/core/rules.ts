@@ -121,7 +121,13 @@ export function canClose(state: GameState, data: GameData, seat: number): boolea
 export function fixedBonuses(state: GameState, data: GameData, seat: number, site: number): Omit<BreakthroughBonuses, 'pills' | 'calm'> {
   const p = state.players[seat];
   const b = data.config.breakthrough;
-  return { site, mind: p.mind * b.mindBonus, guidance: p.guidance > 0 ? b.guidanceBonus : 0, insight: insightBonus(data, p) };
+  return {
+    site,
+    mind: p.mind * b.mindBonus,
+    guidance: p.guidance > 0 ? b.guidanceBonus : 0,
+    insight: insightBonus(data, p),
+    momentum: p.momentum ? b.momentumBonus : 0,
+  };
 }
 
 /** 过目不忘: every insightPer 感悟 is +1 at the next breakthrough, at most insightMax. */
