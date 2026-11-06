@@ -67,6 +67,17 @@ export interface InteractionStats {
   pillStolenTurnRate: number;
 }
 
+/** Land economy, per game unless noted. */
+export interface LandEconomyStats {
+  rentPaid: number;
+  /** Stones spent buying and upgrading land. */
+  landSpend: number;
+  /** Rent collected per stone put into land. */
+  payback: number;
+  /** Lands owned when the game ends, all players together. */
+  ownedLands: number;
+}
+
 export interface SimReport {
   games: number;
   seed: number;
@@ -82,6 +93,7 @@ export interface SimReport {
   leaderWins: number;
   gamesReachingCheck: number;
   interaction: InteractionStats;
+  economy: LandEconomyStats;
   heroSpine: Record<HeroId, HeroSpineStats>;
 }
 
@@ -104,6 +116,7 @@ interface Tally {
   ix: { duels: number; roadblockHits: number; miniGames: number };
   skillUses: Record<string, number>;
   turnHits: { rent: number; duel: number; cast: number; any: number; stolen: number };
+  econ: { rentPaid: number; landSpend: number; ownedLands: number };
   spine: Record<string, SpineTally>;
 }
 
@@ -136,6 +149,7 @@ function newTally(): Tally {
     ix: { duels: 0, roadblockHits: 0, miniGames: 0 },
     skillUses: {},
     turnHits: { rent: 0, duel: 0, cast: 0, any: 0, stolen: 0 },
+    econ: { rentPaid: 0, landSpend: 0, ownedLands: 0 },
     spine: {},
   };
 }
@@ -168,6 +182,8 @@ function playOne(t: Tally, g: number, opts: SimOptions, data: GameData): Game {
       tallySpine(t, e, game);
       if (e.type === 'duel') t.ix.duels++;
       else if (e.type === 'roadblockHit') t.ix.roadblockHits++;
+      else if (e.type === 'rent') t.econ.rentPaid += e.amount ?? 0;
+      else if (e.type === 'buy' || e.type === 'upgrade') t.econ.landSpend += e.amount ?? 0;
       if (e.type === 'turnStart') turn = { seat: e.player!, idle: true, seen: new Set(), lost: pillsLost(game) };
       else if (e.type === 'turnEnd' && turn) { closeTurn(t, turn, game); turn = null; }
       else if (turn) turn.seen.add(e.type);
@@ -189,6 +205,7 @@ function recordGame(t: Tally, game: Game, leader: number | null): void {
     t.reachedCheck++;
     if (leader === w) t.leaderWon++;
   }
+  t.econ.ownedLands += game.board.lands.filter((id) => st.tiles[id].owner !== null).length;
   for (const p of st.players) {
     t.plays[p.hero] = (t.plays[p.hero] ?? 0) + 1;
     const s = p.stats;
@@ -234,6 +251,12 @@ function report(t: Tally, { games, seed, difficulty }: SimOptions): SimReport {
       castTurnRate: t.turnHits.cast / turns,
       interactionTurnRate: t.turnHits.any / turns,
       pillStolenTurnRate: t.turnHits.stolen / turns,
+    },
+    economy: {
+      rentPaid: t.econ.rentPaid / games,
+      landSpend: t.econ.landSpend / games,
+      payback: t.econ.landSpend ? t.econ.rentPaid / t.econ.landSpend : 0,
+      ownedLands: t.econ.ownedLands / games,
     },
     heroSpine: Object.fromEntries(HERO_IDS.map((h) => [h, heroSpine(spineOf(t, h), t.plays[h] ?? 1, t.skillUses[h] ?? 0)])) as Record<HeroId, HeroSpineStats>,
   };

@@ -224,7 +224,7 @@ const landPage = (data: GameData): TutorialCopy => {
       '买下无主灵田。别人停在这里，会向你交租。',
       `灵田升为${building(data, 1)}后，每轮产 ${cfg.landLevels[1].herbs} 株灵草，也能闭关。`,
       `升到${building(data, 2)}或${building(data, 3)}，打坐可得 ${cfg.landLevels[2].sit} 点修为。`,
-      `${building(data, 3)}闭关另有 +${cfg.landLevels[3].closureBonus} 地利。`,
+      `${building(data, 3)}每轮产 ${cfg.landLevels[3].herbs} 株灵草，闭关另有 +${cfg.landLevels[3].closureBonus} 地利。`,
       `${body.name}能在自家任何灵田闭关。其他人要先把灵田升为${building(data, 1)}。`,
     ],
   };
@@ -256,7 +256,7 @@ const breakthroughPage = (data: GameData): TutorialCopy => {
       `修为条圆满后，在自家${building(data, 1)}以上的灵田或白泽灵台闭关。`,
       `突破目标依次为 ${cfg.realms.slice(0, -1).map((realm) => realm.target).join('、')}。检定总和达到目标便成。`,
       `每押一颗丹药 +${cfg.breakthrough.pillBonus}，最多押 ${cfg.breakthrough.maxPills} 颗。成败都会消耗。`,
-      `白泽灵台和自家${building(data, 3)}另有 +${cfg.breakthrough.altarBonus} 地利。`,
+      `白泽灵台另有 +${cfg.breakthrough.altarBonus} 地利，自家${building(data, 3)} +${cfg.landLevels[3].closureBonus}。`,
       `走火入魔会损失一半修为，心境 +${cfg.breakthrough.mindBonus}。${body.name}的修为不会散。`,
     ],
   };

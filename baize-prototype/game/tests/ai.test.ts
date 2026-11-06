@@ -3,8 +3,9 @@ import type { PendingChoice } from '../src/core/choices';
 import type { Game } from '../src/core/engine';
 import { winRealm } from '../src/core/rules';
 import { AIController } from '../src/ai/ai';
+import { landLever } from '../src/sim/lever';
 import { matchup } from '../src/sim/matchup';
-import { ringGame } from './helpers';
+import { ringData, ringGame } from './helpers';
 
 // Seats: 0 体修, 1 法修, 2 剑修, 3 丹师.
 
@@ -96,6 +97,29 @@ describe('AI decisions', () => {
     g.runFlow(g.testRoundStart(), (c) => (c.player === 3 ? ai(c) : c.options[0].id));
     expect(answerOf(log, 'manifestPick')).toBe('guide');
     expect(me.pos).toBe('ALTAR');
+  });
+});
+
+describe('AI land', () => {
+  /** Level of seat 0's 药圃 on R1 after a rich AI's action phase, with the next level set to `next`. */
+  function levelAfterAction(next: { herbs: number; rentMult: number }): number {
+    const data = ringData();
+    Object.assign(data.config.landLevels[2], { upgradeCostP: 1.5, sit: data.config.landLevels[1].sit, closureBonus: 0 }, next);
+    const g = ringGame(1, data);
+    g.state.round = 1;
+    g.state.players[0].stones = 5000;
+    g.state.tiles.R1 = { owner: 0, level: 1 };
+    g.runFlow(g.testActionPhase(0), aiAnswers(g, 0, []));
+    return g.state.tiles.R1.level;
+  }
+
+  it('pays for more herbs, not for rent that rivals rarely stop to pay', () => {
+    expect(levelAfterAction({ herbs: 2, rentMult: 3 })).toBe(2);
+    expect(levelAfterAction({ herbs: 1, rentMult: 30 })).toBe(1);
+  });
+
+  it('a seat that never buys land almost never wins', () => {
+    expect(landLever(-1, 200, 3)).toBeLessThan(0.1);
   });
 });
 

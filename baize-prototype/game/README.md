@@ -14,6 +14,7 @@ npm run preview      # 预览生产构建
 npm test             # vitest 单元测试
 npm run sim -- --games 500 --seed 1            # AI 自对弈统计（可加 --difficulty easy|normal|hard，--verbose 打印第 1 局战报，--json 输出 JSON 报告）
 npm run sweep -- --param winCultivation --values 8,9,10   # 参数扫描：对 config.json 的任意数值路径，按多个种子各跑一批（可加 --seeds 1,2,3,4 --games 500 --json）
+npm run lever -- --games 2000 --seed 1          # 灵田杠杆：一个座位从不买地 / 最多升到某一级时的胜率（公平值 25%）
 npm run replay -- 对局记录.json                 # 无头复现一份对局记录，打印胜者、轮数与各席位修为/灵石/突破（加 --log 打印完整战报）
 npm run board        # 打印 ASCII 地图并检查 data/board.json（有问题时退出码 1）
 npm run shots        # 需先 build：用 Playwright 打开构建产物、截图到 screenshots/ 并检查控制台错误

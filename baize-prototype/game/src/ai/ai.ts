@@ -59,6 +59,9 @@ const STEADY_BAR_EASE = 0.15;
 /** Walking on to the altar costs turns of overflowing 修为; skip a closure here only for more than this gain in odds. */
 const ALTAR_EDGE = 0.15;
 
+/** Opponents stop on any one owned land about once per 60 rounds (measured by AI self-play), which bounds what a rent rise is worth. */
+const RENT_STOPS_PER_ROUND = 1 / 60;
+
 /** Minimum duel EV (stones) worth a challenge, by difficulty. */
 const DUEL_BAR: Record<Difficulty, number> = { easy: 150, normal: 20, hard: 0 };
 
@@ -463,26 +466,22 @@ export class AIController implements Controller {
     return undefined;
   }
 
-  /** Static value of raising `node` to the next level. */
-  private upgradeValue(node: NodeId): number {
-    const st = this.st;
-    const t = st.tiles[node];
-    const price = this.board.node(node).price!;
-    const [from, to] = [landLevel(this.data, t.level), landLevel(this.data, t.level + 1)];
+  /** Static value of a land at `level` for the rest of the game: rent, herbs, 打坐 and the closure site. */
+  private levelValue(price: number, level: number): number {
+    const lv = landLevel(this.data, level);
     const rounds = this.roundsLeft;
-    let s = (nominalRent(this.data, price, t.level + 1) - nominalRent(this.data, price, t.level)) * Math.min(rounds, 4) * 0.4;
-    s += (to.herbs - from.herbs) * VALUE.herb * rounds;
-    s += (to.sit - from.sit) * VALUE.cult * 0.5;
-    if (from.closureBonus === null && to.closureBonus !== null) s += 250;
-    return s;
+    const site = lv.closureBonus === null ? 0 : 250 + lv.closureBonus * VALUE.pill / this.data.config.breakthrough.pillBonus;
+    return nominalRent(this.data, price, level) * RENT_STOPS_PER_ROUND * rounds + lv.herbs * VALUE.herb * rounds + lv.sit * VALUE.cult * 0.5 + site;
   }
 
   private bestUpgrade(nodes: NodeId[]): NodeId | null {
     let best: { node: NodeId; score: number } | null = null;
     for (const id of nodes) {
-      const cost = upgradeCost(this.data, this.board.node(id).price!, this.st.tiles[id].level + 1);
+      const price = this.board.node(id).price!;
+      const level = this.st.tiles[id].level;
+      const cost = upgradeCost(this.data, price, level + 1);
       if (this.me.stones < cost + this.persona.upgradeReserve) continue;
-      const score = this.upgradeValue(id) - cost * 0.5;
+      const score = this.levelValue(price, level + 1) - this.levelValue(price, level) - cost * 0.5;
       if (score > 0 && (!best || score > best.score)) best = { node: id, score };
     }
     return best?.node ?? null;
