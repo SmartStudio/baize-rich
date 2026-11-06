@@ -14,8 +14,8 @@ describe('quick start from hero select', () => {
   it('names a lone human 你 in the game it starts, and keeps P-numbers for AI and hot-seat', () => {
     const solo = newSession(5, quickSeats('sword', 'normal'), 1);
     const g = new Game(solo.setup);
-    expect(g.state.players[0]).toMatchObject({ hero: 'sword', name: '你·剑修' });
-    expect(g.state.players[1].name).toBe('P2·体修');
+    expect(g.state.players[0]).toMatchObject({ hero: 'sword', name: '你·燕回' });
+    expect(g.state.players[1].name).toBe('P2·石铮');
     expect(solo.seats.map((s) => s.human)).toEqual([true, false, false, false]);
 
     const hotSeat = newSession(5, quickSeats('sword', 'normal').map((s, i) => ({ ...s, human: i < 2 })), 1);

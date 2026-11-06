@@ -121,7 +121,7 @@ function closeTurn(t: Tally, turn: TurnWatch, game: Game): void {
 }
 
 function playOne(t: Tally, g: number, opts: SimOptions, data: GameData): Game {
-  const heroName = Object.fromEntries(data.heroes.map((h) => [h.id, h.name])) as Record<HeroId, string>;
+  const heroName = Object.fromEntries(data.heroes.map((h) => [h.id, h.school])) as Record<HeroId, string>;
   const gs = opts.seed * 100003 + g;
   const rng = new Rng(gs);
   const heroes = rng.shuffle([...HERO_IDS]);

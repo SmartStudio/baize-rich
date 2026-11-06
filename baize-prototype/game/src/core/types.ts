@@ -168,8 +168,14 @@ export interface BoardData {
 // ---- heroes.json ----------------------------------------------------------
 export interface HeroData {
   id: HeroId;
+  /** 人物名，界面以它为主。 */
   name: string;
-  role: string;
+  /** 路数：体修 / 法修 / 剑修 / 丹师。 */
+  school: string;
+  /** 出身 · 灵根。 */
+  origin: string;
+  /** 选中台词。 */
+  quote: string;
   color: string;
   passive: { id: string; name: string; desc: string };
   /** 主动技能：免费，冷却 rules.skillCooldownTurns 个自己的回合。 */

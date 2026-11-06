@@ -66,7 +66,7 @@ export class SetupScene extends Phaser.Scene {
       const s = this.seats[i];
       const h = defaultData.heroes.find((x) => x.id === s.hero)!;
       setFrame(por, `por_${s.hero}`);
-      heroName.setText(`${h.name} · ${h.role}`);
+      heroName.setText(`${h.name} · ${h.school}`);
       heroDesc.setText(`被动【${h.passive.name}】${h.passive.desc}`);
       kind.setLabel(s.human ? '玩家' : 'AI');
       diff.setLabel(DIFFICULTY_LABEL[s.difficulty]).setEnabled(!s.human);

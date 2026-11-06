@@ -38,7 +38,7 @@ export class VersusScene extends Phaser.Scene {
         this.add.rectangle(0, -COL_H / 2 + 5, COL_W, 10, PLAYER_COLORS[i]),
         addImg(this, 0, -46, `por_${p.hero}`).setScale(3),
         txt(this, 0, 76, p.name, { size: 22, bold: true, color: PLAYER_HEX[i], origin: [0.5, 0.5] }),
-        txt(this, 0, 106, `${h.role} · 技能【${h.skill.name}】`, { size: 13, color: HEX.dim, origin: [0.5, 0.5] }),
+        txt(this, 0, 106, `${h.school} · ${h.origin}`, { size: 13, color: HEX.dim, origin: [0.5, 0.5] }),
         txt(this, 0, 136, `${i + 1} 号位 · ${label}`, { size: 14, color: seat.human ? HEX.gold : HEX.parchment, origin: [0.5, 0.5] }),
       ]);
       this.tweens.add({ targets: col, y: 350, alpha: 1, duration: 420, delay: 180 + i * 140, ease: 'Back.easeOut' });

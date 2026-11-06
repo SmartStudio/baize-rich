@@ -8,13 +8,6 @@ import { newSession, quickSeats, urlSeed, urlSpeed } from '../ui/session';
 import { COLORS, HEX, txt } from '../ui/theme';
 import { Button, fadeToScene } from '../ui/widgets';
 
-/** Selection lines, from docs/script.md §2. */
-const QUOTE: Record<HeroId, string> = {
-  body: '「肉身即法宝。来，打我试试。」',
-  magic: '「五雷在掌，万法随心。」',
-  sword: '「剑出无回，路在脚下。」',
-  alch: '「一炉丹，换一座山——这买卖不亏。」',
-};
 const DIFFS: Difficulty[] = ['easy', 'normal', 'hard'];
 
 const CARD_W = 276;
@@ -112,7 +105,7 @@ export class HeroSelectScene extends Phaser.Scene {
     const name = txt(this, 0, nameY, h.name, { size: 26, bold: true, origin: [0.5, 0.5] });
     const roleY = nameY + 30;
     const role = this.add.rectangle(0, roleY, 108, 24, COLORS.ink).setStrokeStyle(2, COLORS.gold);
-    const roleText = txt(this, 0, roleY, `定位 · ${h.role}`, { size: 13, bold: true, color: HEX.gold, origin: [0.5, 0.5] });
+    const roleText = txt(this, 0, roleY, h.school, { size: 13, bold: true, color: HEX.gold, origin: [0.5, 0.5] });
     const sections = stackAbilities(this, -w / 2 + 14, roleY + 20, heroAbilities(h, defaultData.config.rules.skillCooldownTurns));
     const badgeBg = this.add.rectangle(0, 0, 64, 30, COLORS.gold).setStrokeStyle(2, COLORS.outline);
     const badge = this.add.container(-w / 2 + 40, top + 4, [badgeBg, txt(this, 0, 0, '你', { size: 18, bold: true, color: HEX.ink, origin: [0.5, 0.5] })]);
@@ -143,7 +136,7 @@ export class HeroSelectScene extends Phaser.Scene {
     const h = defaultData.heroes.find((x) => x.id === this.chosen)!;
     if (this.quoted !== this.chosen) {
       this.quoted = this.chosen;
-      this.quote.setText(`${h.name}：${QUOTE[this.chosen]}`).setAlpha(0);
+      this.quote.setText(`${h.name}（${h.origin}）：${h.quote}`).setAlpha(0);
       this.tweens.add({ targets: this.quote, alpha: 1, duration: 300 });
     }
     this.diffButtons.forEach((b, k) => b.setLabel(DIFFS[k] === this.difficulty ? `● ${DIFFICULTY_LABEL[DIFFS[k]]}` : DIFFICULTY_LABEL[DIFFS[k]]));

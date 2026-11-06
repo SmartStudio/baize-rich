@@ -15,7 +15,7 @@ interface Metric {
 
 const pct = (n: number) => `${(100 * n).toFixed(1)}%`;
 const fixed2 = (n: number) => n.toFixed(2);
-const heroName = Object.fromEntries(defaultData.heroes.map((h) => [h.id, h.name])) as Record<HeroId, string>;
+const heroName = Object.fromEntries(defaultData.heroes.map((h) => [h.id, h.school])) as Record<HeroId, string>;
 
 const METRICS: Metric[] = [
   ...HERO_IDS.map((h): Metric => ({ key: `win.${h}`, label: `${heroName[h]}胜率`, get: (r) => r.heroWinRate[h], fmt: pct })),

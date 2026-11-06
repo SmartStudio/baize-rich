@@ -16,7 +16,7 @@ const seed = Number(arg('seed', '1'));
 const difficulty = arg('difficulty', 'normal') as Difficulty;
 const verbose = process.argv.includes('--verbose');
 const json = process.argv.includes('--json');
-const heroName = Object.fromEntries(defaultData.heroes.map((h) => [h.id, h.name])) as Record<HeroId, string>;
+const heroName = Object.fromEntries(defaultData.heroes.map((h) => [h.id, h.school])) as Record<HeroId, string>;
 
 // The battle log goes to stderr under --json so stdout stays parseable.
 const logLine = json ? console.error : console.log;
