@@ -3,6 +3,7 @@ import Phaser from 'phaser';
 import { defaultData } from '../core/data';
 import { addImg } from './assets';
 import { tutorialCopy, type TutorialCopy } from './narration';
+import { loadCoach, armCoach, saveCoach } from './saves';
 import { COLORS, HEX, panel, txt } from './theme';
 import { Button } from './widgets';
 
@@ -105,6 +106,7 @@ export class HowToPlay {
   private dots: Phaser.GameObjects.Rectangle[] = [];
   private prev: Button;
   private next: Button;
+  private coachBtn: Button;
   private index = 0;
   private closed = false;
   private readonly closeLabel: string;
@@ -121,8 +123,9 @@ export class HowToPlay {
     this.page = scene.add.container(0, 0);
     this.prev = new Button(scene, PX + 24, PY + PH - 64, { w: 140, h: 44, label: '◀ 上一页', size: 16 }).onClick(() => this.go(this.index - 1));
     this.next = new Button(scene, PX + PW - 164, PY + PH - 64, { w: 140, h: 44, label: '', size: 16, fill: 0x8a5a1e }).onClick(() => this.advance());
+    this.coachBtn = new Button(scene, PX + 110, PY + 8, { w: 148, h: 28, label: coachLabel(), size: 13 }).onClick(() => this.toggleCoach());
     this.dots = PAGES.map((_, i) => scene.add.rectangle(640 - (PAGES.length - 1) * 12 + i * 24, PY + PH - 42, 12, 12, COLORS.disabled).setStrokeStyle(2, COLORS.outline));
-    this.root.add([shade, box, head, skip, this.page, this.prev, this.next, ...this.dots]);
+    this.root.add([shade, box, head, skip, this.page, this.prev, this.next, this.coachBtn, ...this.dots]);
     scene.input.keyboard?.on('keydown', this.onKey);
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => scene.input.keyboard?.off('keydown', this.onKey));
     this.go(0);
@@ -171,4 +174,15 @@ export class HowToPlay {
     this.root.destroy();
     this.onClose();
   }
+
+  private toggleCoach(): void {
+    const saved = loadCoach();
+    if (saved.armed) saveCoach(false, saved.seen);
+    else armCoach();
+    this.coachBtn.setLabel(coachLabel());
+  }
+}
+
+function coachLabel(): string {
+  return loadCoach().armed ? '局内提示 开' : '局内提示 关';
 }

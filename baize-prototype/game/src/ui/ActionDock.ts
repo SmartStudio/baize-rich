@@ -1,19 +1,28 @@
-// Floating HUD on the right: utility pills (倍速 / 战报 / 记录) at the top, and the action dock at
-// the bottom with whose turn it is, the last roll, 掷骰子, 升级 / 出符 / 结束回合 and the hand as small
-// cards. Clicking a card opens its detail, with a 施放 button when it can be cast now.
+// Floating HUD on the right. Utility pills sit on top. The dock under them lists the
+// human's current choices: a roll, or the upgrades, 服丹 and 闭关 the engine is offering.
 import Phaser from 'phaser';
 import type { Game } from '../core/engine';
 import type { GameState } from '../core/types';
 import { addImg, hasFrame, setFrame } from './assets';
+import { IDLE_PLAN, type DockOffer, type DockPlan } from './dockPlan';
 import { DOCK, H, RIGHT, type Rect } from './layout';
 import { COLORS, FLOAT_ALPHA, FS, HEX, PLAYER_COLORS, PLAYER_HEX, txt } from './theme';
 import type { Tooltip, TipContent } from './Tooltip';
 import { Button } from './widgets';
 
-/** Hand cards are the 88×120 card art at this scale. */
 const CARD_SCALE = 0.4;
 const CARD_GAP = 6;
 const PORTRAIT = 40;
+const OFFER_H = 48;
+const OFFER_GAP = 4;
+const QUIET_END = COLORS.panelLight;
+const LOUD_END = 0xc03a40;
+
+interface OfferButton {
+  id: string;
+  button: Button;
+  rect: Rect;
+}
 
 export class ActionDock {
   private x = RIGHT.x;
@@ -22,28 +31,33 @@ export class ActionDock {
   private turnPortrait: Phaser.GameObjects.Image;
   private turnName: Phaser.GameObjects.Text;
   private turnHint: Phaser.GameObjects.Text;
+  private planHint: Phaser.GameObjects.Text;
   private dice: Phaser.GameObjects.Image[];
   private handLabel: Phaser.GameObjects.Text | null = null;
   private handLayer: Phaser.GameObjects.Container;
   private handTop = 0;
   private rollGlow: Phaser.GameObjects.Rectangle | null = null;
   private rollPulse: Phaser.Tweens.Tween | null = null;
-  private rollWaiting = false;
   private lastTurn: [GameState, boolean] | null = null;
+  private plan: DockPlan = IDLE_PLAN;
+  private offerButtons: OfferButton[] = [];
+  private moreButton: Button | null = null;
+  private offerHandler: ((id: string) => void) | null = null;
+  private moreHandler: (() => void) | null = null;
+  private rollRectBox: Rect = { x: 0, y: 0, w: 0, h: 0 };
+  private endRectBox: Rect = { x: 0, y: 0, w: 0, h: 0 };
+  private readonly halfW: number;
   readonly btnSpeed: Button;
   readonly btnLog: Button;
   readonly btnSave: Button;
-  readonly btnUpgrade: Button;
   readonly btnCast: Button;
-  readonly btnEat: Button;
-  readonly btnClose: Button;
   readonly btnEnd: Button;
   readonly btnRoll: Button;
   private cardClick: ((card: string) => void) | null = null;
   private castable = new Set<string>();
 
   /** `actions`: false for an all-AI game, which only needs the turn header. */
-  constructor(private scene: Phaser.Scene, private game: Game, private tip: Tooltip, actions: boolean) {
+  constructor(private scene: Phaser.Scene, private game: Game, private tip: Tooltip, private actions: boolean) {
     const s = scene;
     const { x, w } = this;
     const uw = (w - 8) / 3;
@@ -51,81 +65,83 @@ export class ActionDock {
     this.btnLog = new Button(s, x + uw + 4, RIGHT.utilY, { w: uw, h: RIGHT.utilH, label: '战报 · L', size: FS.sm });
     this.btnSave = new Button(s, x + 2 * (uw + 4), RIGHT.utilY, { w: uw, h: RIGHT.utilH, label: '记录 · S', size: FS.sm });
 
-    const p = DOCK.pad;
-    const bodyH = actions
-      ? DOCK.gap + DOCK.rollH + DOCK.gap + DOCK.btnH + DOCK.gap + DOCK.btnH + DOCK.gap + DOCK.handH
-      : 0;
-    const h = p + DOCK.headH + bodyH + p;
-    const y = H - 8 - h;
-    this.frame = s.add.rectangle(x, y, w, h, COLORS.panel, FLOAT_ALPHA).setOrigin(0, 0).setStrokeStyle(2, COLORS.gold);
-    this.turnPortrait = addImg(s, x + p, y + p + (DOCK.headH - PORTRAIT) / 2, 'por_body_s').setOrigin(0, 0);
-    this.turnName = txt(s, x + p + PORTRAIT + 8, y + p + 4, '', { size: FS.md, bold: true });
-    this.turnHint = txt(s, x + p + PORTRAIT + 8, y + p + 25, '', { size: FS.xs, color: HEX.dim });
-    this.dice = [0, 1].map((k) => addImg(s, x + w - p - 15 - (1 - k) * 36, y + p + DOCK.headH / 2, 'die_1'));
-
-    const ry = y + p + DOCK.headH + DOCK.gap;
-    this.btnRoll = new Button(s, x + p, ry, { w: w - 2 * p, h: DOCK.rollH, label: '掷骰子 · 空格', size: FS.xl, fill: COLORS.gold, textColor: HEX.ink });
-    const by = ry + DOCK.rollH + DOCK.gap;
-    const rowW = w - 2 * p;
-    const bw = Math.floor((rowW - 2 * DOCK.gap) / 3);
-    this.btnUpgrade = new Button(s, x + p, by, { w: bw, h: DOCK.btnH, label: '升级 · B', size: FS.sm });
-    this.btnCast = new Button(s, x + p + bw + DOCK.gap, by, { w: bw, h: DOCK.btnH, label: '出符 · C', size: FS.sm });
-    this.btnEnd = new Button(s, x + p + 2 * (bw + DOCK.gap), by, { w: bw, h: DOCK.btnH, label: '结束 · ↵', size: FS.sm, fill: 0xc03a40 });
-    const by2 = by + DOCK.btnH + DOCK.gap;
-    const bw2 = Math.floor((rowW - DOCK.gap) / 2);
-    this.btnEat = new Button(s, x + p, by2, { w: bw2, h: DOCK.btnH, label: '服丹 · P', size: FS.sm });
-    this.btnClose = new Button(s, x + p + bw2 + DOCK.gap, by2, {
-      w: bw2, h: DOCK.btnH, label: '闭关 · G', size: FS.sm, fill: COLORS.gold, textColor: HEX.ink,
-    });
-    this.handTop = by2 + DOCK.btnH + DOCK.gap;
+    const rowW = w - 2 * DOCK.pad;
+    this.halfW = Math.floor((rowW - DOCK.gap) / 2);
+    this.frame = s.add.rectangle(x, 0, w, 10, COLORS.panel, FLOAT_ALPHA).setOrigin(0, 0).setStrokeStyle(2, COLORS.gold);
+    this.turnPortrait = addImg(s, 0, 0, 'por_body_s').setOrigin(0, 0);
+    this.turnName = txt(s, 0, 0, '', { size: FS.md, bold: true });
+    this.turnHint = txt(s, 0, 0, '', { size: FS.xs, color: HEX.dim });
+    this.planHint = txt(s, 0, 0, '', { size: FS.sm, color: HEX.gold, wrap: rowW });
+    this.dice = [0, 1].map(() => addImg(s, 0, 0, 'die_1'));
+    this.btnRoll = new Button(s, 0, 0, { w: rowW, h: DOCK.rollH, label: '掷骰子 · 空格', size: FS.xl, fill: COLORS.gold, textColor: HEX.ink });
+    this.btnCast = new Button(s, 0, 0, { w: this.halfW, h: DOCK.btnH, label: '出符 · C', size: FS.sm });
+    this.btnEnd = new Button(s, 0, 0, { w: this.halfW, h: DOCK.btnH, label: '结束 · ↵', size: FS.sm, fill: LOUD_END });
     this.handLayer = s.add.container(0, 0);
     if (actions) {
-      this.handLabel = txt(s, x + p, this.handTop, '', { size: FS.xs, color: HEX.dim });
-      this.rollGlow = s.add.rectangle(x + p - 4, ry - 4, w - 2 * p + 8, DOCK.rollH + 8).setOrigin(0, 0).setStrokeStyle(3, COLORS.parchment).setAlpha(0);
+      this.handLabel = txt(s, 0, 0, '', { size: FS.xs, color: HEX.dim });
+      this.rollGlow = s.add.rectangle(0, 0, rowW + 8, DOCK.rollH + 8).setOrigin(0, 0).setStrokeStyle(3, COLORS.parchment).setAlpha(0);
       this.rollPulse = s.tweens.add({ targets: this.rollGlow, alpha: { from: 0.15, to: 1 }, duration: 450, yoyo: true, repeat: -1, paused: true });
-    } else {
-      for (const b of [this.btnRoll, this.btnUpgrade, this.btnCast, this.btnEat, this.btnClose, this.btnEnd]) b.setVisible(false);
     }
+    this.layout();
   }
 
   onCardClick(fn: (card: string) => void): void {
     this.cardClick = fn;
   }
 
+  onOffer(fn: (id: string) => void): void {
+    this.offerHandler = fn;
+  }
+
+  onMore(fn: () => void): void {
+    this.moreHandler = fn;
+  }
+
   setCastable(cards: string[]): void {
     this.castable = new Set(cards);
   }
 
-  /** Dock header: whose turn it is. A human's own turn lights the dock up. */
+  setPlan(plan: DockPlan): void {
+    this.plan = plan;
+    this.layout();
+    if (this.lastTurn) this.applyTurn(this.lastTurn[0], this.lastTurn[1]);
+  }
+
+  rollRect(): Rect {
+    return this.rollRectBox;
+  }
+
+  endRect(): Rect {
+    return this.endRectBox;
+  }
+
+  offerRect(id: string): Rect | null {
+    return this.offerButtons.find((row) => row.id === id)?.rect ?? null;
+  }
+
   setTurn(state: GameState, human: boolean): void {
     this.lastTurn = [state, human];
+    this.applyTurn(state, human);
+  }
+
+  private applyTurn(state: GameState, human: boolean): void {
     const p = state.players[state.current];
     setFrame(this.turnPortrait, `por_${p.hero}_s`);
     this.turnName.setText(state.over ? '对局结束' : `${p.name} 的回合`).setColor(PLAYER_HEX[p.seat]);
-    this.turnHint.setText(this.hintLine(state, human)).setColor(human && !state.over ? HEX.gold : HEX.dim);
+    this.turnHint.setText(this.phaseLine(state, human)).setColor(human && !state.over ? HEX.gold : HEX.dim);
     const lit = human && !state.over;
     this.frame.setStrokeStyle(lit ? 3 : 2, lit ? PLAYER_COLORS[p.seat] : COLORS.gold);
   }
 
-  /** Names the buttons the engine has switched on. Disabled actions stay off this line. */
-  private hintLine(state: GameState, human: boolean): string {
+  private phaseLine(state: GameState, human: boolean): string {
     if (state.over) return '';
     if (!human) return 'AI 正在行动…';
-    if (this.rollWaiting) return this.btnClose.isEnabled() ? '可先闭关，再掷骰' : '掷骰子';
-    const ready = [
-      this.btnUpgrade.isEnabled() ? '升级' : '',
-      this.btnCast.isEnabled() ? '出符' : '',
-      this.btnEat.isEnabled() ? '服丹' : '',
-      this.btnClose.isEnabled() ? '闭关' : '',
-      this.btnEnd.isEnabled() ? '结束' : '',
-    ].filter((s) => s !== '');
-    return ready.join(' · ');
+    if (this.plan.roll) return '掷骰前';
+    if (this.plan.end) return '行动阶段';
+    return '';
   }
 
-  /** The roll button breathes while it waits for a human to press it. */
   setRollWaiting(on: boolean): void {
-    this.rollWaiting = on;
-    if (this.lastTurn) this.setTurn(...this.lastTurn);
     if (on) this.rollPulse?.resume();
     else {
       this.rollPulse?.pause();
@@ -152,30 +168,33 @@ export class ActionDock {
       });
       return;
     }
-    p.hand.forEach((card, i) => {
-      const spell = g.spellById.get(card)!;
-      const bx = left + i * (cw + CARD_GAP);
-      const can = this.castable.has(card);
-      const rect: Rect = { x: bx, y: top, w: cw, h: ch };
-      const c = s.add.container(bx, top);
-      const img = addImg(s, 0, 0, hasFrame(s, `card_${spell.id}`) ? `card_${spell.id}` : `card_${spell.cat}`).setOrigin(0, 0).setScale(CARD_SCALE);
-      const name = txt(s, cw / 2, ch * 0.68, spell.name, { size: FS.xs, color: HEX.ink, origin: [0.5, 0.5], bold: true });
-      const glow = s.add.rectangle(-2, -2, cw + 4, ch + 4).setOrigin(0, 0).setStrokeStyle(2, can ? COLORS.gold : COLORS.outline);
-      c.add([img, name, glow]);
-      if (!can) c.setAlpha(0.75);
-      img.setInteractive({ useHandCursor: true });
-      img.on('pointerover', () => { c.y = top - 4; });
-      img.on('pointerout', () => { c.y = top; });
-      img.on('pointerdown', () => this.tip.toggle(`card:${i}:${card}`, rect, this.cardTip(card)));
-      this.handLayer.add(c);
-    });
+    p.hand.forEach((card, i) => this.addCard(card, i, left, top, cw, ch));
     if (n === 0) this.handLayer.add(txt(s, left, top + ch / 2, '暂无符箓', { size: FS.sm, color: PLAYER_HEX[p.seat], origin: [0, 0.5] }));
   }
 
+  private addCard(card: string, i: number, left: number, top: number, cw: number, ch: number): void {
+    const spell = this.game.spellById.get(card)!;
+    const s = this.scene;
+    const bx = left + i * (cw + CARD_GAP);
+    const can = this.castable.has(card);
+    const rect: Rect = { x: bx, y: top, w: cw, h: ch };
+    const c = s.add.container(bx, top);
+    const frame = hasFrame(s, `card_${spell.id}`) ? `card_${spell.id}` : `card_${spell.cat}`;
+    const img = addImg(s, 0, 0, frame).setOrigin(0, 0).setScale(CARD_SCALE);
+    const name = txt(s, cw / 2, ch * 0.68, spell.name, { size: FS.xs, color: HEX.ink, origin: [0.5, 0.5], bold: true });
+    const glow = s.add.rectangle(-2, -2, cw + 4, ch + 4).setOrigin(0, 0).setStrokeStyle(2, can ? COLORS.gold : COLORS.outline);
+    c.add([img, name, glow]);
+    if (!can) c.setAlpha(0.75);
+    img.setInteractive({ useHandCursor: true });
+    img.on('pointerover', () => { c.y = top - 4; });
+    img.on('pointerout', () => { c.y = top; });
+    img.on('pointerdown', () => this.tip.toggle(`card:${i}:${card}`, rect, this.cardTip(card)));
+    this.handLayer.add(c);
+  }
+
   private cardTip(card: string): TipContent {
-    const g = this.game;
-    const spell = g.spellById.get(card)!;
-    const cat = g.data.spells.categories[spell.cat];
+    const spell = this.game.spellById.get(card)!;
+    const cat = this.game.data.spells.categories[spell.cat];
     const can = this.castable.has(card);
     return {
       title: `${spell.name} · ${cat.name}`,
@@ -202,6 +221,153 @@ export class ActionDock {
       });
     });
   }
+
+  private layout(): void {
+    this.clearOffers();
+    if (!this.actions) {
+      this.placeChrome(H - 8 - headerH(), headerH());
+      this.hideControls();
+      return;
+    }
+    const hintH = this.measureHint();
+    const h = dockHeight(hintH, offerBlock(this.plan), this.showsRoll(), this.showsRow());
+    const y = H - 8 - h;
+    this.placeChrome(y, h);
+    let cursor = y + DOCK.pad + DOCK.headH;
+    cursor = this.placeHint(cursor, hintH);
+    cursor = this.placeOffers(cursor);
+    cursor = this.placeRoll(cursor);
+    cursor = this.placeRow(cursor);
+    this.handTop = cursor + DOCK.gap;
+    this.handLabel?.setPosition(this.x + DOCK.pad, this.handTop);
+    this.paintControls();
+  }
+
+  private measureHint(): number {
+    this.planHint.setText(this.plan.hint).setVisible(this.plan.hint !== '');
+    return this.plan.hint ? Math.ceil(this.planHint.height) : 0;
+  }
+
+  private placeChrome(y: number, h: number): void {
+    const p = DOCK.pad;
+    this.frame.setPosition(this.x, y).setSize(this.w, h);
+    this.turnPortrait.setPosition(this.x + p, y + p + (DOCK.headH - PORTRAIT) / 2);
+    this.turnName.setPosition(this.x + p + PORTRAIT + 8, y + p + 4);
+    this.turnHint.setPosition(this.x + p + PORTRAIT + 8, y + p + 25);
+    this.dice.forEach((die, k) => die.setPosition(this.x + this.w - p - 15 - (1 - k) * 36, y + p + DOCK.headH / 2));
+  }
+
+  private placeHint(cursor: number, hintH: number): number {
+    if (hintH === 0) return cursor;
+    const y = cursor + DOCK.gap;
+    this.planHint.setPosition(this.x + DOCK.pad, y);
+    return y + hintH;
+  }
+
+  private placeOffers(cursor: number): number {
+    if (this.plan.offers.length === 0 && this.plan.more === 0) return cursor;
+    let y = cursor + DOCK.gap;
+    const x = this.x + DOCK.pad;
+    const w = this.w - 2 * DOCK.pad;
+    for (const offer of this.plan.offers) y = this.addOffer(offer, x, y, w);
+    if (this.plan.more > 0) y = this.addMore(x, y, w);
+    return y - OFFER_GAP;
+  }
+
+  private addOffer(offer: DockOffer, x: number, y: number, w: number): number {
+    const button = new Button(this.scene, x, y, {
+      w, h: OFFER_H, label: offer.title, hint: offer.detail, hintColor: HEX.ink,
+      size: FS.sm, fill: COLORS.gold, textColor: HEX.ink,
+    }).onClick(() => this.offerHandler?.(offer.id));
+    this.offerButtons.push({ id: offer.id, button, rect: { x, y, w, h: OFFER_H } });
+    return y + OFFER_H + OFFER_GAP;
+  }
+
+  private addMore(x: number, y: number, w: number): number {
+    this.moreButton = new Button(this.scene, x, y, {
+      w, h: OFFER_H, label: `还有 ${this.plan.more} 块 · B`, size: FS.sm,
+    }).onClick(() => this.moreHandler?.());
+    return y + OFFER_H + OFFER_GAP;
+  }
+
+  private placeRoll(cursor: number): number {
+    const show = this.showsRoll();
+    this.btnRoll.setVisible(show);
+    if (!show) {
+      this.rollRectBox = { x: 0, y: 0, w: 0, h: 0 };
+      return cursor;
+    }
+    const x = this.x + DOCK.pad;
+    const y = cursor + DOCK.gap;
+    this.btnRoll.setPosition(x, y);
+    this.rollRectBox = { x, y, w: this.w - 2 * DOCK.pad, h: DOCK.rollH };
+    this.rollGlow?.setPosition(x - 4, y - 4);
+    return y + DOCK.rollH;
+  }
+
+  private placeRow(cursor: number): number {
+    const showCast = this.plan.cast || this.plan.end;
+    const showEnd = this.plan.end;
+    this.btnCast.setVisible(this.actions && showCast);
+    this.btnEnd.setVisible(this.actions && showEnd);
+    if (!showCast && !showEnd) {
+      this.endRectBox = { x: 0, y: 0, w: 0, h: 0 };
+      return cursor;
+    }
+    const y = cursor + DOCK.gap;
+    const x = this.x + DOCK.pad;
+    this.btnCast.setPosition(x, y);
+    const endX = showCast ? x + this.halfW + DOCK.gap : x;
+    this.btnEnd.setPosition(endX, y);
+    this.endRectBox = showEnd ? { x: endX, y, w: this.halfW, h: DOCK.btnH } : { x: 0, y: 0, w: 0, h: 0 };
+    return y + DOCK.btnH;
+  }
+
+  private paintControls(): void {
+    this.btnRoll.setEnabled(this.plan.roll);
+    this.btnCast.setEnabled(this.plan.cast);
+    this.btnEnd.setFill(this.plan.end && this.plan.endLoud ? LOUD_END : QUIET_END);
+    this.btnEnd.setEnabled(this.plan.end);
+  }
+
+  private showsRoll(): boolean {
+    return this.actions && !this.plan.end;
+  }
+
+  private showsRow(): boolean {
+    return this.actions && (this.plan.end || this.plan.cast);
+  }
+
+  private hideControls(): void {
+    this.btnRoll.setVisible(false);
+    this.btnCast.setVisible(false);
+    this.btnEnd.setVisible(false);
+    this.planHint.setVisible(false);
+  }
+
+  private clearOffers(): void {
+    for (const row of this.offerButtons) row.button.destroy(true);
+    this.offerButtons = [];
+    this.moreButton?.destroy(true);
+    this.moreButton = null;
+  }
+}
+
+function headerH(): number {
+  return DOCK.pad * 2 + DOCK.headH;
+}
+
+function offerBlock(plan: DockPlan): number {
+  const n = plan.offers.length + (plan.more > 0 ? 1 : 0);
+  if (n === 0) return 0;
+  return DOCK.gap + n * OFFER_H + (n - 1) * OFFER_GAP;
+}
+
+function dockHeight(hintH: number, offers: number, roll: boolean, row: boolean): number {
+  const hint = hintH > 0 ? DOCK.gap + hintH : 0;
+  const rollH = roll ? DOCK.gap + DOCK.rollH : 0;
+  const rowH = row ? DOCK.gap + DOCK.btnH : 0;
+  return DOCK.pad + DOCK.headH + hint + offers + rollH + rowH + DOCK.gap + DOCK.handH + DOCK.pad;
 }
 
 function timingName(t: string): string {

@@ -8,7 +8,7 @@ import { defaultData } from '../core/data';
 import { Game } from '../core/engine';
 import type { GameEvent, GameEventType } from '../core/events';
 import { toRecord, type GameRecord } from '../core/record';
-import { realmName, totalAssets } from '../core/rules';
+import { isGlowing, realmName, totalAssets } from '../core/rules';
 import { ALTAR } from '../core/board';
 import type { GameState, NodeId } from '../core/types';
 import { BoardCamera } from '../ui/BoardCamera';
@@ -17,14 +17,17 @@ import { Breakthrough } from '../ui/Breakthrough';
 import { breakthroughView } from '../ui/breakthroughView';
 import { ChoiceModal } from '../ui/ChoiceModal';
 import { presentChoice } from '../ui/choices/registry';
+import { Coach, coachHudRect } from '../ui/Coach';
+import { COACH_STEPS, coachCopy, dismiss, emptyBook, nudge, observe, type CoachBook, type CoachCue, type CoachMoment } from '../ui/coachTriggers';
 import { Cutscene, type BannerSpec } from '../ui/Cutscene';
-import { STAGE, type Rect } from '../ui/layout';
+import { dockPlan, IDLE_PLAN, type DockPlan } from '../ui/dockPlan';
+import { LEFT, STAGE, type Rect } from '../ui/layout';
 import { LogPanel } from '../ui/LogPanel';
 import { playMiniGame } from '../ui/MiniGame';
 import { Minimap } from '../ui/Minimap';
 import { aiTurnNarration, heroNameForSeat, narrateEvent, resumeNarration, roundNarration, turnNarration } from '../ui/narration';
 import { PlayerCards } from '../ui/PlayerCards';
-import { downloadRecord, saveAutosave } from '../ui/saves';
+import { downloadRecord, loadCoach, saveAutosave, saveCoach } from '../ui/saves';
 import type { SessionConfig } from '../ui/session';
 import { ActionDock } from '../ui/ActionDock';
 import { COLORS, FS, HEX, PLAYER_COLORS, txt } from '../ui/theme';
@@ -62,7 +65,8 @@ const PACE: Record<'ai' | 'human', Pace> = {
   ai: { step: 200, teleport: 450, roll: 450, rollHold: 280, slow: 300, turnStart: 300, think: 80, thinkModal: 220 },
   human: { step: 240, teleport: 540, roll: 700, rollHold: 600, slow: 650, turnStart: 1100, think: 0, thinkModal: 0 },
 };
-const ROUND_WAIT = 700;
+/** Round ribbon lifetime. The turn banner starts only after this, so the two never share the board. */
+const ROUND_RIBBON_MS = 1000;
 const CUTSCENE_MS = 1500;
 const WIN_MS = 2000;
 const SPEEDS = [0.5, 1, 2, 4];
@@ -131,6 +135,12 @@ export class GameScene extends Phaser.Scene {
   private pressed: NodeId | null = null;
   /** The camera moved since tile popovers were last placed. */
   private camMoving = false;
+  private coach!: Coach;
+  private coachBook: CoachBook = emptyBook();
+  private coachArmed = true;
+  /** Screen rect of a coach bubble that should not also click the board underneath. */
+  private coachBlock: Rect | null = null;
+  private shownPlan: DockPlan = IDLE_PLAN;
 
   constructor() {
     super('Game');
@@ -184,13 +194,35 @@ export class GameScene extends Phaser.Scene {
     this.side.btnSave.onClick(() => this.saveRecord());
     this.side.btnRoll.onClick(() => this.mainAnswer('roll'));
     this.side.btnEnd.onClick(() => this.mainAnswer('end'));
-    this.side.btnUpgrade.onClick(() => void this.openSubMenu('upgrade'));
     this.side.btnCast.onClick(() => void this.openSubMenu('cast'));
-    this.side.btnEat.onClick(() => this.mainAnswer('eat'));
-    this.side.btnClose.onClick(() => this.mainAnswer('closure'));
+    this.side.onOffer((id) => this.mainAnswer(id));
+    this.side.onMore(() => void this.openSubMenu('upgrade'));
     this.side.onCardClick((card) => this.mainAnswer(`cast:${card}`));
+    const coachSave = loadCoach();
+    this.coachArmed = coachSave.armed;
+    this.coachBook = emptyBook(coachSave.seen);
+    this.coach = new Coach(hud);
+    const dismissBubble = () => {
+      if (!this.coach.isOpen) return;
+      this.coachBlock = this.coach.rect();
+      this.dismissCoach();
+    };
+    const clearBlock = () => { this.coachBlock = null; };
+    this.input.on('pointerdown', dismissBubble);
+    hud.input.on('pointerdown', dismissBubble);
+    this.input.on('pointerup', clearBlock);
+    hud.input.on('pointerup', clearBlock);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.input.off('pointerdown', dismissBubble);
+      hud.input.off('pointerdown', dismissBubble);
+      this.input.off('pointerup', clearBlock);
+      hud.input.off('pointerup', clearBlock);
+    });
     this.boardView.onHover((n) => { this.hovered = n; this.showTile(); });
-    this.boardView.onPress((n) => { this.pressed = this.tip.justClosed(`tile:${n}`) ? null : n; });
+    this.boardView.onPress((n) => {
+      if (this.overCoach()) { this.pressed = null; return; }
+      this.pressed = this.tip.justClosed(`tile:${n}`) ? null : n;
+    });
     this.boardView.onClick((n) => { if (n === this.pressed && !this.cam.dragged) this.nodeClicked(n); });
     this.input.keyboard?.on('keydown', (ev: KeyboardEvent) => this.onKey(ev));
     this.setMainButtons(null);
@@ -317,7 +349,7 @@ export class GameScene extends Phaser.Scene {
       case 'roundStart':
         if (e.snap && e.snap.round !== this.engine.data.config.manifest.round) this.boardView.showBaize(false);
         if (e.snap) this.roundRibbon(e.snap);
-        await this.wait(this.ms(ROUND_WAIT));
+        await this.wait(this.ms(ROUND_RIBBON_MS) + 40);
         break;
       case 'turnStart':
         this.cam.recentre(seat);
@@ -339,6 +371,7 @@ export class GameScene extends Phaser.Scene {
       this.popDeltas(e.snap);
       this.renderAll(e.snap, false);
     }
+    this.noteCoach(this.momentFromEvent(e));
   }
 
   private cutscene(e: GameEvent): Promise<void> {
@@ -363,7 +396,7 @@ export class GameScene extends Phaser.Scene {
 
   private roundRibbon(st: GameState): void {
     const copy = roundNarration(this.engine, st);
-    this.fx.ribbon(copy.title, copy.sub, COLORS.gold, STAGE.cy, this.ms(1400));
+    this.fx.ribbon(copy.title, copy.sub, COLORS.gold, STAGE.cy, this.ms(ROUND_RIBBON_MS));
   }
 
   /** AI turns get a quick ribbon; a human seat's turn gets a full "轮到你了" moment. */
@@ -445,9 +478,11 @@ export class GameScene extends Phaser.Scene {
     if (c.kind === 'preRoll' || c.kind === 'action') {
       this.mainChoice = c;
       this.setMainButtons(c);
+      this.noteCoach(this.momentFromChoice(c));
       return new Promise((res) => { this.mainResolve = res; });
     }
     if (c.kind === 'miniGame') return this.playHumanMini(c);
+    this.noteCoach(this.momentFromChoice(c));
     return this.modalChoice(c);
   }
 
@@ -460,16 +495,17 @@ export class GameScene extends Phaser.Scene {
   }
 
   private setMainButtons(c: PendingChoice | null): void {
-    const ids = c ? c.options.map((o) => o.id) : [];
-    this.side.btnRoll.setEnabled(ids.includes('roll'));
-    this.side.btnEnd.setEnabled(ids.includes('end'));
-    this.side.btnUpgrade.setEnabled(ids.some((i) => i.startsWith('upgrade:')));
-    this.side.btnCast.setEnabled(ids.some(isCastId));
-    this.side.btnEat.setEnabled(ids.includes('eat'));
-    this.side.btnClose.setEnabled(ids.includes('closure'));
+    const choice = c && (c.kind === 'preRoll' || c.kind === 'action') ? c : null;
+    const plan = dockPlan(this.engine, choice);
+    this.shownPlan = plan;
+    this.side.setPlan(plan);
+    const ids = choice ? choice.options.map((o) => o.id) : [];
     this.side.setCastable(ids.filter((i) => i.startsWith('cast:')).map((i) => i.slice(5)));
-    this.side.setRollWaiting(ids.includes('roll'));
+    this.side.setRollWaiting(plan.roll);
     this.side.renderHand(this.shownState ?? this.engine.state, this.handViewer(this.engine.state));
+    this.setNodeOptions(plan.clicks);
+    this.boardView.setClickable(plan.nodes);
+    if (choice && plan.nodes.length > 0) this.frameTargets(choice.player);
   }
 
   private mainAnswer(id: string): void {
@@ -482,6 +518,7 @@ export class GameScene extends Phaser.Scene {
     this.setMainButtons(null);
     this.boardView.setClickable([]);
     this.nodeOptions.clear();
+    this.cam.release();
     // Rolling means "show me my move", even if the player had panned away to look around.
     if (id === 'roll') this.cam.recentre(c.player);
     res(id);
@@ -510,6 +547,13 @@ export class GameScene extends Phaser.Scene {
     this.cam.release();
     if (id?.startsWith(NARROW)) void this.openSubMenu(which, id.slice(NARROW.length) as NodeId);
     else if (id) this.mainAnswer(id);
+    else this.restorePlanClicks();
+  }
+
+  private restorePlanClicks(): void {
+    this.setNodeOptions(this.shownPlan.clicks);
+    this.boardView.setClickable(this.shownPlan.nodes);
+    if (this.mainChoice && this.shownPlan.nodes.length > 0) this.frameTargets(this.mainChoice.player);
   }
 
   private setNodeOptions(opts: readonly { id: string; node?: NodeId }[]): void {
@@ -607,6 +651,7 @@ export class GameScene extends Phaser.Scene {
 
   private onKey(ev: KeyboardEvent): void {
     const k = ev.key;
+    if (this.coach.isOpen) this.dismissCoach();
     if (k === 'f' || k === 'F') { this.cycleSpeed(); return; }
     if (k === 'l' || k === 'L') { this.logPanel.toggle(); return; }
     if (k === 'Escape' && this.logPanel.isOpen) { this.logPanel.toggle(false); return; }
@@ -626,5 +671,83 @@ export class GameScene extends Phaser.Scene {
     else if (k === 'p' || k === 'P') this.mainAnswer('eat');
     else if (k === 'g' || k === 'G') this.mainAnswer('closure');
     else if (k === 'k' || k === 'K') this.mainAnswer('skill');
+    else if (/^[1-9]$/.test(k)) this.answerOffer(k);
+  }
+
+  private overCoach(): boolean {
+    const rect = this.coach.isOpen ? this.coach.rect() : this.coachBlock;
+    if (!rect) return false;
+    const p = this.input.activePointer;
+    return p.x >= rect.x && p.x <= rect.x + rect.w && p.y >= rect.y && p.y <= rect.y + rect.h;
+  }
+
+  private answerOffer(key: string): void {
+    const row = this.shownPlan.offers.find((offer) => offer.key === key);
+    if (row) this.mainAnswer(row.id);
+  }
+
+  private noteCoach(moment: CoachMoment): void {
+    if (!this.alive || !this.coachArmed) return;
+    const next = observe(this.coachBook, moment, coachCopy(this.engine.data));
+    this.coachBook = next.book;
+    if (next.cue && !this.coach.isOpen) this.coach.show(next.cue, this.coachRect(next.cue));
+  }
+
+  private dismissCoach(): void {
+    const step = this.coach.dismiss();
+    if (!step) return;
+    this.coachBook = dismiss(this.coachBook, step);
+    this.persistCoach();
+    this.time.delayedCall(0, () => this.revealCoach());
+  }
+
+  private revealCoach(): void {
+    if (!this.alive || !this.coachArmed || this.coach.isOpen) return;
+    const next = nudge(this.coachBook);
+    this.coachBook = next.book;
+    if (next.cue) this.coach.show(next.cue, this.coachRect(next.cue));
+  }
+
+  private persistCoach(): void {
+    if (this.coachBook.seen.length >= COACH_STEPS.length) this.coachArmed = false;
+    saveCoach(this.coachArmed, this.coachBook.seen);
+  }
+
+  private momentFromChoice(c: PendingChoice): CoachMoment {
+    const standing = this.engine.state.players[c.player].pos;
+    const node = c.ctx.node ?? (c.kind === 'brew' ? standing : c.options.find((o) => o.node)?.node);
+    return {
+      t: 'choice',
+      human: this.isHuman(c.player),
+      seat: c.player,
+      kind: c.kind,
+      node,
+      nodeType: node ? this.engine.board.node(node).type : undefined,
+      closure: c.options.some((o) => o.id === 'closure'),
+    };
+  }
+
+  private momentFromEvent(e: GameEvent): CoachMoment {
+    const seat = e.player ?? 0;
+    const snap = e.snap ?? this.engine.state;
+    return {
+      t: 'event',
+      human: e.player !== undefined && this.isHuman(e.player),
+      seat,
+      type: e.type,
+      node: e.node,
+      nodeType: e.node ? this.engine.board.node(e.node).type : undefined,
+      cultGained: e.cult?.gained ?? 0,
+      glowing: e.player !== undefined && isGlowing(snap, this.engine.data, seat),
+    };
+  }
+
+  private coachRect(cue: CoachCue): Rect {
+    const hud = coachHudRect(cue.at, cue.seat);
+    if (hud) return hud;
+    if (cue.at.t === 'roll') return this.side.rollRect();
+    if (cue.at.t === 'closure') return this.side.offerRect('closure') ?? this.side.rollRect();
+    if (cue.at.t === 'tile') return this.toScreen(this.boardView.nodeRect(cue.at.node));
+    return { x: LEFT.x, y: LEFT.lineY, w: LEFT.w, h: LEFT.lineH };
   }
 }

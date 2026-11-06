@@ -2,9 +2,11 @@
 // Storage can throw (private mode, quota, blocked site data); the game must keep working.
 import { defaultData } from '../core/data';
 import { parseRecord, replayRecord, type GameRecord } from '../core/record';
+import { isCoachStep, type CoachStep } from './coachTriggers';
 
 const AUTOSAVE_KEY = 'baize.autosave';
 const TUTORIAL_KEY = 'baize.tutorialSeen';
+const COACH_KEY = 'baize.coach';
 
 /** An unfinished autosave that still replays, with a one-line summary for the 继续上局 button. */
 export function findResumable(): { record: GameRecord; summary: string } | null {
@@ -36,6 +38,44 @@ export function markTutorialSeen(): void {
   } catch {
     /* storage blocked: the tutorial stays reachable from the title screen */
   }
+}
+
+export function loadCoach(): { armed: boolean; seen: CoachStep[] } {
+  let raw: string | null;
+  try {
+    raw = localStorage.getItem(COACH_KEY);
+  } catch {
+    return { armed: true, seen: [] };
+  }
+  return parseCoachSave(raw);
+}
+
+export function saveCoach(armed: boolean, seen: readonly CoachStep[]): void {
+  try {
+    localStorage.setItem(COACH_KEY, JSON.stringify({ armed, seen }));
+  } catch {
+    /* storage blocked: the guide stays on for this tab */
+  }
+}
+
+/** Next game walks the seven steps again. */
+export function armCoach(): void {
+  saveCoach(true, []);
+}
+
+export function parseCoachSave(raw: string | null): { armed: boolean; seen: CoachStep[] } {
+  if (!raw) return { armed: true, seen: [] };
+  let json: unknown;
+  try {
+    json = JSON.parse(raw);
+  } catch {
+    return { armed: true, seen: [] };
+  }
+  if (!json || typeof json !== 'object') return { armed: true, seen: [] };
+  const seenRaw = 'seen' in json ? json.seen : undefined;
+  const armed = 'armed' in json ? json.armed : undefined;
+  const seen = Array.isArray(seenRaw) ? seenRaw.filter((step): step is CoachStep => typeof step === 'string' && isCoachStep(step)) : [];
+  return { armed: armed !== false, seen };
 }
 
 export function saveAutosave(r: GameRecord): void {

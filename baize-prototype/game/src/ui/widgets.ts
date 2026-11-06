@@ -77,6 +77,13 @@ export class Button extends Phaser.GameObjects.Container {
     return this;
   }
 
+  /** Swap the enabled fill. A disabled button picks this up the next time it is enabled. */
+  setFill(fill: number): this {
+    this.fill = fill;
+    if (this.enabled) this.bg.setFillStyle(fill);
+    return this;
+  }
+
   press(): void {
     if (this.enabled && this.handler) this.handler();
   }
