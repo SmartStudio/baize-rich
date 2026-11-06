@@ -82,7 +82,7 @@ export function coachCopy(data: GameData): Record<CoachStep, string> {
   const win = realmName(data, winRealm(data));
   return {
     roll: '按空格掷骰，点数就是你要走的格数。',
-    buy: '这块灵田没人要。买下它，路过的人要给你交租，你停在这里还能打坐修炼。',
+    buy: '这块灵田没人要。买下它，别人路过交半租，停下交全租。你停在这里还能打坐修炼。',
     cult: '左边是你的修为条。每个回合都会吐纳长一点，在自家地上打坐长得更快。',
     herbs: `${herbName}会长灵草。带着灵草去丹房，${per}株炼一颗丹药。`,
     closure: `修为条满了，就在灵台或自家${closeName}以上的灵田闭关。押上丹药，成功率更高。失败会走火入魔。`,

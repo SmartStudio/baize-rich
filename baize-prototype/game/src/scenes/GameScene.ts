@@ -325,6 +325,9 @@ export class GameScene extends Phaser.Scene {
           this.side.setDice(e.dice);
         }
         break;
+      case 'passToll':
+        this.cards.floatStones(e.payee!, `+${e.amount}`, HEX.good);
+        break;
       case 'manifest':
         this.boardView.showBaize(true);
         await this.present(e, pace);

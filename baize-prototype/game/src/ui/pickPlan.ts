@@ -1,10 +1,11 @@
 // Choices that only decide where a token goes, asked on the board instead of in a modal: the cells each
 // answer leads to, their number keys and labels, and the dock line. Pure, so GameScene and the tests share it.
-// The walk projection mirrors Game.walk: forks branch, the altar stops a walk unless its toll is paid,
-// a 镇山 mountain stops it, 迷魂丹 halves the steps.
+// The walk projection mirrors Game.walk: forks branch, the altar stops a walk unless its pill is paid,
+// a 镇山 mountain stops it, 迷魂丹 halves the steps, every rival land walked past takes its 过路费.
 import { ALTAR } from '../core/board';
 import type { ChoiceKind, PendingChoice, PendingChoiceOf } from '../core/choices';
 import type { Game } from '../core/engine';
+import { passToll } from '../core/rules';
 import type { NodeId } from '../core/types';
 
 export const PICK_KINDS = ['fork', 'exitRoad', 'altarPass', 'adjust', 'rollValue', 'node'] as const;
@@ -22,7 +23,9 @@ export interface PickCell {
   /** Digit that picks this cell, null past the ninth. */
   key: string | null;
   label: string;
-  /** A cost the label alone hides: 神行符 spent, the altar toll. */
+  /** Stones of 过路费 the way to this cell pays. */
+  toll: number;
+  /** A cost the label alone hides: 神行符 spent, the altar pill, the 过路费. */
   sub?: string;
   /** Space picks it. Exactly one cell is primary. */
   primary: boolean;
@@ -39,7 +42,9 @@ export interface PickPlan {
 interface Landing {
   node: NodeId;
   route: string[];
-  toll: boolean;
+  /** Paid the altar's pill to walk on through it. */
+  borrowed: boolean;
+  toll: number;
 }
 
 interface Candidate {
@@ -76,7 +81,7 @@ const PLANNERS: { [K in PickKind]: Planner<K> } = {
   altarPass: (g, c) => ({
     lead: `停在白泽灵台，或付 ${g.data.config.altarToll} 颗丹药借道再走 ${c.ctx.remaining} 步。`,
     candidates: c.options.flatMap((o) => (o.value === 'stop'
-      ? [landed(o.id, { node: ALTAR, route: [], toll: false }, '停留')]
+      ? [landed(o.id, { node: ALTAR, route: [], borrowed: false, toll: 0 }, '停留')]
       : byLanding(g, o.id, stepInto(g, c.player, ALTAR, o.value, c.ctx.remaining!, true)))),
     defaultId: c.defaultId,
   }),
@@ -86,7 +91,7 @@ const PLANNERS: { [K in PickKind]: Planner<K> } = {
       id: o.id,
       landing: l,
       label: `${o.value.steps} 步`,
-      sub: costLine(o.value.card || o.value.steer !== 0 ? o.hint : undefined, l.toll),
+      sub: costLine(o.value.card || o.value.steer !== 0 ? o.hint : undefined, l),
       rank: o.id === c.defaultId ? 0 : o.value.card ? 2 : 1,
     }))),
     defaultId: c.defaultId,
@@ -94,12 +99,12 @@ const PLANNERS: { [K in PickKind]: Planner<K> } = {
   rollValue: (g, c) => ({
     lead: '御骰符：选本次点数。',
     candidates: c.options.flatMap((o) => walkFrom(g, c.player, o.value).map((l) => ({
-      id: o.id, landing: l, label: `${o.value} 点`, sub: costLine(undefined, l.toll), rank: 0, key: valueKey(o.value),
+      id: o.id, landing: l, label: `${o.value} 点`, sub: costLine(undefined, l), rank: 0, key: valueKey(o.value),
     }))),
   }),
   node: (g, c) => ({
     lead: `${c.title}：${c.desc ?? ''}。`,
-    candidates: c.options.map((o) => landed(o.id, { node: o.value, route: [], toll: false }, g.nodeName(o.value))),
+    candidates: c.options.map((o) => landed(o.id, { node: o.value, route: [], borrowed: false, toll: 0 }, g.nodeName(o.value))),
   }),
 };
 
@@ -124,10 +129,11 @@ export function pickPlan(g: Game, c: PendingChoice): PickPlan | null {
   return { hint: `${ask.lead}点击发光的格子或按数字键，${space}${later}`, cells, asksLater };
 }
 
-/** The best-ranked answer reaching each node, in option order. */
+/** The best-ranked answer reaching each node, the one paying less 过路费 on a tie, in option order. */
 function distinct(candidates: Candidate[]): Candidate[] {
   const best = new Map<NodeId, Candidate>();
-  const ranked = candidates.map((c, order) => ({ c, order })).sort((a, b) => a.c.rank - b.c.rank || a.order - b.order);
+  const ranked = candidates.map((c, order) => ({ c, order }))
+    .sort((a, b) => a.c.rank - b.c.rank || a.c.landing.toll - b.c.landing.toll || a.order - b.order);
   for (const { c } of ranked) if (!best.has(c.landing.node)) best.set(c.landing.node, c);
   return candidates.filter((c) => best.get(c.landing.node) === c);
 }
@@ -150,7 +156,8 @@ function toCells(kept: Candidate[], defaultId: string | undefined): PickCell[] {
     const want = c.key === undefined ? (i < KEYS ? String(i + 1) : null) : c.key;
     const key = want && !taken.has(want) ? want : null;
     if (key) taken.add(key);
-    return { node: c.landing.node, id: c.id, route: c.landing.route, key, label: c.label, sub: c.sub, primary: i === primaryAt };
+    const { node, route, toll } = c.landing;
+    return { node, id: c.id, route, key, label: c.label, toll, sub: c.sub, primary: i === primaryAt };
   });
 }
 
@@ -159,7 +166,7 @@ function byLanding(g: Game, id: string, landings: Landing[]): Candidate[] {
 }
 
 function landed(id: string, landing: Landing, label: string): Candidate {
-  return { id, landing, label, sub: costLine(undefined, landing.toll), rank: landing.toll ? 1 : 0 };
+  return { id, landing, label, sub: costLine(undefined, landing), rank: landing.borrowed ? 1 : 0 };
 }
 
 /** 2–9 by their digit, 10 by 0; 11 and 12 are click-only. */
@@ -167,8 +174,8 @@ function valueKey(v: number): string | null {
   return v <= 9 ? String(v) : v === 10 ? '0' : null;
 }
 
-function costLine(how: string | undefined, toll: boolean): string | undefined {
-  return [how, toll ? '借道' : ''].filter(Boolean).join(' · ') || undefined;
+function costLine(how: string | undefined, l: Landing): string | undefined {
+  return [how, l.borrowed ? '借道' : '', l.toll ? `过路费 ${l.toll}` : ''].filter(Boolean).join(' · ') || undefined;
 }
 
 /** Every place a move of `steps` from the seat's cell can end, one entry per way through the forks. */
@@ -177,20 +184,23 @@ function walkFrom(g: Game, seat: number, steps: number): Landing[] {
   const w = new Walker(g, seat);
   const total = p.dazed ? Math.max(1, Math.floor(steps / 2)) : steps;
   const exits = p.pos === ALTAR ? g.board.node(ALTAR).next : g.board.exits(p.pos, g.board.isTwoWay(p.pos) ? p.cameFrom : null, w.dir);
-  return w.branch(p.pos, exits, total, { route: [], pills: p.pills, toll: false });
+  return w.branch(p.pos, exits, total, { route: [], pills: p.pills, stones: p.stones, borrowed: false, toll: 0 });
 }
 
 /** The walk after stepping from `from` into `to` with `remaining` steps left before that step. */
-function stepInto(g: Game, seat: number, from: NodeId, to: NodeId, remaining: number, toll = false): Landing[] {
+function stepInto(g: Game, seat: number, from: NodeId, to: NodeId, remaining: number, borrowed = false): Landing[] {
   const w = new Walker(g, seat);
-  return w.walk(from, to, remaining, { route: [], pills: g.state.players[seat].pills - (toll ? w.fee : 0), toll });
+  const p = g.state.players[seat];
+  return w.walk(from, to, remaining, { route: [], pills: p.pills - (borrowed ? w.fee : 0), stones: p.stones, borrowed, toll: 0 });
 }
 
-/** One way through the forks so far: the answers it took, the pills it has left, whether it paid the toll. */
+/** One way through the forks so far: the answers it took, the pills and stones it has left, what it paid on the way. */
 interface Trail {
   route: string[];
   pills: number;
-  toll: boolean;
+  stones: number;
+  borrowed: boolean;
+  toll: number;
 }
 
 /** Game.walk for one seat, every branch at once. */
@@ -209,18 +219,26 @@ class Walker {
   }
 
   walk(from: NodeId, to: NodeId, remaining: number, t: Trail): Landing[] {
+    const g = this.g;
     const left = remaining - 1;
-    const rb = this.g.state.roadblock;
-    if (left === 0 || (rb && rb.node === to && rb.seat !== this.seat)) return [{ node: to, route: t.route, toll: t.toll }];
-    if (to === ALTAR) return this.altar(left, t);
-    return this.branch(to, this.g.board.exits(to, from, this.dir), left, t);
+    const rb = g.state.roadblock;
+    const stones = t.stones + (g.board.node(to).type === 'start' && left > 0 ? g.data.config.salaryPass : 0);
+    if (left === 0 || (rb && rb.node === to && rb.seat !== this.seat)) return [landing(to, t)];
+    const fee = Math.min(stones, passToll(g.state, g.board, g.data, to, this.seat));
+    const paid = { ...t, stones: stones - fee, toll: t.toll + fee };
+    if (to === ALTAR) return this.altar(left, paid);
+    return this.branch(to, g.board.exits(to, from, this.dir), left, paid);
   }
 
-  /** Reaching the altar with steps left: stop there, or pay the toll and leave by any road. */
+  /** Reaching the altar with steps left: stop there, or pay the pill and leave by any road. */
   private altar(left: number, t: Trail): Landing[] {
-    if (t.pills < this.fee) return [{ node: ALTAR, route: t.route, toll: t.toll }];
-    const stop = { node: ALTAR, route: [...t.route, 'stop'], toll: t.toll };
-    const roads = this.g.board.node(ALTAR).next.flatMap((x) => this.walk(ALTAR, x, left, { route: [...t.route, x], pills: t.pills - this.fee, toll: true }));
+    if (t.pills < this.fee) return [landing(ALTAR, t)];
+    const stop = landing(ALTAR, { ...t, route: [...t.route, 'stop'] });
+    const roads = this.g.board.node(ALTAR).next.flatMap((x) => this.walk(ALTAR, x, left, { ...t, route: [...t.route, x], pills: t.pills - this.fee, borrowed: true }));
     return [stop, ...roads];
   }
+}
+
+function landing(node: NodeId, t: Trail): Landing {
+  return { node, route: t.route, borrowed: t.borrowed, toll: t.toll };
 }

@@ -223,7 +223,7 @@ const landPage = (data: GameData): TutorialCopy => {
     id: 'land',
     title: '灵田与灵草',
     lines: [
-      '买下无主灵田。别人停在这里，会向你交租。',
+      '买下无主灵田。别人路过交半租，停下交全租。',
       `灵田升为${building(data, 1)}后，每轮产 ${cfg.landLevels[1].herbs} 株灵草，也能闭关。`,
       `升到${building(data, 2)}或${building(data, 3)}，打坐可得 ${cfg.landLevels[2].sit} 点修为。`,
       `${building(data, 3)}每轮产 ${cfg.landLevels[3].herbs} 株灵草，闭关另有 +${cfg.landLevels[3].closureBonus} 地利。`,
