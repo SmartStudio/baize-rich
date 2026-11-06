@@ -18,7 +18,7 @@ export interface BannerSpec {
 
 const DEPTH = 9900;
 const BANNER_H = 100;
-const BANNER_ICON = 72;
+const BANNER_ICON = 64;
 const PLATE_R = 6;
 
 export class Cutscene {
@@ -110,11 +110,6 @@ function bannerContent(s: Phaser.Scene, spec: BannerSpec, cy: number): { root: P
   return { root, icon };
 }
 
-function diceLabel(d: [number, number]): string {
-  const mark = d[0] === d[1] ? '  双数！' : '';
-  return `${d[0]} + ${d[1]} = ${d[0] + d[1]}${mark}`;
-}
-
 /** Ink plate behind the dice and their sum. Fades with the row that owns it. */
 function inkPlate(scene: Phaser.Scene, x: number, y: number, w: number, h: number): Phaser.GameObjects.Graphics {
   const g = scene.add.graphics();
@@ -138,8 +133,8 @@ interface DiceRow {
 
 function diceRow(scene: Phaser.Scene, d: [number, number]): DiceRow {
   const dice = [0, 1].map(() => addImg(scene, 0, 0, 'die_1').setScale(STAGE.dice));
-  const sum = txt(scene, 0, 0, diceLabel(d), {
-    size: FS.lg, bold: true, color: HEX.gold, stroke: HEX.ink, origin: [0.5, 0.5],
+  const sum = txt(scene, 0, 0, `${d[0] + d[1]}`, {
+    size: FS.hero, bold: true, color: HEX.gold, stroke: HEX.ink, origin: [0.5, 0.5],
   }).setAlpha(0);
   const dieW = dice[0].displayWidth;
   const rowH = Math.max(dice[0].displayHeight, sum.height);

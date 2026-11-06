@@ -23,7 +23,7 @@ interface StatusTag {
   desc: string;
 }
 
-const PORTRAIT = 44;
+const PORTRAIT = 40;
 const TEXT_X = 60;
 const BAR_W = LEFT.w - TEXT_X - 10;
 
@@ -42,7 +42,7 @@ export class PlayerCards {
       const frame = s.add.rectangle(x, y, LEFT.w, LEFT.chipH, COLORS.panel, FLOAT_ALPHA).setOrigin(0, 0).setStrokeStyle(2, COLORS.outline);
       s.add.rectangle(x, y, 4, LEFT.chipH, PLAYER_COLORS[i]).setOrigin(0, 0);
       const marker = s.add.triangle(x + LEFT.w + 8, y + LEFT.chipH / 2, 0, 0, 0, 14, 9, 7, PLAYER_COLORS[i]).setStrokeStyle(1, COLORS.outline).setVisible(false);
-      addImg(s, x + 9, y + (LEFT.chipH - PORTRAIT) / 2, `por_${p.hero}`).setOrigin(0, 0).setScale(PORTRAIT / 64);
+      addImg(s, x + 9, y + (LEFT.chipH - PORTRAIT) / 2, `por_${p.hero}_s`).setOrigin(0, 0);
       txt(s, x + TEXT_X, y + 6, p.name, { size: FS.md, color: PLAYER_HEX[i], bold: true });
       txt(s, x + LEFT.w - 8, y + 8, labels[i], { size: FS.xs, color: HEX.dim, origin: [1, 0] });
       const cult = txt(s, x + TEXT_X, y + 27, '', { size: FS.sm });

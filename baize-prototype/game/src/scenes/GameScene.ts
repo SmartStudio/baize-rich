@@ -366,7 +366,8 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     const multiHuman = this.ais.filter((a) => a === null).length > 1;
-    await this.fx.banner({
+    // Not awaited: the banner tells the player to press Space, so the roll has to be live while it shows.
+    void this.fx.banner({
       title: multiHuman ? `轮到 ${p.name}` : '轮到你了！',
       sub: `${p.name} · 第 ${st.round} 轮 · 按空格掷骰，或先升级、出符`,
       icon: `por_${p.hero}`, color: PLAYER_COLORS[seat],

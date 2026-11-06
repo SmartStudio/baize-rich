@@ -13,7 +13,7 @@ import { Button } from './widgets';
 /** Hand cards are the 88×120 card art at this scale. */
 const CARD_SCALE = 0.4;
 const CARD_GAP = 6;
-const PORTRAIT = 36;
+const PORTRAIT = 40;
 
 export class ActionDock {
   private x = RIGHT.x;
@@ -54,7 +54,7 @@ export class ActionDock {
     const h = p + DOCK.headH + bodyH + p;
     const y = H - 8 - h;
     this.frame = s.add.rectangle(x, y, w, h, COLORS.panel, FLOAT_ALPHA).setOrigin(0, 0).setStrokeStyle(2, COLORS.gold);
-    this.turnPortrait = addImg(s, x + p, y + p + (DOCK.headH - PORTRAIT) / 2, 'por_body').setOrigin(0, 0).setScale(PORTRAIT / 64);
+    this.turnPortrait = addImg(s, x + p, y + p + (DOCK.headH - PORTRAIT) / 2, 'por_body_s').setOrigin(0, 0);
     this.turnName = txt(s, x + p + PORTRAIT + 8, y + p + 4, '', { size: FS.md, bold: true });
     this.turnHint = txt(s, x + p + PORTRAIT + 8, y + p + 25, '', { size: FS.xs, color: HEX.dim });
     this.dice = [0, 1].map((k) => addImg(s, x + w - p - 15 - (1 - k) * 36, y + p + DOCK.headH / 2, 'die_1'));
@@ -89,7 +89,7 @@ export class ActionDock {
   setTurn(state: GameState, human: boolean): void {
     this.lastTurn = [state, human];
     const p = state.players[state.current];
-    setFrame(this.turnPortrait, `por_${p.hero}`);
+    setFrame(this.turnPortrait, `por_${p.hero}_s`);
     this.turnName.setText(state.over ? '对局结束' : `${p.name} 的回合`).setColor(PLAYER_HEX[p.seat]);
     this.turnHint.setText(state.over ? '' : human ? (this.rollWaiting ? '掷骰，或先升级、出符' : '可升级、出符，或结束回合') : 'AI 正在行动…').setColor(human ? HEX.gold : HEX.dim);
     const lit = human && !state.over;

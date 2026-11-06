@@ -79,7 +79,9 @@ async function waitForServer(url, tries = 50) {
     await sleep(1500);
     await shot(page, '02-human-turn.png');
     await page.keyboard.press('Space');
-    await sleep(3000);
+    await sleep(900);
+    await shot(page, '02b-dice.png');
+    await sleep(2100);
     await shot(page, '03-human-buy-dialog.png');
     await page.keyboard.press('Space'); // buy
     await sleep(1200);

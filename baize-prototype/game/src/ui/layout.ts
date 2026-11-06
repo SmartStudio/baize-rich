@@ -18,8 +18,7 @@ export const INSET = 4;
 export const SPRITE = {
   ground: (CELL - 2 * INSET) / TILE,
   prop: 1,
-  token: 1.15,
-  tokenActive: 1.35,
+  token: 1,
   demon: 1,
   altar: 1,
   /** Height of a token's hop between cells, in token-local pixels. */
@@ -42,7 +41,7 @@ export const MINI = { maxH: 150, gap: 6, btnH: 24 };
  * The dice row sits under the turn ribbon and the cutscene strip sits under that row,
  * so a 100px banner stays above a recentred token instead of covering it.
  */
-export const STAGE = { cx: W / 2, cy: H / 2, diceY: 141, bannerY: 231, turnRibbonY: 84, toastY: H - 98, dice: 1.6 };
+export const STAGE = { cx: W / 2, cy: H / 2, diceY: 141, bannerY: 231, turnRibbonY: 84, toastY: H - 98, dice: 2 };
 /** Screen area no HUD column covers. The camera keeps what matters (moving token, choice targets) inside it. */
 export const SAFE = { x: M + SIDE_W + M, y: 16, w: W - 2 * (M + SIDE_W + M), h: H - 32 };
 

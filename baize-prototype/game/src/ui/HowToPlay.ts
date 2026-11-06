@@ -95,8 +95,8 @@ const PAGES: Page[] = [
       `对方没有丹药时，夺 ${cfg.duel.lossStones} 灵石。`,
     ],
     art: (s, cx, cy) => [
-      addImg(s, cx - 60, cy - 60, 'por_sword').setScale(1.6),
-      addImg(s, cx + 60, cy - 60, 'por_body').setScale(1.6),
+      addImg(s, cx - 60, cy - 60, 'por_sword'),
+      addImg(s, cx + 60, cy - 60, 'por_body'),
       txt(s, cx, cy - 60, 'VS', { size: 22, bold: true, color: HEX.gold, origin: [0.5, 0.5] }),
       ...chip(s, cx, cy + 50, '1D6 + 境界差 + 加成'),
     ],
@@ -120,7 +120,7 @@ const PAGES: Page[] = [
       '鼠标悬停棋盘上的格子，可以查看它的详情。',
     ],
     art: (s, cx, cy) => {
-      const out: Obj[] = HERO_IDS.map((h, i) => addImg(s, cx - 120 + i * 80, cy - 110, `por_${h}`).setScale(1.1));
+      const out: Obj[] = HERO_IDS.map((h, i) => addImg(s, cx - 120 + i * 80, cy - 110, `por_${h}`));
       const keys: [string, string][] = [
         ['空格', '掷骰 / 确认'], ['B', '升级洞府'], ['C', '出符'], ['K', '发动技能'], ['Enter', '结束回合'],
         ['Esc', '取消'], ['F', '切换倍速'], ['S', '下载对局记录'],

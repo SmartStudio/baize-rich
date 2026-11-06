@@ -182,7 +182,6 @@ export class BoardView {
     const r = this.nodeRect(state.players[state.current].pos);
     this.currentMark.setPosition(r.x, r.y).setSize(r.w, r.h).setVisible(!state.over);
     this.currentMark.setStrokeStyle(4, PLAYER_COLORS[state.current]).setFillStyle(PLAYER_COLORS[state.current], 0.16);
-    this.tokens.forEach((t, seat) => t.setScale(seat === state.current && !state.over ? SPRITE.tokenActive : SPRITE.token));
   }
 
   /** A short gain / loss label that rises from a seat's token. */

@@ -206,6 +206,7 @@ export function frameSpecs(): FrameSpec[] {
       glyph(ch, '#0F0E1A', 16, 2)(ctx, w, h);
     });
     add(`por_${hid}`, 64, 64, both(box(fill), glyph(ch, '#0F0E1A', 34)));
+    add(`por_${hid}_s`, 40, 40, both(box(fill), glyph(ch, '#0F0E1A', 22)));
   }
   add('ic_stone', 16, 16, (ctx) => {
     ctx.fillStyle = '#0F0E1A';
@@ -217,7 +218,7 @@ export function frameSpecs(): FrameSpec[] {
   add('ic_cult', 16, 16, both(circle('#F2B93B'), glyph('修', '#2A2238', 10)));
   add('ic_demon', 16, 16, both(circle('#8E2B8E'), glyph('魔', '#F4E9D0', 10)));
   add('ic_baize', 16, 16, both(circle('#E6E4F0'), glyph('泽', '#2A2238', 10)));
-  for (let i = 1; i <= 6; i++) add(`die_${i}`, 30, 30, pips(i));
+  for (let i = 1; i <= 6; i++) add(`die_${i}`, 24, 24, pips(i));
   for (const [cat, fill] of Object.entries(CARD_FILL)) {
     add(`card_${cat}`, 88, 120, (ctx, w, h) => {
       box('#2A2238')(ctx, w, h);

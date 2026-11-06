@@ -52,7 +52,7 @@ export class SetupScene extends Phaser.Scene {
     panel(this, x, y, 880, 96);
     this.add.rectangle(x, y, 8, 96, PLAYER_COLORS[i]).setOrigin(0, 0);
     txt(this, x + 24, y + 14, `席位 ${i + 1}`, { size: 18, bold: true, color: PLAYER_HEX[i] });
-    const por = addImg(this, x + 24, y + 40, `por_${this.seats[i].hero}`).setOrigin(0, 0).setScale(0.75);
+    const por = addImg(this, x + 24, y + 40, `por_${this.seats[i].hero}_s`).setOrigin(0, 0);
     const heroName = txt(this, x + 130, y + 14, '', { size: 18, bold: true });
     const heroDesc = txt(this, x + 130, y + 40, '', { size: 12, color: HEX.dim, wrap: 360 });
     const kind = new Button(this, x + 520, y + 12, { w: 110, h: 34, label: '' });
@@ -65,7 +65,7 @@ export class SetupScene extends Phaser.Scene {
     const render = () => {
       const s = this.seats[i];
       const h = defaultData.heroes.find((x) => x.id === s.hero)!;
-      setFrame(por, `por_${s.hero}`);
+      setFrame(por, `por_${s.hero}_s`);
       heroName.setText(`${h.name} · ${h.school}`);
       heroDesc.setText(`被动【${h.passive.name}】${h.passive.desc}`);
       kind.setLabel(s.human ? '玩家' : 'AI');
