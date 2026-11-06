@@ -122,8 +122,6 @@ export interface RulesConfig {
   diceCardMin: number;
   /** 御骰符：可选点数上限 */
   diceCardMax: number;
-  /** 主动技能：冷却（自己的回合数） */
-  skillCooldownTurns: number;
   /** 镇山：山岳可放在前方 1 至此值格 */
   roadblockRange: number;
   /** 乾坤挪移：只能与路网上相距不超过此格数的他人互换 */
@@ -178,8 +176,15 @@ export interface HeroData {
   quote: string;
   color: string;
   passive: { id: string; name: string; desc: string };
-  /** 主动技能：免费，冷却 rules.skillCooldownTurns 个自己的回合。 */
-  skill: { id: HeroSkillId; name: string; desc: string; timing: 'preroll' | 'action' };
+  skill: HeroSkillData;
+}
+export interface HeroSkillData {
+  id: HeroSkillId;
+  name: string;
+  desc: string;
+  timing: 'preroll' | 'action';
+  /** 用后隔多少个自己的回合再次可用：本回合用掉，第 turnsTaken + cooldown 个回合起就绪。 */
+  cooldown: number;
 }
 export type HeroSkillId = 'sworddash' | 'swap' | 'roadblock' | 'daze';
 

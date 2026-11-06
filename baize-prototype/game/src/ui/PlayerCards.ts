@@ -2,6 +2,7 @@
 // Hovering the 修为 line explains it; clicking a chip pins a popover with everything else.
 import Phaser from 'phaser';
 import type { Game } from '../core/engine';
+import { skillTerms } from '../core/heroes';
 import { barFull, barSize, isGlowing, realmName, winRealm } from '../core/rules';
 import type { GameState } from '../core/types';
 import { addImg } from './assets';
@@ -110,7 +111,7 @@ export class PlayerCards {
     const wait = p.skillReadyTurn - p.turnsTaken;
     tags.push({
       label: wait > 0 ? `技能 冷却 ${wait}` : '技能 就绪',
-      desc: `【${hero.skill.name}】${hero.skill.desc}。不花资源，用后冷却 ${cfg.rules.skillCooldownTurns} 个自己的回合（按 K 或在「出符」菜单发动）。\n被动【${hero.passive.name}】${hero.passive.desc}。`,
+      desc: `【${hero.skill.name}】${hero.skill.desc}。${skillTerms(hero.skill)}（按 K 或在「出符」菜单发动）。\n被动【${hero.passive.name}】${hero.passive.desc}。`,
     });
     return tags;
   }

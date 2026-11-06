@@ -3,24 +3,24 @@
     "id": "body", "name": "石铮", "school": "体修", "origin": "铁匠之子 · 土灵根",
     "quote": "「打不过就挨着，挨得住就赢了。」", "color": "gold",
     "passive": { "id": "ironskin", "name": "铜皮铁骨", "desc": "斗法守方 +2；在自家地上打坐修为 +1；妖兽谷必胜" },
-    "skill": { "id": "roadblock", "name": "镇山", "timing": "action", "desc": "在前方 1–6 格落下山岳：下一个走进这格的他人被拦停于此并结算；你下回合开始时消散" }
+    "skill": { "id": "roadblock", "name": "镇山", "timing": "action", "cooldown": 2, "desc": "在前方 1–6 格落下山岳：下一个走进这格的他人被拦停于此并结算；你下回合开始时消散" }
   },
   {
     "id": "magic", "name": "沈青砚", "school": "法修", "origin": "私塾先生之女 · 雷灵根",
     "quote": "「灵根差？那就多读几遍。」", "color": "white",
     "passive": { "id": "thunderbody", "name": "引雷淬体", "desc": "灵泉和灵眼的修为 +1" },
-    "skill": { "id": "swap", "name": "乾坤挪移", "timing": "preroll", "desc": "掷骰前与 8 格内一名他人互换位置（不结算），再照常掷骰" }
+    "skill": { "id": "swap", "name": "乾坤挪移", "timing": "preroll", "cooldown": 2, "desc": "掷骰前与 8 格内一名他人互换位置（不结算），再照常掷骰" }
   },
   {
     "id": "sword", "name": "燕回", "school": "剑修", "origin": "镖局孤女 · 金灵根",
     "quote": "「秘境里的东西，谁抢到算谁的。」", "color": "red",
     "passive": { "id": "swordqi", "name": "剑气", "desc": "斗法攻方 +1" },
-    "skill": { "id": "sworddash", "name": "剑遁", "timing": "preroll", "desc": "代替掷骰：瞬移到 5 格内一名他人身边，立即向其斗法，再结算该格" }
+    "skill": { "id": "sworddash", "name": "剑遁", "timing": "preroll", "cooldown": 2, "desc": "代替掷骰：瞬移到 5 格内一名他人身边，立即向其斗法，再结算该格" }
   },
   {
     "id": "alch", "name": "陈半夏", "school": "丹师", "origin": "药铺学徒 · 木灵根",
     "quote": "「一炉丹，够我活十年。」", "color": "blue",
     "passive": { "id": "pillway", "name": "丹道", "desc": "炼丹每次多出 1 颗（每次停在丹房 1 次）" },
-    "skill": { "id": "daze", "name": "迷魂丹", "timing": "action", "desc": "指定一名他人：其下一次移动步数减半（向下取整，至少 1）" }
+    "skill": { "id": "daze", "name": "迷魂丹", "timing": "action", "cooldown": 2, "desc": "指定一名他人：其下一次移动步数减半（向下取整，至少 1）" }
   }
 ]

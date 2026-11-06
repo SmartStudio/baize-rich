@@ -71,7 +71,6 @@
     "swiftstepMax": 3,
     "diceCardMin": 2,
     "diceCardMax": 12,
-    "skillCooldownTurns": 2,
     "roadblockRange": 6,
     "swapRange": 8,
     "swordDashRange": 5

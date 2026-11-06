@@ -20,6 +20,7 @@ import type {
 } from './choices';
 import { defaultData } from './data';
 import type { BreakthroughResult, CultSource, DuelResult, GameEvent, GameEventType } from './events';
+import { skillTerms } from './heroes';
 import { hashSeed, nextFloat } from './rng';
 import {
   barFull, barSize, canClose, closureBonus, closureSite, compareStanding, duelBonus, hasAbility, herbYield, isGlowing, maxLevel,
@@ -1235,12 +1236,12 @@ export class Game {
 
   private skillOption(seat: number): ChoiceOption<{ t: 'skill' }> {
     const sk = this.heroOf(seat).skill;
-    return { id: 'skill', label: `技能【${sk.name}】（冷却 ${this.cfg.rules.skillCooldownTurns} 回合）`, value: { t: 'skill' }, hint: sk.desc };
+    return { id: 'skill', label: `技能【${sk.name}】（${skillTerms(sk)}）`, value: { t: 'skill' }, hint: sk.desc };
   }
 
   private spendSkill(seat: number): void {
     const p = this.state.players[seat];
-    p.skillReadyTurn = p.turnsTaken + this.cfg.rules.skillCooldownTurns;
+    p.skillReadyTurn = p.turnsTaken + this.heroOf(seat).skill.cooldown;
     p.stats.skillUses++;
     this.emit('skill', `${this.pn(seat)} 施展技能【${this.heroOf(seat).skill.name}】`, { player: seat });
   }

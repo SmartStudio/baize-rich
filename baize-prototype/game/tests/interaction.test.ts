@@ -223,7 +223,7 @@ describe('§12 主动技能', () => {
     expect(b.pos).toBe('R4');
   });
 
-  it(`goes on cooldown for skillCooldownTurns of the user's own turns and is ready from turn 1`, () => {
+  it(`goes on cooldown for the skill's own cooldown in the user's turns and is ready from turn 1`, () => {
     const g = ringGame();
     spread(g);
     const d = g.state.players[3];
@@ -231,7 +231,7 @@ describe('§12 主动技能', () => {
     expect(g.skillReady(3)).toBe(true);
     g.runFlow(g.testUseSkill(3), script({ target: 'p1' }));
     expect(d.stats.skillUses).toBe(1);
-    for (let k = 1; k < rules.skillCooldownTurns; k++) {
+    for (let k = 1; k < g.heroOf(3).skill.cooldown; k++) {
       d.turnsTaken++;
       expect(g.skillReady(3)).toBe(false);
     }
