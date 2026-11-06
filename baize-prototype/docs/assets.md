@@ -6,7 +6,7 @@
 
 | 路径 | 内容 |
 |---|---|
-| `assets/atlas.png` + `atlas.json` | Phaser 纹理图集（JSON Hash 格式，1× 像素，104 帧），由 `tools/art/pack.py` 从 `sprites/` 重建 |
+| `assets/atlas.png` + `atlas.json` | Phaser 纹理图集（JSON Hash 格式，1× 像素，103 帧），由 `tools/art/pack.py` 从 `sprites/` 重建 |
 | `assets/sprites/*.png` | 每一帧的 1× 单图，文件名即帧名 |
 | `assets/sprites_x4/*.png` | 4 倍最近邻放大的预览图，给美术和策划看 |
 | `assets/mockups/` | 主界面效果图（1280×720 与 1080p）、地图路线图、3 个弹窗样稿、地标对照图 `landmarks.png` |
@@ -40,7 +40,6 @@
 | 帧名 | 尺寸 | 用途与摆放 |
 |---|---|---|
 | `decor_wood` / `_fire` / `_water` / `_earth` | 不定 | 棋盘外地面上的散布装饰，底部居中 |
-| `centre_bg` | 448×448 | 标题画面的底图 |
 | `baize` | 100×104 | 白泽单独形象（白泽现世横幅、突破过场） |
 | `obj_furnace` | 40×40 | 炼丹小游戏里的丹炉，3× 显示 |
 | `tok_body` `tok_magic` `tok_sword` `tok_alch` | 48×64 | 等于各自的 `_d0` 行走帧，给棋盘以外的界面用 |

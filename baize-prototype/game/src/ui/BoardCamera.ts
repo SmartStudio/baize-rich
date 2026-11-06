@@ -2,7 +2,7 @@
 // goal is depends on one mode:
 //   follow — keep a seat's token inside a calm dead zone (and always inside the HUD-free SAFE area),
 //   frame  — fit a world rect (choice targets, both ends of a teleport) into the SAFE area,
-//   free   — the player dragged / zoomed / used the minimap; nothing moves the camera until the next
+//   free   — the player dragged / zoomed; nothing moves the camera until the next
 //            turn start or 回到棋子.
 // The goal zoom is always one of ZOOMS; the view tweens between them and snaps onto the goal when it settles.
 import Phaser from 'phaser';
@@ -95,12 +95,6 @@ export class BoardCamera {
     if (this.mode.kind !== 'frame') return;
     this.mode = { kind: 'follow', seat: this.mode.seat };
     this.goal = { ...this.view, zoom: this.userZoom };
-  }
-
-  /** Glide to a world point and stop following (minimap). */
-  panTo(p: Point): void {
-    this.mode = { kind: 'free' };
-    this.goal = this.world.clamp({ cx: p.x, cy: p.y, zoom: this.goal.zoom });
   }
 
   /** World rect the whole screen shows right now. */

@@ -1,15 +1,23 @@
 import Phaser from 'phaser';
+import { Board } from '../core/board';
 import { defaultData } from '../core/data';
 import { addImg } from '../ui/assets';
+import { BoardView } from '../ui/BoardView';
 import { HowToPlay } from '../ui/HowToPlay';
 import { TITLE_SUBTITLE, titleNarration } from '../ui/narration';
 import { findResumable, markTutorialSeen, tutorialSeen } from '../ui/saves';
 import { resumeSession } from '../ui/session';
 import { COLORS, HEX, txt } from '../ui/theme';
+import { terrainRect } from '../ui/world';
 import { Button, fadeToScene } from '../ui/widgets';
 
 const INTRO = titleNarration(defaultData);
 const LINE_MS = 3200;
+
+const depthOf = (obj: Phaser.GameObjects.GameObject): number => {
+  const withDepth = obj as Phaser.GameObjects.GameObject & { depth?: number };
+  return withDepth.depth ?? 0;
+};
 
 /** Title: a skippable narrated intro over an animated backdrop, then 开始游戏 / 继续上局 / 玩法说明. */
 export class TitleScene extends Phaser.Scene {
@@ -40,17 +48,41 @@ export class TitleScene extends Phaser.Scene {
     this.input.on('pointerdown', () => { if (this.phase === 'intro') this.showMenu(); });
   }
 
-  /** Map art drifting behind a dark veil, a breathing glow behind the altar, clouds and rising spirit motes. */
+  /** The live board, snapped once and scaled up so the menu reads over a soft copy of the table. */
   private backdrop(): void {
-    const map = addImg(this, 640, 360, 'centre_bg').setScale(3).setAlpha(0.32);
-    this.tweens.add({ targets: map, scale: 3.15, x: 610, duration: 14000, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-    this.add.rectangle(0, 0, 1280, 720, COLORS.bg, 0.45).setOrigin(0, 0);
+    const plate = this.boardPlate();
+    this.tweens.add({ targets: plate, scale: 2.08, x: 610, duration: 14000, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    this.add.rectangle(0, 0, 1280, 720, COLORS.bg, 0.5).setOrigin(0, 0);
     const glow = this.add.graphics();
     glow.fillStyle(COLORS.gold, 0.10).fillCircle(640, 300, 190);
     glow.fillStyle(COLORS.parchment, 0.08).fillCircle(640, 300, 130);
     this.tweens.add({ targets: glow, alpha: 0.4, duration: 2200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     for (let i = 0; i < 7; i++) this.cloud(Phaser.Math.Between(0, 1280), 60 + i * 95, Phaser.Math.FloatBetween(0.6, 1.4), i % 2 ? 1 : -1);
     for (let i = 0; i < 40; i++) this.mote();
+  }
+
+  private boardPlate(): Phaser.GameObjects.RenderTexture {
+    const plate = this.add.renderTexture(640, 360, 640, 360).setOrigin(0.5).setScale(2).setAlpha(0.92);
+    const priorTweens = new Set(this.tweens.getTweens());
+    const before = new Set(this.children.list);
+    const view = new BoardView(this, new Board(defaultData.board), []);
+    const born = this.children.list.filter((obj) => !before.has(obj));
+    this.paintPlate(plate, view, born);
+    for (const tw of [...this.tweens.getTweens()]) if (!priorTweens.has(tw)) tw.stop();
+    for (const obj of born) obj.destroy();
+    plate.texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
+    return plate;
+  }
+
+  /** Frame the whole ground in the plate. The live board is removed by the caller. */
+  private paintPlate(plate: Phaser.GameObjects.RenderTexture, view: BoardView, born: Phaser.GameObjects.GameObject[]): void {
+    const area = terrainRect(view.world.bounds);
+    const zoom = Math.max(plate.width / area.w, plate.height / area.h);
+    plate.camera.setZoom(zoom);
+    plate.camera.centerOn(area.x + area.w / 2, area.y + area.h / 2);
+    plate.fill(COLORS.bg);
+    born.sort((a, b) => depthOf(a) - depthOf(b));
+    plate.draw(born);
   }
 
   private cloud(x: number, y: number, s: number, dir: 1 | -1): void {
