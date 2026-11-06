@@ -13,6 +13,8 @@ import { ALTAR } from '../core/board';
 import type { GameState, NodeId } from '../core/types';
 import { BoardCamera } from '../ui/BoardCamera';
 import { BoardView } from '../ui/BoardView';
+import { Breakthrough } from '../ui/Breakthrough';
+import { breakthroughView } from '../ui/breakthroughView';
 import { ChoiceModal } from '../ui/ChoiceModal';
 import { presentChoice } from '../ui/choices/registry';
 import { Cutscene, type BannerSpec } from '../ui/Cutscene';
@@ -63,10 +65,11 @@ const ROUND_WAIT = 700;
 const CUTSCENE_MS = 1500;
 const WIN_MS = 2000;
 const SPEEDS = [0.5, 1, 2, 4];
+/** An AI's 闭关 plays the same cutscene, a little quicker than a human's own. */
+const AI_BREAKTHROUGH = 0.7;
 
 /** Big events get a full-width cutscene banner; a null spec means this instance is not big. */
 const CUTSCENES: Partial<Record<GameEventType, (g: Game, e: GameEvent) => BannerSpec | null>> = {
-  breakthrough: (g, e) => ({ title: '破境！', sub: e.text, icon: portrait(g, e), color: COLORS.gold }),
   manifest: (_g, e) => ({ title: '白泽现世', sub: e.text, icon: 'baize', color: 0xe6e4f0, dim: true }),
   duel: (g, e) => ({ title: '斗法', sub: e.text, icon: portrait(g, e), color: PLAYER_COLORS[e.player!] }),
   bankrupt: (g, e) => ({ title: '破产重整', sub: e.text, icon: portrait(g, e), color: COLORS.bad }),
@@ -107,6 +110,7 @@ export class GameScene extends Phaser.Scene {
   private modal!: ChoiceModal;
   private logPanel!: LogPanel;
   private fx!: Cutscene;
+  private breakthrough!: Breakthrough;
   /** Last snapshot played back; resource popups are diffs against it. */
   private lastSnap: GameState | null = null;
   private queue: GameEvent[] = [];
@@ -167,6 +171,7 @@ export class GameScene extends Phaser.Scene {
     this.modal = new ChoiceModal(hud);
     this.logPanel = new LogPanel(hud);
     this.fx = new Cutscene(hud);
+    this.breakthrough = new Breakthrough(hud);
     this.lastSnap = null;
     this.minimap = new Minimap(hud, this.boardView.world, this.engine.board.data, (p) => this.cam.panTo(p));
     this.minimap.btnRecentre.onClick(() => this.recentre());
@@ -301,6 +306,10 @@ export class GameScene extends Phaser.Scene {
       case 'manifest':
         this.boardView.showBaize(true);
         await this.cutscene(e);
+        break;
+      case 'breakthrough':
+        this.cam.follow(seat);
+        await this.breakthrough.play(breakthroughView(this.engine, e), (b) => this.ms(b * (this.isHuman(seat) ? 1 : AI_BREAKTHROUGH)));
         break;
       case 'roundStart':
         if (e.snap && e.snap.round !== this.engine.data.config.manifest.round) this.boardView.showBaize(false);
