@@ -197,20 +197,11 @@ export class GameScene extends Phaser.Scene {
     const coachSave = loadCoach();
     this.coachArmed = coachSave.armed;
     this.coachBook = emptyBook(coachSave.seen);
-    this.coach = new Coach(hud);
-    const dismissBubble = () => {
-      if (!this.coach.isOpen) return;
-      this.coachBlock = this.coach.rect();
-      this.dismissCoach();
-    };
+    this.coach = new Coach(hud, () => { this.coachBlock = this.coach.rect(); this.dismissCoach(); });
     const clearBlock = () => { this.coachBlock = null; };
-    this.input.on('pointerdown', dismissBubble);
-    hud.input.on('pointerdown', dismissBubble);
     this.input.on('pointerup', clearBlock);
     hud.input.on('pointerup', clearBlock);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      this.input.off('pointerdown', dismissBubble);
-      hud.input.off('pointerdown', dismissBubble);
       this.input.off('pointerup', clearBlock);
       hud.input.off('pointerup', clearBlock);
     });
@@ -727,7 +718,6 @@ export class GameScene extends Phaser.Scene {
 
   private onKey(ev: KeyboardEvent): void {
     const k = ev.key;
-    if (this.coach.isOpen) this.dismissCoach();
     if (k === 'f' || k === 'F') { this.cycleSpeed(); return; }
     if (k === 'l' || k === 'L') { this.logPanel.toggle(); return; }
     if (k === 'Escape' && this.side.sound.isOpen) { this.side.sound.close(); return; }
