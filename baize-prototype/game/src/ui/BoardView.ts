@@ -328,6 +328,12 @@ export class BoardView {
     return { x: r.x + r.w / 2, y: r.y + r.h / 2 + STAND_DY - Math.round(h / 2) };
   }
 
+  /** Two seats turn to face each other (a duel). */
+  faceEachOther(a: number, b: number): void {
+    this.tokens[a].face(this.tokens[b]);
+    this.tokens[b].face(this.tokens[a]);
+  }
+
   private paintBuilding(id: NodeId, growMs: number): void {
     const bld = this.buildings.get(id);
     if (!bld || !this.state) return;

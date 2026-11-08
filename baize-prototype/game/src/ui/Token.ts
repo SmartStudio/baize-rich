@@ -125,6 +125,12 @@ export class Token {
     return this.travel(p, ms, 'Sine.easeInOut');
   }
 
+  /** Turn on the spot toward a point, keeping the stand pose. */
+  face(p: Point): void {
+    this.facing = facingFor(this.root, p, this.facing);
+    this.pose();
+  }
+
   setCurrent(on: boolean): void {
     this.pointer.setVisible(on);
   }

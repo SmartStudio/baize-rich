@@ -7,7 +7,7 @@ import { sound } from '../audio/Sound';
 import type { PendingChoice } from '../core/choices';
 import { defaultData } from '../core/data';
 import { Game } from '../core/engine';
-import type { GameEvent, GameEventType } from '../core/events';
+import type { DuelResult, GameEvent, GameEventType } from '../core/events';
 import { toRecord, type GameRecord } from '../core/record';
 import { isGlowing } from '../core/rules';
 import type { GameState, NodeId } from '../core/types';
@@ -343,6 +343,10 @@ export class GameScene extends Phaser.Scene {
           this.side.setDice(e.dice);
         }
         break;
+      case 'duel':
+        if (e.duel) await this.duelDice(e.duel, pace);
+        await this.present(e, { ...pace, banner: Math.max(pace.banner - pace.roll - pace.rollHold, pace.banner * 0.6) });
+        break;
       case 'manifest':
         this.boardView.showBaize(true);
         await this.present(e, pace);
@@ -353,7 +357,10 @@ export class GameScene extends Phaser.Scene {
         break;
       case 'roundStart':
         if (e.snap && e.snap.round !== this.engine.data.config.manifest.round) this.boardView.showBaize(false);
-        if (e.snap) this.roundRibbon(e.snap);
+        if (e.snap) {
+          this.renderAll(e.snap, false);
+          this.roundRibbon(e.snap);
+        }
         await this.wait(this.ms(ROUND_RIBBON_MS) + 40);
         break;
       case 'turnStart':
@@ -422,6 +429,14 @@ export class GameScene extends Phaser.Scene {
     const from = { x: Math.round(body.x + body.w / 2), y: Math.round(body.y + body.h * 0.4) };
     const to = seat !== null ? this.cards.stonesAt(seat) : this.pointToScreen(this.boardView.paidAt(node!));
     void flyStones(this.hud, from, to, PAY.coins, this.ms(PAY.flyMs)).then(() => { if (this.alive) land(); });
+  }
+
+  /** Both duellists turn to face each other and roll one die each; the row shows their totals. */
+  private async duelDice(d: DuelResult, pace: Pace): Promise<void> {
+    this.boardView.faceEachOther(d.attacker, d.defender);
+    this.cam.frameTeleport(unionRect([this.boardView.tokenRect(d.attacker), this.boardView.tokenRect(d.defender)]), d.attacker);
+    await this.fx.rollDice(d.rolls, this.ms(pace.roll), this.ms(pace.rollHold), `${d.totals[0]} : ${d.totals[1]}`);
+    this.cam.release();
   }
 
   private roundRibbon(st: GameState): void {
