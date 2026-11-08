@@ -1,38 +1,63 @@
 // 闭关突破 cutscene (GDD §5.3, §14): realm before → after against the target, the 2D6 tumbling, each bonus
 // adding onto the total, then 破境 (gold flash, the new realm drops in, 白泽 behind) or 走火入魔 (red flash,
-// shake, what was lost). Beat lengths come from the caller (ui/pacing), already scaled by the speed setting.
+// the board token flickers, what was lost). Beat lengths come from the caller (ui/pacing), already scaled by the speed setting.
 // Every position and scale is an integer, so the pixel art stays crisp.
 import Phaser from 'phaser';
 import { sound } from '../audio/Sound';
-import { addImg, setFrame } from './assets';
+import { addImg, ensureCanvas, setFrame } from './assets';
 import type { BreakthroughView } from './breakthroughView';
 import { signed } from './choices/spec';
-import { H, W } from './layout';
+import { BOARD_COL, H, W, type Rect } from './layout';
 import type { BreakthroughBeats } from './pacing';
 import { COLORS, FS, HEX, txt } from './theme';
 
 const DEPTH = 9950;
-const PW = 640;
-const PH = 360;
-const PX = (W - PW) / 2;
-const PY = 140;
+const PW = 520;
+const PH = 300;
 const DIE_SCALE = 2;
-const SHAKE = [-8, 8, -6, 6, -4, 4, -2, 2, 0];
-const DICE_Y = 136;
-const CHIPS_Y = 196;
+const DICE_Y = 112;
+const CHIPS_Y = 164;
 const CHIP_GAP = 8;
+const PANEL_GAP = 20;
+const FLICKER = [0.55, 0.08, 0.46, 0.04, 0.34, 0];
+const REALM_COLORS: Record<string, number> = {
+  筑基: 0x71d6e8,
+  结丹: 0xf2b93b,
+  元婴: 0xb99cff,
+  化神: 0xf4e9d0,
+};
 
 type Fadeable = Phaser.GameObjects.Components.AlphaSingle;
+interface PanelPoint { x: number; y: number }
+
+export function breakthroughPanelPosition(avoid: Rect): PanelPoint {
+  const right = BOARD_COL.x + BOARD_COL.w - PW - 12;
+  const bottom = H - PH - PANEL_GAP;
+  const choices = [
+    { x: BOARD_COL.x + 12, y: PANEL_GAP },
+    { x: right, y: PANEL_GAP },
+    { x: BOARD_COL.x + 12, y: bottom },
+    { x: right, y: bottom },
+  ];
+  const tx = avoid.x + avoid.w / 2;
+  const ty = avoid.y + avoid.h / 2;
+  return choices.reduce((best, point) => {
+    const score = (point.x + PW / 2 - tx) ** 2 + (point.y + PH / 2 - ty) ** 2;
+    const bestScore = (best.x + PW / 2 - tx) ** 2 + (best.y + PH / 2 - ty) ** 2;
+    return score > bestScore ? point : best;
+  });
+}
 
 export class Breakthrough {
   constructor(private scene: Phaser.Scene) {}
 
-  async play(v: BreakthroughView, beat: BreakthroughBeats): Promise<void> {
+  async play(v: BreakthroughView, beat: BreakthroughBeats, token: Rect): Promise<void> {
     const s = this.scene;
-    const dim = s.add.rectangle(0, 0, W, H, 0x000000, 0.7).setOrigin(0, 0).setAlpha(0);
-    const panel = s.add.container(PX, PY);
+    const at = breakthroughPanelPosition(token);
+    const dim = s.add.rectangle(0, 0, W, H, 0x000000, 0.46).setOrigin(0, 0).setAlpha(0);
+    const panel = s.add.container(at.x, at.y);
     const layer = s.add.container(0, 0, [dim, panel]).setDepth(DEPTH).setAlpha(0);
-    panel.add(s.add.rectangle(0, 0, PW, PH, COLORS.ink, 0.96).setOrigin(0, 0).setStrokeStyle(4, COLORS.gold));
+    panel.add(s.add.rectangle(0, 0, PW, PH, COLORS.ink, 0.92).setOrigin(0, 0).setStrokeStyle(3, COLORS.gold));
     this.header(panel, v);
     await this.fade([layer, dim], 1, beat.in);
     sound.cue('charge');
@@ -40,7 +65,7 @@ export class Breakthrough {
     await this.addBonuses(panel, v, total, beat);
     await this.wait(beat.verdict);
     sound.cue(v.success ? 'ascend' : 'deviate');
-    await (v.success ? this.ascend(layer, panel, v, beat) : this.fail(layer, panel, v, beat));
+    await (v.success ? this.ascend(layer, panel, v, token, beat) : this.fail(layer, panel, v, token, beat));
     await this.wait(beat.result);
     await this.fade([layer], 0, beat.out);
     layer.destroy();
@@ -48,12 +73,12 @@ export class Breakthrough {
 
   private header(panel: Phaser.GameObjects.Container, v: BreakthroughView): void {
     const s = this.scene;
-    panel.add(addImg(s, 24, 20, v.portrait).setOrigin(0, 0));
-    panel.add(txt(s, 104, 24, `闭关突破 · ${v.who}`, { size: FS.sm, color: HEX.dim }));
-    panel.add(txt(s, 104, 44, `${v.from} → ${v.to}`, { size: FS.xl, bold: true, color: HEX.gold, stroke: HEX.ink }));
-    panel.add(s.add.rectangle(PW - 128, 20, 104, 64, COLORS.panel).setOrigin(0, 0).setStrokeStyle(2, COLORS.gold));
-    panel.add(txt(s, PW - 76, 32, '目标', { size: FS.sm, color: HEX.parchment, origin: [0.5, 0.5] }));
-    panel.add(txt(s, PW - 76, 62, String(v.target), { size: FS.xl, bold: true, color: HEX.gold, origin: [0.5, 0.5] }));
+    panel.add(addImg(s, 20, 16, v.portrait).setOrigin(0, 0));
+    panel.add(txt(s, 96, 20, `闭关突破 · ${v.who}`, { size: FS.sm, color: HEX.dim }));
+    panel.add(txt(s, 96, 40, `${v.from} → ${v.to}`, { size: FS.xl, bold: true, color: HEX.gold, stroke: HEX.ink }));
+    panel.add(s.add.rectangle(PW - 108, 16, 88, 58, COLORS.panel).setOrigin(0, 0).setStrokeStyle(2, COLORS.gold));
+    panel.add(txt(s, PW - 64, 28, '目标', { size: FS.sm, color: HEX.parchment, origin: [0.5, 0.5] }));
+    panel.add(txt(s, PW - 64, 54, String(v.target), { size: FS.xl, bold: true, color: HEX.gold, origin: [0.5, 0.5] }));
   }
 
   /** Tumbles the dice in place, lands them on the rolled faces, shows their sum. Returns the running-total text. */
@@ -93,34 +118,50 @@ export class Breakthrough {
     total.setText(String(v.total)).setColor(v.success ? HEX.good : HEX.bad);
   }
 
-  private async ascend(layer: Phaser.GameObjects.Container, panel: Phaser.GameObjects.Container, v: BreakthroughView, beat: BreakthroughBeats): Promise<void> {
+  private async ascend(layer: Phaser.GameObjects.Container, panel: Phaser.GameObjects.Container, v: BreakthroughView, token: Rect, beat: BreakthroughBeats): Promise<void> {
     const s = this.scene;
-    const baize = addImg(s, PW - 70, PH - 8, 'baize').setOrigin(0.5, 1).setAlpha(0);
+    const baize = addImg(s, PW - 48, PH - 6, 'baize').setOrigin(0.5, 1).setAlpha(0);
     panel.addAt(baize, 1);
-    const realm = txt(s, PW / 2, 268, `突破成功 · ${v.to}`, { size: FS.hero, bold: true, color: HEX.gold, stroke: HEX.ink, origin: [0.5, 0.5] });
+    const realm = txt(s, PW / 2, 220, `突破成功 · ${v.to}`, { size: FS.hero, bold: true, color: HEX.gold, stroke: HEX.ink, origin: [0.5, 0.5] });
     panel.add([realm, ...this.outcome(v, HEX.gold)]);
-    this.flash(layer, 0xfff3c0, 0.85, beat.flash);
+    this.flash(layer, 0xfff3c0, 0.22, beat.flash);
+    this.successPulse(token, REALM_COLORS[v.to] ?? COLORS.gold, beat.flash + beat.drop);
     s.tweens.add({ targets: baize, alpha: 0.4, duration: beat.flash });
-    await this.slide(realm, 268, beat.drop, -48);
+    await this.slide(realm, 220, beat.drop, -40);
   }
 
-  private async fail(layer: Phaser.GameObjects.Container, panel: Phaser.GameObjects.Container, v: BreakthroughView, beat: BreakthroughBeats): Promise<void> {
+  private async fail(layer: Phaser.GameObjects.Container, panel: Phaser.GameObjects.Container, v: BreakthroughView, token: Rect, beat: BreakthroughBeats): Promise<void> {
     const s = this.scene;
-    panel.add([txt(s, PW / 2, 268, '走火入魔', { size: FS.hero, bold: true, color: HEX.bad, stroke: HEX.ink, origin: [0.5, 0.5] }), ...this.outcome(v, HEX.bad)]);
-    this.flash(layer, COLORS.bad, 0.55, beat.flash);
-    for (const dx of SHAKE) {
-      panel.setX(PX + dx);
+    panel.add([txt(s, PW / 2, 220, '走火入魔', { size: FS.hero, bold: true, color: HEX.bad, stroke: HEX.ink, origin: [0.5, 0.5] }), ...this.outcome(v, HEX.bad)]);
+    this.flash(layer, COLORS.bad, 0.2, beat.flash);
+    const shade = s.add.rectangle(token.x + token.w / 2, token.y + token.h / 2, token.w + 8, token.h + 6, 0x080610)
+      .setName('breakthrough-verdict-fx').setDepth(DEPTH + 2).setBlendMode(Phaser.BlendModes.MULTIPLY);
+    for (const alpha of FLICKER) {
+      shade.setAlpha(alpha);
       await this.wait(beat.shakeStep);
     }
+    shade.destroy();
   }
 
   /** What changed ("晋入结丹 · 领悟神识") and the script lines, under the verdict. */
   private outcome(v: BreakthroughView, color: string): Phaser.GameObjects.Text[] {
     const s = this.scene;
     return [
-      txt(s, PW / 2, 306, v.outcome.join(' · '), { size: FS.md, bold: true, color, origin: [0.5, 0.5] }),
-      txt(s, PW / 2, 334, v.lines.join('   '), { size: FS.sm, color: HEX.parchment, origin: [0.5, 0.5] }),
+      txt(s, PW / 2, 254, v.outcome.join(' · '), { size: FS.md, bold: true, color, origin: [0.5, 0.5] }),
+      txt(s, PW / 2, 280, v.lines.join('   '), { size: FS.sm, color: HEX.parchment, origin: [0.5, 0.5] }),
     ];
+  }
+
+  private successPulse(token: Rect, color: number, duration: number): void {
+    ensureVerdictRing(this.scene);
+    const ring = this.scene.add.image(token.x + token.w / 2, token.y + token.h, 'breakthrough_ring')
+      .setName('breakthrough-verdict-fx').setTint(color).setDepth(DEPTH + 2);
+    const p = { t: 0 };
+    this.scene.tweens.add({
+      targets: p, t: 1, duration,
+      onUpdate: () => ring.setScale(p.t < 0.5 ? 1 : 2).setAlpha(1 - p.t),
+      onComplete: () => ring.destroy(),
+    });
   }
 
   private chip(label: string, color: string): Phaser.GameObjects.Container {
@@ -158,4 +199,17 @@ export class Breakthrough {
   private wait(ms: number): Promise<void> {
     return new Promise((res) => this.scene.time.delayedCall(ms, () => res()));
   }
+}
+
+function ensureVerdictRing(scene: Phaser.Scene): void {
+  ensureCanvas(scene, 'breakthrough_ring', 44, 14, (ctx) => {
+    ctx.fillStyle = '#ffffff';
+    for (let y = 0; y < 14; y++) {
+      for (let x = 0; x < 44; x++) {
+        const outer = ((x + 0.5 - 22) / 22) ** 2 + ((y + 0.5 - 7) / 7) ** 2 <= 1;
+        const inner = ((x + 0.5 - 22) / 18) ** 2 + ((y + 0.5 - 7) / 4) ** 2 <= 1;
+        if (outer && !inner) ctx.fillRect(x, y, 1, 1);
+      }
+    }
+  });
 }

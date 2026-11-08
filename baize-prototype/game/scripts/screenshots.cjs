@@ -14,7 +14,7 @@ const DIST = process.env.DIST || 'dist';
 const PREFIX = process.env.SHOT_PREFIX || '';
 // ONLY=choices captures just the choice screens and the breakthrough cutscene.
 const ONLY = process.env.ONLY || '';
-const outDir = path.join(root, 'screenshots');
+const outDir = process.env.SHOT_DIR || path.join(root, 'screenshots');
 const shot = (page, name) => page.screenshot({ path: path.join(outDir, PREFIX + name) });
 const PORT = Number(process.env.PORT) || 4179;
 const BASE = `http://localhost:${PORT}/`;
@@ -118,18 +118,53 @@ async function choiceShots(page, errors) {
   await page.keyboard.press(sc.stake.win);
   await sleep(1400);
   await shot(page, '09b-breakthrough-roll.png');
-  await sleep(1800);
+  await verdictShot(page, '09bb-breakthrough-success-token.png');
+  await sleep(1300);
   await shot(page, '09c-breakthrough-success.png');
   await resume(page, sc.stake.record);
   await page.keyboard.press(sc.stake.lose);
-  await sleep(3200);
+  await verdictShot(page, '09db-breakthrough-fail-token.png');
+  await sleep(1400);
   await shot(page, '09d-breakthrough-fail.png');
   const picks = [['fork', '14-fork-board.png'], ['forkClose', '14b-fork-board-zoom2.png'], ['adjust', '15-adjust-board.png']];
   for (const [name, file] of [['brew', '10-brew.png'], ['market', '11-market.png'], ['fortune', '12-fortune.png'], ['manifest', '13-manifest.png'], ...picks]) {
     await resume(page, sc[name].record);
     await shot(page, file);
   }
+  await manifestMomentShots(page, sc.manifest.record);
   await roadblockShot(page, errors, sc.roadblock.record);
+}
+
+async function verdictShot(page, file) {
+  await page.waitForFunction(() => {
+    const hud = window.__phaser.scene.getScene('Hud');
+    return hud.children.list.some((obj) => obj.name === 'breakthrough-verdict-fx');
+  }, null, { timeout: 5000, polling: 16 });
+  await shot(page, file);
+}
+
+async function manifestMomentShots(page, record) {
+  await resume(page, record);
+  await page.keyboard.press('Space');
+  await sleep(500);
+  await page.evaluate(() => {
+    const sc = window.__phaser.scene.getScene('Game');
+    sc.boardView.showBaize(true);
+    sc.cam.panTo(sc.boardView.world.centre('ALTAR'));
+    void sc.fx.banner({
+      title: '白泽现世',
+      sub: '秘境过半。白泽现世，让走得慢的人先挑。',
+      icon: 'baize',
+      color: 0xe6e4f0,
+      dim: true,
+    }, 5000);
+  });
+  await sleep(1000);
+  await shot(page, '13b-manifest-z1.png');
+  await page.mouse.move(640, 360);
+  await page.mouse.wheel(0, -120);
+  await sleep(500);
+  await shot(page, '13c-manifest-z2.png');
 }
 
 // Point at a node's top face, k of the way from its centre to its left edge, and screenshot its popover.

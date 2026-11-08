@@ -349,8 +349,8 @@ export class GameScene extends Phaser.Scene {
         await this.present(e, pace);
         break;
       case 'breakthrough':
-        this.cam.follow(seat);
-        await sound.duckDuring(this.breakthrough.play(breakthroughView(this.engine, e), breakthroughBeats(this.isHuman(seat), this.speed)));
+        this.cam.recentre(seat, true);
+        await sound.duckDuring(this.breakthrough.play(breakthroughView(this.engine, e), breakthroughBeats(this.isHuman(seat), this.speed), this.cam.toScreen(this.boardView.tokenRect(seat))));
         break;
       case 'roundStart':
         if (e.snap && e.snap.round !== this.engine.data.config.manifest.round) this.boardView.showBaize(false);
