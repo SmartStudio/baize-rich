@@ -40,7 +40,7 @@ import { tileTip } from '../ui/TileInfo';
 import { Tooltip } from '../ui/Tooltip';
 import { TopBar } from '../ui/TopBar';
 import { flyStones } from '../ui/StoneFlight';
-import { Button } from '../ui/widgets';
+import { Button, fadeToScene } from '../ui/widgets';
 import { unionRect, type Point } from '../ui/world';
 import type { ResultData } from './ResultScene';
 
@@ -51,6 +51,8 @@ const isCastId = (id: string): boolean =>
 /** Round ribbon lifetime. The turn banner starts only after this, so the two never share the board. */
 const ROUND_RIBBON_MS = 1000;
 const WIN_MS = 2000;
+/** The board fades into the result screen. */
+const RESULT_FADE_MS = 600;
 /** 灵石 changing hands at 1×, when watched: stones in the air, the payee's count running up, the bought building rising. */
 const PAY = { coins: 3, flyMs: 420, countMs: 300, growMs: 360, skimGrowMs: 120 };
 
@@ -270,7 +272,7 @@ export class GameScene extends Phaser.Scene {
       this.renderAll(this.engine.state);
       if (this.engine.over) {
         await this.wait(500);
-        if (this.alive) this.scene.start('Result', this.resultData());
+        if (this.alive) this.endGame();
         return;
       }
       const c = this.engine.pending!;
@@ -287,6 +289,10 @@ export class GameScene extends Phaser.Scene {
       this.engine.answer(id);
       this.autosave();
     }
+  }
+
+  private endGame(): void {
+    fadeToScene(this, 'Result', this.resultData(), RESULT_FADE_MS, null);
   }
 
   private record(): GameRecord {
