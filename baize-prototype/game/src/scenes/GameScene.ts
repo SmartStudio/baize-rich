@@ -31,7 +31,7 @@ import { pickPlan, ROUTE_KINDS, type PickCell, type PickPlan } from '../ui/pickP
 import { PlayerCards } from '../ui/PlayerCards';
 import { RealmRace } from '../ui/RealmRace';
 import { resultView } from '../ui/resultReadout';
-import { downloadRecord, loadCoach, saveAutosave, saveCoach } from '../ui/saves';
+import { downloadRecord, loadCoach, saveAutosave, saveCoach, saveSpeed } from '../ui/saves';
 import type { SessionConfig } from '../ui/session';
 import { ActionDock } from '../ui/ActionDock';
 import { COLORS, FS, HEX, PLAYER_COLORS, txt } from '../ui/theme';
@@ -771,6 +771,7 @@ export class GameScene extends Phaser.Scene {
 
   private cycleSpeed(): void {
     this.speed = nextSpeed(this.speed);
+    saveSpeed(this.speed);
     sound.cue('click');
     this.side.btnSpeed.setLabel(`倍速 ×${this.speed} · F`);
     this.toast(`倍速 ×${this.speed} · ${speedNote(this.speed)}`);

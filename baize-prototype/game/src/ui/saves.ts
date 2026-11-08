@@ -4,11 +4,13 @@ import { DEFAULT_PREFS, snapVolume, type AudioPrefs } from '../audio/mix';
 import { defaultData } from '../core/data';
 import { parseRecord, replayRecord, type GameRecord } from '../core/record';
 import { isCoachStep, type CoachStep } from './coachTriggers';
+import { SPEEDS } from './pacing';
 
 const AUTOSAVE_KEY = 'baize.autosave';
 const TUTORIAL_KEY = 'baize.tutorialSeen';
 const COACH_KEY = 'baize.coach';
 const AUDIO_KEY = 'baize.audio';
+const SPEED_KEY = 'baize.speed';
 
 /** An unfinished autosave that still replays, with a one-line summary for the 继续上局 button. */
 export function findResumable(): { record: GameRecord; summary: string } | null {
@@ -108,6 +110,28 @@ export function parseAudioPrefs(raw: string | null): AudioPrefs {
   const flag = (k: 'muted' | 'music' | 'sfx') => (typeof o[k] === 'boolean' ? o[k] : DEFAULT_PREFS[k]);
   const volume = typeof o.volume === 'number' && Number.isFinite(o.volume) ? snapVolume(o.volume) : DEFAULT_PREFS.volume;
   return { muted: flag('muted'), music: flag('music'), sfx: flag('sfx'), volume };
+}
+
+/** The 倍速 last chosen with F; 1× when unset, unreadable or no longer offered. */
+export function loadSpeed(): number {
+  try {
+    return parseSpeed(localStorage.getItem(SPEED_KEY));
+  } catch {
+    return 1;
+  }
+}
+
+export function saveSpeed(speed: number): void {
+  try {
+    localStorage.setItem(SPEED_KEY, String(speed));
+  } catch {
+    /* storage blocked: the speed holds for this game */
+  }
+}
+
+export function parseSpeed(raw: string | null): number {
+  const n = Number(raw);
+  return raw !== null && SPEEDS.some((s) => s.speed === n) ? n : 1;
 }
 
 export function saveAutosave(r: GameRecord): void {

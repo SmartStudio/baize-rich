@@ -3,6 +3,7 @@ import { defaultData } from '../core/data';
 import { HERO_IDS } from '../core/heroes';
 import type { GameRecord, SeatControl } from '../core/record';
 import type { GameSetup, HeroId } from '../core/types';
+import { loadSpeed } from './saves';
 
 export interface SeatConfig {
   human: boolean;
@@ -44,7 +45,7 @@ export function quickSeats(chosen: HeroId, difficulty: Difficulty): SeatConfig[]
 }
 
 export function resumeSession(r: GameRecord): SessionConfig {
-  return { setup: r.setup, seats: r.seats, speed: urlSpeed(1), history: r.history };
+  return { setup: r.setup, seats: r.seats, speed: urlSpeed(loadSpeed()), history: r.history };
 }
 
 export function urlParams(): URLSearchParams {
