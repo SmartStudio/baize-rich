@@ -1,12 +1,15 @@
-// How long the board playback lingers on each beat. An AI turn skims by default and slows to the human pace
-// only for what touches a human seat; GameScene just waits the numbers given here.
+// How long the board playback lingers on each beat. An AI turn plays every beat a little shorter than the
+// human's and slows to the human pace for what touches a human seat; GameScene just waits the numbers given here.
 import type { GameEvent, GameEventType } from '../core/events';
 import type { GameState } from '../core/types';
 
-/** watch: a human's own turn, or an AI beat that touches a human or the whole table. skim: anything else. */
+/** watch: a human's own turn, or an AI beat that touches a human or the whole table. skim: an AI's own business. */
 export type Tempo = 'watch' | 'skim';
 
-/** Beat lengths in ms at 1×. `pause` follows a slow event; `banner` is a full-width cutscene. */
+/**
+ * Beat lengths in ms at 1×. `pause` follows a slow event; `banner` is a full-width cutscene; `fly` is 灵石
+ * hopping from payer to payee, then `grow` is the bought or upgraded building rising.
+ */
 export interface Pace {
   step: number;
   teleport: number;
@@ -14,15 +17,17 @@ export interface Pace {
   rollHold: number;
   pause: number;
   banner: number;
+  fly: number;
+  grow: number;
 }
 
 export const PACE: Record<Tempo, Pace> = {
-  watch: { step: 240, teleport: 540, roll: 700, rollHold: 600, pause: 650, banner: 1500 },
-  skim: { step: 70, teleport: 200, roll: 240, rollHold: 120, pause: 120, banner: 600 },
+  watch: { step: 300, teleport: 640, roll: 900, rollHold: 800, pause: 850, banner: 1700, fly: 460, grow: 380 },
+  skim: { step: 180, teleport: 440, roll: 480, rollHold: 280, pause: 400, banner: 1200, fly: 340, grow: 280 },
 };
 
 /** An AI seat's turn: how long its turn ribbon holds and how long it seems to think before each answer. */
-export const AI_TURN = { intro: 150, think: 40, thinkModal: 90 };
+export const AI_TURN = { intro: 550, think: 300, thinkModal: 400 };
 /** A human seat's "轮到你了" banner; not awaited, the roll is live under it. */
 export const HUMAN_INTRO = 1100;
 
@@ -80,10 +85,10 @@ export function breakthroughBeats(human: boolean, speed: number): BreakthroughBe
 
 /** The 倍速 (F) cycle, each with what it does at the table. */
 export const SPEEDS: readonly { speed: number; note: string }[] = [
-  { speed: 0.5, note: '全部慢一倍：AI 回合也一步步看清' },
-  { speed: 1, note: 'AI 回合快放，与你有关的事照常慢放' },
-  { speed: 2, note: '全部快一倍' },
-  { speed: 4, note: '全部快四倍' },
+  { speed: 0.5, note: '全部慢一倍：每一拍都细看' },
+  { speed: 1, note: 'AI 每一步都看得清，与你有关的事放得更慢' },
+  { speed: 2, note: '全部快一倍：AI 回合一闪而过' },
+  { speed: 4, note: '全部快四倍：只看结果' },
 ];
 
 export function nextSpeed(speed: number): number {

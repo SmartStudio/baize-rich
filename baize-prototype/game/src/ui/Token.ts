@@ -15,7 +15,7 @@ const POSE: Record<Facing, { dir: WalkDir; flip: boolean }> = {
   right: { dir: 's', flip: false },
   left: { dir: 's', flip: true },
 };
-/** Walk frames per step: a step lasts 240 ms at 1×, so the cycle runs near 8 fps and scales with game speed. */
+/** Walk frames per step: a step lasts 200-300 ms at 1×, so the cycle runs at 7-10 fps and scales with game speed. */
 const FRAMES_PER_STEP = 2;
 const BOB_MS = 560;
 const POINTER_Y = -60;

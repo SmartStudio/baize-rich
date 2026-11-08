@@ -7,6 +7,7 @@ import { addImg, setFrame } from '../ui/assets';
 import { newSession, quickSeats, randomSeed, urlSeed, urlSpeed, type SeatConfig } from '../ui/session';
 import { COLORS, HEX, PLAYER_COLORS, PLAYER_HEX, panel, txt } from '../ui/theme';
 import { Button, fadeToScene } from '../ui/widgets';
+import { loadSpeed } from '../ui/saves';
 
 const DIFFS: Difficulty[] = ['easy', 'normal', 'hard'];
 const PERSONAS: Personality[] = ['steady', 'aggressive', 'miser'];
@@ -43,7 +44,7 @@ export class SetupScene extends Phaser.Scene {
   }
 
   private start(): void {
-    fadeToScene(this, 'Versus', newSession(this.seed, this.seats, urlSpeed(1)));
+    fadeToScene(this, 'Versus', newSession(this.seed, this.seats, urlSpeed(loadSpeed())));
   }
 
   private buildRow(i: number): void {

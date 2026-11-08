@@ -11,12 +11,14 @@ import { H, SAFE, W, type Rect } from './layout';
 import { keepInside, rectCentre, rectToScreen, toWorld, viewRect, ZOOMS, type Point, type View, type WorldMap, type Zoom } from './world';
 
 type Mode =
-  | { kind: 'follow'; seat: number }
+  | { kind: 'follow'; seat: number; zone: Rect }
   | { kind: 'frame'; rect: Rect; seat: number }
   | { kind: 'free' };
 
 /** Screen box the followed token may wander in before the camera moves. */
 const DEADZONE: Rect = { x: SAFE.x + SAFE.w * 0.25, y: SAFE.y + SAFE.h * 0.22, w: SAFE.w * 0.5, h: SAFE.h * 0.56 };
+/** The human's own walk: the camera keeps the token near the middle so every step reads. */
+const CLOSE_ZONE: Rect = { x: SAFE.x + SAFE.w * 0.42, y: SAFE.y + SAFE.h * 0.4, w: SAFE.w * 0.16, h: SAFE.h * 0.2 };
 /** Hard limit: the followed token never leaves this box, however fast it moves. */
 const KEEP: Rect = { x: SAFE.x + 40, y: SAFE.y + 50, w: SAFE.w - 80, h: SAFE.h - 70 };
 /** Easing time constant at 1× speed, in ms; faster game speeds ease proportionally faster. */
@@ -64,15 +66,15 @@ export class BoardCamera {
     this.manualFn = fn;
   }
 
-  /** Follow a seat's token, unless the player has taken the camera. */
-  follow(seat: number): void {
+  /** Follow a seat's token, unless the player has taken the camera; `close` keeps it near the middle. */
+  follow(seat: number, close = false): void {
     if (this.mode.kind === 'free') return;
-    this.mode = { kind: 'follow', seat };
+    this.mode = { kind: 'follow', seat, zone: close ? CLOSE_ZONE : DEADZONE };
   }
 
   /** Centre on a seat's token and follow it from there (turn start, 回到棋子). */
   recentre(seat: number, snap = false): void {
-    this.mode = { kind: 'follow', seat };
+    this.mode = { kind: 'follow', seat, zone: DEADZONE };
     const p = this.focus(seat);
     this.goal = this.world.clamp({ cx: p.x, cy: p.y, zoom: this.userZoom });
     if (snap) {
@@ -102,7 +104,7 @@ export class BoardCamera {
   /** A framed choice or teleport is over: go back to following that seat from where the camera is. */
   release(): void {
     if (this.mode.kind !== 'frame') return;
-    this.mode = { kind: 'follow', seat: this.mode.seat };
+    this.mode = { kind: 'follow', seat: this.mode.seat, zone: DEADZONE };
     this.goal = { ...this.view, zoom: this.userZoom };
   }
 
@@ -130,7 +132,7 @@ export class BoardCamera {
   /** Ease one frame toward the goal; true when the view visibly moved. */
   update(dtMs: number): boolean {
     const m = this.mode;
-    if (m.kind === 'follow') this.goal = keepInside({ ...this.goal, zoom: this.userZoom }, this.focus(m.seat), DEADZONE);
+    if (m.kind === 'follow') this.goal = keepInside({ ...this.goal, zoom: this.userZoom }, this.focus(m.seat), m.zone);
     this.goal = this.world.clamp(this.goal);
     const k = this.press && this.dragged ? 1 : 1 - Math.exp(-dtMs / Math.max(35, EASE_MS / this.speed()));
     const zoom = this.stepZoom(dtMs);

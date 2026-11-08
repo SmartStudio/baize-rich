@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Game, type Flow } from '../src/core/engine';
 import type { GameEventType } from '../src/core/events';
 import { breakthroughBeats, nextSpeed, PACE, SPEEDS, speedNote, tempoOf, type Tempo } from '../src/ui/pacing';
+import { parseSpeed } from '../src/ui/saves';
 import { ringData, script } from './helpers';
 
 const HUMAN = new Set([0]);
@@ -88,5 +89,10 @@ describe('beat lengths', () => {
     }
     expect([...seen].sort()).toEqual(SPEEDS.map((x) => x.speed).sort());
     expect(new Set(SPEEDS.map((x) => speedNote(x.speed))).size).toBe(SPEEDS.length);
+  });
+
+  it('remembers an offered 倍速 and falls back to 1× for anything else', () => {
+    for (const { speed } of SPEEDS) expect(parseSpeed(String(speed))).toBe(speed);
+    for (const raw of [null, '', '3', 'fast', 'NaN']) expect(parseSpeed(raw)).toBe(1);
   });
 });

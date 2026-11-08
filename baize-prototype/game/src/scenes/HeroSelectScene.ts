@@ -7,6 +7,7 @@ import { addImg } from '../ui/assets';
 import { newSession, quickSeats, urlSeed, urlSpeed } from '../ui/session';
 import { COLORS, HEX, txt } from '../ui/theme';
 import { Button, fadeToScene } from '../ui/widgets';
+import { loadSpeed } from '../ui/saves';
 
 const DIFFS: Difficulty[] = ['easy', 'normal', 'hard'];
 
@@ -153,7 +154,7 @@ export class HeroSelectScene extends Phaser.Scene {
   }
 
   private start(): void {
-    fadeToScene(this, 'Versus', newSession(urlSeed(), quickSeats(this.chosen, this.difficulty), urlSpeed(1)));
+    fadeToScene(this, 'Versus', newSession(urlSeed(), quickSeats(this.chosen, this.difficulty), urlSpeed(loadSpeed())));
   }
 
   private onKey(ev: KeyboardEvent): void {
