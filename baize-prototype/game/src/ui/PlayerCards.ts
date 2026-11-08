@@ -155,7 +155,7 @@ export class PlayerCards {
   }
 
   private paintResources(v: ChipView, face: ChipFace): void {
-    const values = [face.herbs, face.pills, face.stones, face.mind].map(String);
+    const values = [`草${face.herbs}`, `丹${face.pills}`, `石${face.stones}`, `心${face.mind}`];
     const colors = [HEX.parchment, face.pillGold ? HEX.gold : HEX.parchment, HEX.parchment, face.mind > 0 ? HEX.gold : HEX.parchment];
     let x = v.rect.x + 6;
     const y = v.rect.y + 54;
