@@ -7,6 +7,7 @@ Needs Pillow and NumPy. The key colour is sampled from the image corners, so a m
 pink in generation still keys out. Output: tools/art/out/<id>.png, cropped to the subject, or the whole
 square for `"fit": "frame"` (portraits). An entry with `"src"` reuses another entry's source image.
 
+`"fit": "box"` scales the subject to fit inside `size` ([w, h]) and stands it bottom-centre on an exact `size` canvas.
 `"fit": "quad"` keys the source, then maps the quadrilateral `quad` onto exactly `size`.
 `"fit": "tile"` takes a full-bleed texture (no key colour), cuts `crop` (fractions of the source; default
 a centred cut at the target aspect) and cross-fades the edges along the axes in `wrap` so it tiles.
@@ -97,12 +98,21 @@ def pixelize(src: Path, spec: dict) -> Image.Image:
         crop = keyed.transform((size[0] * 8, size[1] * 8), Image.QUAD, spec['quad'], Image.BILINEAR)
     elif spec['fit'] == 'w':
         size = (spec['size'], max(1, round(h * spec['size'] / w)))
+    elif spec['fit'] == 'box':
+        bw, bh = spec['size']
+        scale = min(bw / w, bh / h)
+        size = (max(1, round(w * scale)), max(1, round(h * scale)))
     else:
         size = (max(1, round(w * spec['size'] / h)), spec['size'])
     small = crop.convert('RGB').resize(size, Image.BOX)
     small_a = np.asarray(crop.getchannel('A').resize(size, Image.BOX))
     pal = small.quantize(colors=spec['colors'], method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
-    return Image.fromarray(np.dstack([np.asarray(pal.convert('RGB')), np.where(small_a > ALPHA_CUT, 255, 0).astype(np.uint8)]), 'RGBA')
+    out = Image.fromarray(np.dstack([np.asarray(pal.convert('RGB')), np.where(small_a > ALPHA_CUT, 255, 0).astype(np.uint8)]), 'RGBA')
+    if spec['fit'] != 'box':
+        return out
+    canvas = Image.new('RGBA', tuple(spec['size']), (0, 0, 0, 0))
+    canvas.paste(out, ((canvas.width - out.width) // 2, canvas.height - out.height))
+    return canvas
 
 
 def main(ids: list[str]) -> None:
