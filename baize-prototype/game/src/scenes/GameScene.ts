@@ -243,7 +243,10 @@ export class GameScene extends Phaser.Scene {
   update(_time: number, delta: number): void {
     if (!this.alive) return;
     this.trackHover(delta);
-    this.btnRecentre.setVisible(this.cam.visibleRect().w < W);
+    const zoomed = this.cam.visibleRect().w < W;
+    this.cards.setCompact(zoomed);
+    this.race.setCompact(zoomed);
+    this.btnRecentre.setVisible(zoomed).setY(this.race.bottom + RACE.gap);
   }
 
   // ------------------------------------------------------------ main loop

@@ -1,8 +1,8 @@
 // Where each lit cell's tag (number badge, label, cost lines) sits: fully on the part of the board the camera
 // shows, never under a HUD panel, and covering no other tag or token where it can help it. Tags keep one screen
 // size at every zoom, so the layout is solved in world space at the camera's current view and redone when it moves.
-import { H, LEFT, RIGHT, type Rect } from './layout';
-import { toWorld, viewRect, type Point, type View } from './world';
+import { H, LEFT, RIGHT, SLIM_CHIP, type Rect } from './layout';
+import { toWorld, viewRect, ZOOMS, type Point, type View } from './world';
 
 export interface Size {
   w: number;
@@ -42,15 +42,24 @@ const SLOTS: Slot[] = [
   (f, s) => spot({ x: f.x - GAP, y: f.y + f.h / 2 }, [1, 0.5], s),
 ];
 
-/** Screen rects of the HUD panels: round line and seat chips, the 战报 ticker, and the whole right column. */
-export const HUD_PANELS: readonly Rect[] = [
-  { x: LEFT.x, y: LEFT.lineY, w: LEFT.w, h: LEFT.chipY + MAX_SEATS * (LEFT.chipH + LEFT.chipGap) - LEFT.lineY },
-  { x: LEFT.x, y: LEFT.tickerY, w: LEFT.w, h: LEFT.tickerH },
-  { x: RIGHT.x, y: RIGHT.utilY, w: RIGHT.w, h: H - RIGHT.utilY },
-];
+/**
+ * Screen rects of the HUD panels: round line and seat chips, the 战报 ticker, and the whole right column. While the
+ * camera is zoomed in the seat chips fold to slim strips (PlayerCards), so they block less.
+ */
+export function hudPanels(zoomed: boolean): Rect[] {
+  const chips = zoomed
+    ? { w: SLIM_CHIP.w, h: MAX_SEATS * (SLIM_CHIP.h + SLIM_CHIP.gap) }
+    : { w: LEFT.w, h: MAX_SEATS * (LEFT.chipH + LEFT.chipGap) };
+  return [
+    { x: LEFT.x, y: LEFT.lineY, w: LEFT.w, h: LEFT.chipY - LEFT.lineY },
+    { x: LEFT.x, y: LEFT.chipY, ...chips },
+    { x: LEFT.x, y: LEFT.tickerY, w: LEFT.w, h: LEFT.tickerH },
+    { x: RIGHT.x, y: RIGHT.utilY, w: RIGHT.w, h: H - RIGHT.utilY },
+  ];
+}
 
 export function boardFrame(view: View): BoardFrame {
-  return { zoom: view.zoom, visible: viewRect(view), blocked: HUD_PANELS.map((r) => screenToWorld(view, r)) };
+  return { zoom: view.zoom, visible: viewRect(view), blocked: hudPanels(view.zoom > ZOOMS[0]).map((r) => screenToWorld(view, r)) };
 }
 
 /**

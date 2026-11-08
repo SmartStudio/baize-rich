@@ -4,11 +4,10 @@
 import Phaser from 'phaser';
 import type { Board } from '../core/board';
 import type { GameState, NodeId } from '../core/types';
-import { STAND_DY } from './Ambient';
 import { ensureCanvas } from './assets';
 import { paintPixels } from './sprites';
 import { PLAYER_COLORS } from './theme';
-import { DEPTH, type Point, type WorldMap } from './world';
+import { buildingFoot, DEPTH, type Point, type WorldMap } from './world';
 
 const POLE = ['yY', 'Yy', ...Array<string>(13).fill('nN')];
 /** Two flutter frames of a swallow-tailed pennant flying right from the pole; `m` is the fold shading. */
@@ -94,9 +93,8 @@ export class OwnerMarks {
     const cloth = s.add.image(CLOTH_AT.dx, CLOTH_AT.dy - pole.height, pixelKey(s, 'own_cloth0', CLOTH[0])).setOrigin(0, 0);
     pixelKey(s, 'own_cloth1', CLOTH[1]);
     // Sorted on the building's foot line: drawn over the building, under any token standing on the cell.
-    const buildingFoot = r.y + r.h / 2 + STAND_DY;
     const flag = s.add.container(r.x + FOOT.dx, r.y + r.h + FOOT.dy, [pole, cloth])
-      .setDepth(DEPTH.stand(buildingFoot) + 0.05).setVisible(false);
+      .setDepth(DEPTH.stand(buildingFoot(r).y) + 0.05).setVisible(false);
     return { wash, flag, cloth, phase: (f.c0 + f.r0) % CLOTH.length };
   }
 

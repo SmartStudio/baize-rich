@@ -14,7 +14,7 @@ import { Occluders } from './Occluders';
 import { OwnerMarks } from './OwnerMarks';
 import { COLORS, FS, HEX, PLAYER_COLORS, PLAYER_HEX, txt } from './theme';
 import { Token, TOKEN_BOX } from './Token';
-import { DEPTH, FACE, facingFor, seam, TD, tokenSpots, TW, WorldMap, type Facing, type Point } from './world';
+import { buildingFoot, DEPTH, FACE, facingFor, seam, TD, tokenSpots, TW, WorldMap, type Facing, type Point } from './world';
 
 /** Token feet on the altar: cells of its footprint (offsets from its back-left cell) beside the statue, by arrival. */
 const ALTAR_SEATS: [number, number][] = [[0, 2], [2, 2], [0, 1], [2, 1]];
@@ -25,10 +25,10 @@ const STATUE_SIZE = { w: 70, h: 112 };
 /** Neighbours on a shared cell step aside or back this fast, at most. */
 const MAKE_ROOM_MS = 140;
 /**
- * A rising building's depth over its resting one: above its own cell's tokens (feet ≤ 9.5 px in front of it)
- * and below the next row's blocks (14 px in front).
+ * A rising building's depth over its resting one: above its own cell's tokens (feet ≤ 25.5 px in front of it)
+ * and below the next row's blocks (30 px in front).
  */
-const GROW_LIFT = 10;
+const GROW_LIFT = 27;
 
 /** Face overlay textures: what is drawn on a top face and how. Light parts are white, tinted at use. */
 type Overlay = 'mark' | 'focus';
@@ -150,14 +150,13 @@ export class BoardView {
     const r = this.world.rect(id);
     const f = this.world.footprint(id);
     addImg(s, r.x, r.y, n.region ? `ft_land_${n.region}` : 'ft_jade').setOrigin(0, 0).setDepth(DEPTH.block(f.r0));
-    const feet = { x: r.x + r.w / 2, y: r.y + r.h / 2 + STAND_DY };
-    const stand = (frame: string): Phaser.GameObjects.Image =>
+    const stand = (frame: string, feet: Point): Phaser.GameObjects.Image =>
       this.occluders.add(addImg(s, feet.x, feet.y, frame).setOrigin(0.5, 1).setDepth(DEPTH.stand(feet.y)));
     if (n.type !== 'land') {
-      stand(`lm_${n.type}`);
+      stand(`lm_${n.type}`, { x: r.x + r.w / 2, y: r.y + r.h / 2 + STAND_DY });
       return;
     }
-    this.buildings.set(id, stand('bld_1').setVisible(false));
+    this.buildings.set(id, stand('bld_1', buildingFoot(r)).setVisible(false));
   }
 
   /** The 3×3 altar frame: its bottom-left corner on the front face's bottom-left. Only its statue can cover a token. */
@@ -323,9 +322,9 @@ export class BoardView {
   paidAt(id: NodeId): Point {
     const level = this.state?.tiles[id]?.level ?? 0;
     if (level === 0) return this.owners.flagAt(id);
-    const r = this.world.rect(id);
+    const feet = buildingFoot(this.world.rect(id));
     const h = this.scene.textures.getFrame(...frameRef(this.scene, `bld_${level}`)).height;
-    return { x: r.x + r.w / 2, y: r.y + r.h / 2 + STAND_DY - Math.round(h / 2) };
+    return { x: feet.x, y: feet.y - Math.round(h / 2) };
   }
 
   /** Two seats turn to face each other (a duel). */
