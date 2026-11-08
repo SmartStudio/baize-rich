@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { sound } from '../audio/Sound';
 import { Board } from '../core/board';
 import { defaultData } from '../core/data';
 import { addImg } from '../ui/assets';
@@ -7,6 +8,7 @@ import { HowToPlay } from '../ui/HowToPlay';
 import { TITLE_SUBTITLE, titleNarration } from '../ui/narration';
 import { findResumable, markTutorialSeen, tutorialSeen } from '../ui/saves';
 import { resumeSession } from '../ui/session';
+import { SoundControl } from '../ui/SoundControl';
 import { COLORS, HEX, txt } from '../ui/theme';
 import { terrainRect } from '../ui/world';
 import { Button, fadeToScene } from '../ui/widgets';
@@ -27,6 +29,7 @@ export class TitleScene extends Phaser.Scene {
   private narration!: Phaser.GameObjects.Text;
   private skipHint!: Phaser.GameObjects.Text;
   private primary: (() => void) | null = null;
+  private soundControl!: SoundControl;
 
   constructor() {
     super('Title');
@@ -36,7 +39,10 @@ export class TitleScene extends Phaser.Scene {
     this.phase = 'intro';
     this.help = null;
     this.cameras.main.setBackgroundColor(COLORS.bg).fadeIn(600);
+    sound.music('title');
     this.backdrop();
+    this.soundControl = new SoundControl(this, 1240, 8, 32, 28);
+    this.soundControl.pill.setDepth(10);
     this.altar = addImg(this, 640, 280, 'ft_altar').setAlpha(0);
     this.tweens.add({ targets: this.altar, alpha: 1, duration: 2400, ease: 'Sine.easeOut' });
     this.narration = txt(this, 640, 560, '', { size: 22, origin: [0.5, 0.5], stroke: HEX.ink, wrap: 1000, align: 'center' }).setAlpha(0);
@@ -155,7 +161,7 @@ export class TitleScene extends Phaser.Scene {
       this.tweens.add({ targets: b, alpha: 1, duration: 400, delay: 350 + k * 120 });
     });
     const { rounds } = defaultData.config;
-    txt(this, 640, 700, `率先渡劫化神即胜；第 ${rounds} 轮秘境关闭时境界最高者胜 · 空格 / Enter 确认 · H 玩法说明`, {
+    txt(this, 640, 700, `率先渡劫化神即胜；第 ${rounds} 轮秘境关闭时境界最高者胜 · 空格 / Enter 确认 · H 玩法说明 · M 静音`, {
       size: 13, color: HEX.dim, origin: [0.5, 0.5],
     });
   }
@@ -173,6 +179,7 @@ export class TitleScene extends Phaser.Scene {
   private onKey(ev: KeyboardEvent): void {
     if (this.phase === 'intro') { this.showMenu(); return; }
     if (this.help?.isOpen) return;
+    if (ev.key === 'Escape' && this.soundControl.isOpen) { this.soundControl.close(); return; }
     if (ev.key === ' ' || ev.key === 'Enter') { ev.preventDefault(); this.primary?.(); }
     else if (ev.key === 'h' || ev.key === 'H') this.openHelp();
   }

@@ -56,6 +56,8 @@ BAIZE_NO_ATLAS=1 npm run build      # 强制使用占位图构建
 
 **AI 和 UI 都是 Controller。** `ai/ai.ts` 的 `AIController.decide(c)` 在 `switch (c.kind)` 里处理收窄后的选择，难度和性格只调整阈值，困难难度用 `ai/predict.ts` 做一步前瞻。格子、机缘、白泽机缘、闭关成功率的估值是 `ai/evaluate.ts` 里的纯函数。`scenes/GameScene.ts` 持有棋盘和世界相机，`scenes/HudScene.ts` 是叠在上面的固定 HUD（`ui/ActionDock` 行动坞、`ui/PlayerCards` 玩家小卡、`ui/TileInfo` 点击详情）。HUD 只通过 `GameScene.toScreen(rect)` 换算棋盘坐标。`preRoll` / `action` 映射到行动坞按钮、手牌和快捷键，其余决策交给通用的 `ui/ChoiceModal`。场景顺序：Boot → Title → HeroSelect →（Setup = 高级设置）→ Versus → Game → Result。
 
+**音频（`src/audio/`）全部用 WebAudio 实时合成，没有音频文件。** 纯 TS 部分：`cues.ts` 是音效表（每个 cue 的合成配方 + 重复间隔 + AI 快放时的规则），`eventCues.ts` 是引擎事件 → cue 的唯一映射，`gate.ts` 按 `ui/pacing` 的 Tempo 节流（AI 快放回合的脚步、灵石声合并成一声），`music.ts` 逐小节生成五声音阶背景乐，`mix.ts` 是设置与总线音量（设置由 `ui/saves.ts` 解析）。`Sound.ts` 是唯一碰 AudioContext 的地方：首次点击 / 按键后才创建，环境不支持时静默；场景只调用 `sound.cue(名字)` / `sound.event(e, tempo, humans)` / `sound.music(模式)`，过场用 `sound.duckDuring(promise)` 压低音乐。新增音效：在 `cues.ts` 加一条，再在 `eventCues.ts` 或对应的 UI 时刻引用它。调试句柄 `window.__audio`（`counts` 计数、`render(cue)` 离线渲染）。M 键全局静音，右上角喇叭按钮开关音乐 / 音效 / 音量。
+
 **美术可选**：`vite.config.ts` 在启动时检查 `../assets/atlas.*` 是否存在，并注入 `__HAS_ATLAS__`。缺少的帧由 `BootScene` 按 `ui/assets.ts` 的 `frameSpecs()` 用 Canvas 生成同名占位纹理。`publicDir` 指向 `../assets`。替换图集后需要重启 dev server。画面固定 1280×720，布局常量在 `ui/layout.ts`。
 
 **扩展**：新增符箓、地块或英雄时需要改动的位置（JSON → `types.ts` → engine → AI → 占位图 → 测试），按 `game/README.md` 的「如何扩展」逐步列出的清单操作。

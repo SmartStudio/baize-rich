@@ -1,10 +1,12 @@
 import Phaser from 'phaser';
+import { sound } from '../audio/Sound';
 import { COLORS, HEX, txt } from './theme';
 
 /** Fade the camera out, then switch scenes. Interrupts a running fade-in; repeat calls during the fade-out are ignored. */
 export function fadeToScene(scene: Phaser.Scene, key: string, data?: object, ms = 280): void {
   const cam = scene.cameras.main;
   if (cam.fadeEffect.isRunning && cam.fadeEffect.direction) return;
+  sound.cue('confirm');
   cam.fade(ms, 15, 14, 26, true);
   cam.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => scene.scene.start(key, data));
 }
