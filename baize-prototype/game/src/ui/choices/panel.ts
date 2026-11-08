@@ -6,6 +6,8 @@ import { COLORS, FS, HEX, txt } from '../theme';
 import type { Fact, ModalSpec, Tone } from './spec';
 
 export const EDGE = 8;
+/** A panel fades in while rising this far onto its spot, on whole pixels. */
+const RISE = { px: 8, ms: 120 };
 
 /** A drawn layout: its layer, and (for layouts with a focus ring) how to move the ring. */
 export interface Sheet {
@@ -33,10 +35,20 @@ export function placeX(pw: number, py: number, ph: number, avoid: Rect | undefin
   return hits ? far : centred;
 }
 
-/** Parchment panel with a gold border and the title tab on its top edge; `dim` darkens the screen behind. */
+/**
+ * Parchment panel with a gold border and the title tab on its top edge; `dim` darkens the screen behind. The
+ * layer (and whatever the layout adds to it) rises in.
+ */
 export function modalFrame(s: Phaser.Scene, title: string, px: number, py: number, pw: number, ph: number, dim: boolean): Phaser.GameObjects.Container {
-  const layer = s.add.container(0, 0).setDepth(10000);
-  if (dim) layer.add(s.add.rectangle(0, 0, W, H, 0x000000, 0.55).setOrigin(0, 0).setInteractive());
+  const layer = s.add.container(0, RISE.px).setDepth(10000).setAlpha(0);
+  const t = { k: 0 };
+  const rise = s.tweens.add({
+    targets: t, k: 1, duration: RISE.ms, ease: 'Quad.easeOut',
+    onUpdate: () => layer.setY(Math.round(RISE.px * (1 - t.k))).setAlpha(t.k),
+    onComplete: () => layer.setY(0).setAlpha(1),
+  });
+  layer.once(Phaser.GameObjects.Events.DESTROY, () => rise.remove());
+  if (dim) layer.add(s.add.rectangle(0, -RISE.px, W, H + RISE.px, 0x000000, 0.55).setOrigin(0, 0).setInteractive());
   layer.add(s.add.rectangle(px, py, pw, ph, COLORS.parchment).setOrigin(0, 0).setStrokeStyle(4, COLORS.gold).setInteractive());
   layer.add(s.add.rectangle(px + 4, py + 4, pw - 8, ph - 8).setOrigin(0, 0).setStrokeStyle(1, 0xc9a86a));
   layer.add(s.add.rectangle(px + pw / 2, py + 2, Math.min(pw - 40, 300), 28, 0x3f8a4f).setStrokeStyle(2, COLORS.outline));

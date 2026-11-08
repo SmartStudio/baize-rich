@@ -4,7 +4,8 @@
 //   frame  — fit a world rect (choice targets, both ends of a teleport) into the SAFE area,
 //   free   — the player dragged / zoomed; nothing moves the camera until the next
 //            turn start or 回到棋子.
-// The goal zoom is always one of ZOOMS; the view tweens between them and snaps onto the goal when it settles.
+// The view's zoom is always one of ZOOMS: it steps straight to the goal zoom (once that goal has held for a
+// beat, so a pick answered at once never flickers) and only the pan eases, so pixels never go soft.
 import Phaser from 'phaser';
 import { H, SAFE, W, type Rect } from './layout';
 import { keepInside, rectCentre, rectToScreen, toWorld, viewRect, ZOOMS, type Point, type View, type WorldMap, type Zoom } from './world';
@@ -25,9 +26,10 @@ const DRAG_START_PX = 6;
 const WHEEL_STEP = 60;
 /** Pinch spread ratio that steps one zoom level. */
 const PINCH_STEP = 1.25;
-/** Below this distance (screen px) and zoom difference the view lands exactly on its goal. */
+/** Below this distance (screen px), at the goal's zoom, the view lands exactly on its goal. */
 const SNAP_PX = 0.5;
-const SNAP_ZOOM = 1e-3;
+/** A goal zoom set by the game (not the player) must hold this long at 1× before the view steps to it. */
+const ZOOM_HOLD_MS = 120;
 
 export class BoardCamera {
   private view: View;
@@ -38,6 +40,8 @@ export class BoardCamera {
   private press: { start: Point; view: View } | null = null;
   private pinch: { dist: number } | null = null;
   private wheel = 0;
+  /** How long the goal zoom has differed from the view's. */
+  private zoomHeld = 0;
   /** The last press turned into a drag (stays set until the next press, so its release is not a click). */
   dragged = false;
   private manualFn: (() => void) | null = null;
@@ -129,9 +133,9 @@ export class BoardCamera {
     if (m.kind === 'follow') this.goal = keepInside({ ...this.goal, zoom: this.userZoom }, this.focus(m.seat), DEADZONE);
     this.goal = this.world.clamp(this.goal);
     const k = this.press && this.dragged ? 1 : 1 - Math.exp(-dtMs / Math.max(35, EASE_MS / this.speed()));
-    const zoom = Math.exp(Math.log(this.view.zoom) + (Math.log(this.goal.zoom) - Math.log(this.view.zoom)) * k);
+    const zoom = this.stepZoom(dtMs);
     let v: View = { cx: this.view.cx + (this.goal.cx - this.view.cx) * k, cy: this.view.cy + (this.goal.cy - this.view.cy) * k, zoom };
-    if (m.kind === 'follow') v = this.world.clamp(keepInside(v, this.focus(m.seat), KEEP));
+    v = this.world.clamp(m.kind === 'follow' ? keepInside(v, this.focus(m.seat), KEEP) : v);
     v = this.settle(v);
     const moved = v.cx !== this.view.cx || v.cy !== this.view.cy || v.zoom !== this.view.zoom;
     this.view = v;
@@ -145,10 +149,18 @@ export class BoardCamera {
    */
   private settle(v: View): View {
     const g = this.goal;
-    const near = Math.abs(v.zoom - g.zoom) < SNAP_ZOOM
-      && Math.abs(v.cx - g.cx) * g.zoom < SNAP_PX && Math.abs(v.cy - g.cy) * g.zoom < SNAP_PX;
+    const near = v.zoom === g.zoom && Math.abs(v.cx - g.cx) * g.zoom < SNAP_PX && Math.abs(v.cy - g.cy) * g.zoom < SNAP_PX;
     const onGrid = (x: number): number => Math.round(x * g.zoom) / g.zoom;
     return near ? { cx: onGrid(g.cx), cy: onGrid(g.cy), zoom: g.zoom } : v;
+  }
+
+  private stepZoom(dtMs: number): number {
+    if (this.goal.zoom === this.view.zoom) {
+      this.zoomHeld = 0;
+      return this.view.zoom;
+    }
+    this.zoomHeld += dtMs * this.speed();
+    return this.zoomHeld >= ZOOM_HOLD_MS ? this.goal.zoom : this.view.zoom;
   }
 
   private setFrame(rect: Rect, seat: number, zoom: Zoom): void {
@@ -174,11 +186,19 @@ export class BoardCamera {
     this.userZoom = zoom;
     if (this.mode.kind === 'follow') {
       this.goal = { ...this.goal, zoom };
+      this.jump(this.world.clamp({ ...this.view, zoom }));
       return;
     }
     this.takeOver();
-    const at = toWorld(this.goal, anchor);
+    const at = toWorld(this.view, anchor);
     this.goal = this.world.clamp({ cx: at.x - (anchor.x - W / 2) / zoom, cy: at.y - (anchor.y - H / 2) / zoom, zoom });
+    this.jump(this.goal);
+  }
+
+  /** The player's own zoom step lands at once, so the point under the pointer stays put. */
+  private jump(v: View): void {
+    this.view = { ...v };
+    this.apply();
   }
 
   private zoomStep(dir: 1 | -1, anchor: Point): void {
