@@ -6,6 +6,7 @@ import type { GameEvent, GameEventType } from '../core/events';
 import type { SeatControl } from '../core/record';
 import { closurePlaces, realmName, totalAssets, winRealm } from '../core/rules';
 import { decidingStat, leadReason, standings, STAT_LABEL, type StandingStat } from './raceReadout';
+import { verdict, type Verdict } from './resultVerdict';
 
 export interface ResultStat {
   text: string;
@@ -35,6 +36,8 @@ export interface ResultView {
   rule: string;
   rows: ResultRow[];
   recap: Recap;
+  /** For the human seat: how far behind the winner, and a tip for next game. */
+  verdict: Verdict | null;
   footer: string;
 }
 
@@ -55,6 +58,7 @@ export function resultView(game: Game, seats: SeatControl[]): ResultView {
     rule: rankRule(game),
     rows: order.map((_, k) => resultRow(game, seats, order, k)),
     recap: recap(game, human ?? order[0], human !== undefined),
+    verdict: verdict(game, order, human),
   };
 }
 

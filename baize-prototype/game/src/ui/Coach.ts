@@ -1,19 +1,22 @@
-// Speech bubble for one first-game sentence. It does not take the keyboard.
-// GameScene dismisses it on a click or a key, then keeps handling that key.
+// Speech bubble for one first-game sentence. Only a click on the bubble closes it: every other click and key
+// goes to the game as if it were not there, so "I read it" never gets mixed up with "I was doing something".
+// It sits under modals, the alchemy overlay and cutscenes, so it never covers what the game is asking.
 import Phaser from 'phaser';
+import { bubbleOrigin } from './coachPlace';
 import type { CoachAt, CoachCue, CoachStep } from './coachTriggers';
-import { LEFT, RIGHT, H, W, type Rect } from './layout';
+import { LEFT, type Rect } from './layout';
 import { COLORS, FS, HEX, txt } from './theme';
 
 const BUBBLE_W = 260;
-const DEPTH = 12000;
+const DEPTH = 9700;
+const OK = { w: 64, h: 22 };
 
 export class Coach {
   private root: Phaser.GameObjects.Container | null = null;
   private shown: CoachStep | null = null;
   private box: Rect = { x: 0, y: 0, w: 0, h: 0 };
 
-  constructor(private scene: Phaser.Scene) {}
+  constructor(private scene: Phaser.Scene, private onDismiss: () => void) {}
 
   get isOpen(): boolean {
     return this.root !== null;
@@ -31,6 +34,7 @@ export class Coach {
     this.clear();
     this.shown = cue.step;
     const built = buildBubble(this.scene, cue.text, at);
+    built.hit.on('pointerdown', () => this.onDismiss());
     this.root = built.root;
     this.box = built.box;
   }
@@ -62,36 +66,20 @@ function seatRect(seat: number, dx: number, dy: number, w: number, h: number): R
   return { x: LEFT.x + dx, y: y + dy, w, h };
 }
 
-function buildBubble(scene: Phaser.Scene, text: string, at: Rect): { root: Phaser.GameObjects.Container; box: Rect } {
+/** The parchment bubble with its 知道了 button; `hit` is the whole bubble, the button only shows where to click. */
+function buildBubble(scene: Phaser.Scene, text: string, at: Rect): { root: Phaser.GameObjects.Container; hit: Phaser.GameObjects.Rectangle; box: Rect } {
   const body = txt(scene, 12, 10, text, { size: FS.md, color: HEX.ink, wrap: BUBBLE_W - 24 });
-  const foot = txt(scene, 12, 16 + body.height, '点击或按任意键', { size: FS.xs, color: HEX.dim });
-  const h = Math.ceil(foot.y + foot.height + 10);
+  const okY = Math.ceil(16 + body.height);
+  const h = okY + OK.h + 10;
+  const foot = txt(scene, 12, okY + OK.h / 2, '其他操作照常', { size: FS.xs, color: HEX.dim, origin: [0, 0.5] });
+  const okBg = scene.add.rectangle(BUBBLE_W - 12 - OK.w, okY, OK.w, OK.h, COLORS.gold).setOrigin(0, 0).setStrokeStyle(1, COLORS.outline);
+  const ok = txt(scene, BUBBLE_W - 12 - OK.w / 2, okY + OK.h / 2, '知道了', { size: FS.sm, bold: true, color: HEX.ink, origin: [0.5, 0.5] });
   const origin = bubbleOrigin(at, BUBBLE_W, h);
   const bg = scene.add.rectangle(0, 0, BUBBLE_W, h, COLORS.parchment).setOrigin(0, 0).setStrokeStyle(3, COLORS.gold);
   bg.setInteractive({ useHandCursor: true });
   const tail = bubbleTail(scene, at, origin, h);
-  const root = scene.add.container(origin.x, origin.y, [bg, tail, body, foot]).setDepth(DEPTH);
-  return { root, box: { x: origin.x, y: origin.y, w: BUBBLE_W, h } };
-}
-
-function bubbleOrigin(at: Rect, w: number, h: number): { x: number; y: number } {
-  const gap = 14;
-  const inLeft = at.x < LEFT.x + LEFT.w;
-  const rightEdge = inLeft ? LEFT.x + LEFT.w : at.x + at.w;
-  const onDock = at.x >= RIGHT.x;
-  const limit = onDock ? W - 8 : RIGHT.x - gap;
-  const right = rightEdge + gap;
-  const left = at.x - gap - w;
-  const side = right + w <= limit ? right : left >= 8 ? left : null;
-  let x = side ?? 8;
-  let y = at.y + at.h / 2 - h / 2;
-  if (side === null) {
-    y = at.y - h - gap;
-    if (y < 8) y = at.y + at.h + gap;
-    x = Math.max(8, Math.min(at.x, limit - w));
-  }
-  y = Math.max(8, Math.min(H - h - 8, y));
-  return { x: Math.round(x), y: Math.round(y) };
+  const root = scene.add.container(origin.x, origin.y, [bg, tail, body, foot, okBg, ok]).setDepth(DEPTH).setName('coach');
+  return { root, hit: bg, box: { x: origin.x, y: origin.y, w: BUBBLE_W, h } };
 }
 
 function bubbleTail(scene: Phaser.Scene, at: Rect, origin: { x: number; y: number }, h: number): Phaser.GameObjects.Graphics {

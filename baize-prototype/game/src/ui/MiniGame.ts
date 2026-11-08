@@ -1,6 +1,7 @@
 // 炼丹房 overlay, built in screen space on the scene the caller passes (GameScene passes its Hud scene), so
 // the board camera never matters. The human's stop here becomes the engine's `miniGame` answer. A human plays at real time whatever the game speed (a faster gauge would make
-// the game harder, not quicker); the AI-watch version (`auto`) runs about 1.2 s at 1× and scales with speed.
+// the game harder, not quicker), and the gauge waits still under its legend until the player lights the fire, so it
+// never runs while they are still reading. The AI-watch version (`auto`) runs about 1.2 s at 1× and scales with speed.
 import Phaser from 'phaser';
 import { addImg } from './assets';
 import { H, W } from './layout';
@@ -25,7 +26,12 @@ const BAR = { x: W / 2 - 200, y: 448, w: 400, h: 20 };
 const ZONE = { green: 0.3, gold: 0.07 };
 /** One pass of the gauge pointer across the bar. */
 const SWEEP_MS = 650;
-const Y = { note: BOX.y + 34, stand: 404, sum: 448, prompt: 494, result: 494, detail: 530 };
+const Y = { note: BOX.y + 34, stand: 404, sum: 448, legend: 474, prompt: 504, result: 494, detail: 530 };
+const LEGEND: { color: number; text: string }[] = [
+  { color: COLORS.good, text: '绿区 成丹' },
+  { color: COLORS.gold, text: '金线 极品' },
+  { color: 0x4a2a2a, text: '其余 炸炉' },
+];
 
 const HUMAN = { in: 220, alchemyLimit: 2600, reveal: 260, hold: 1100, out: 200 };
 const WATCH = { in: 150, sweep: 450, reveal: 150, hold: 450, out: 150 };
@@ -123,16 +129,16 @@ class Frame {
     return tweenP(this.scene, { targets: this.root, alpha: 1, scale: 1, x: 0, y: 0, duration: ms, ease: 'Back.easeOut' });
   }
 
-  /** Blink `label` until the player acts (true) or `limit` ms pass (false). */
-  waitInput(label: string, limit: number): Promise<boolean> {
+  /** Blink `label` until the player acts (true) or `limit` ms pass (false); with no limit, until they act. */
+  waitInput(label: string, limit?: number): Promise<boolean> {
     const s = this.scene;
     this.prompt.setText(label).setVisible(true).setAlpha(1);
     const blink = s.tweens.add({ targets: this.prompt, alpha: 0.35, duration: 380, yoyo: true, repeat: -1 });
     return new Promise((res) => {
-      const timer = s.time.delayedCall(limit, () => this.waiting?.(false));
+      const timer = limit === undefined ? null : s.time.delayedCall(limit, () => this.waiting?.(false));
       this.waiting = (acted) => {
         this.waiting = null;
-        timer.remove();
+        timer?.remove();
         blink.remove();
         this.prompt.setVisible(false);
         res(acted);
@@ -182,10 +188,15 @@ async function alchemy(s: Phaser.Scene, ui: Frame, auto: MiniGameTier | undefine
     await tweenP(s, { targets: p, t: landing(auto, centre), duration: WATCH.sweep * k * 0.45, ease: 'Cubic.easeOut', onUpdate: follow });
     tier = auto;
   } else {
+    const legend = legendRow(s);
+    ui.add(legend);
+    follow();
     await ui.enter(HUMAN.in);
+    await ui.waitInput('空格 / 点击 点火，指针开始走');
     const sweep = s.tweens.add({ targets: p, t: 1, duration: SWEEP_MS, yoyo: true, repeat: -1, onUpdate: follow });
     const acted = await ui.waitInput('空格 / 点击 收火', HUMAN.alchemyLimit);
     sweep.remove();
+    legend.setVisible(false);
     tier = acted ? alchemyTier(p.t, centre) : 'fail';
     if (!acted) detail = '火候已过';
   }
@@ -196,6 +207,25 @@ async function alchemy(s: Phaser.Scene, ui: Frame, auto: MiniGameTier | undefine
   await waitMs(s, hold);
   flicker.forEach((t) => t.remove());
   return tier;
+}
+
+/** Swatches under the bar saying what each colour of it brews. */
+function legendRow(s: Phaser.Scene): Phaser.GameObjects.Container {
+  const gap = 28;
+  const items = LEGEND.map(({ color, text }) => {
+    const swatch = s.add.rectangle(0, 0, 14, 14, color).setOrigin(0, 0.5).setStrokeStyle(1, COLORS.outline);
+    const label = txt(s, 20, 0, text, { size: FS.md, color: HEX.parchment, origin: [0, 0.5] });
+    return { parts: [swatch, label], w: 20 + label.width };
+  });
+  const total = items.reduce((a, it) => a + it.w, 0) + gap * (items.length - 1);
+  const row = s.add.container(W / 2 - total / 2, Y.legend).setName('mg-legend');
+  let x = 0;
+  for (const it of items) {
+    it.parts.forEach((o) => { o.x += x; });
+    row.add(it.parts);
+    x += it.w + gap;
+  }
+  return row;
 }
 
 function alchemyFx(s: Phaser.Scene, ui: Frame, furnace: Phaser.GameObjects.Image, flames: Phaser.GameObjects.Triangle[], tier: MiniGameTier, ms: number): void {

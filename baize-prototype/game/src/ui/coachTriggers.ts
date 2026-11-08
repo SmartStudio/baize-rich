@@ -7,6 +7,13 @@ import { realmName, winRealm } from '../core/rules';
 export const COACH_STEPS = ['roll', 'buy', 'cult', 'herbs', 'closure', 'glow', 'win'] as const;
 export type CoachStep = (typeof COACH_STEPS)[number];
 
+/**
+ * Sentences about the moment on screen (this roll, this land for sale, this furnace, this closure). Queued behind
+ * an unread bubble, one is dropped, still unseen, as soon as a moment comes that no longer raises it, so it never
+ * explains a choice already made. The rest (修为条, 宝光, the win rule) stay true and wait their turn.
+ */
+const MOMENT_BOUND: ReadonlySet<CoachStep> = new Set<CoachStep>(['roll', 'buy', 'herbs', 'closure']);
+
 export function isCoachStep(value: string): value is CoachStep {
   return (COACH_STEPS as readonly string[]).includes(value);
 }
@@ -111,8 +118,10 @@ export function nudge(book: CoachBook): { book: CoachBook; cue: CoachCue | null 
 }
 
 function queue(book: CoachBook, moment: CoachMoment, copy: Record<CoachStep, string>): CoachCue[] {
-  const waiting = book.waiting.filter((cue) => cue.step !== book.showing && !book.seen.includes(cue.step));
-  for (const step of stepsDue(moment)) {
+  const due = stepsDue(moment);
+  const waiting = book.waiting.filter((cue) => cue.step !== book.showing && !book.seen.includes(cue.step)
+    && (!MOMENT_BOUND.has(cue.step) || due.includes(cue.step)));
+  for (const step of due) {
     if (book.seen.includes(step) || book.showing === step || waiting.some((cue) => cue.step === step)) continue;
     waiting.push(makeCue(step, moment, copy));
   }

@@ -34,7 +34,8 @@ export class ResultScene extends Phaser.Scene {
     const rows = v.rows.map((row, rank) => this.add.container(0, 0, this.addRow(row, rank, ROW.y + rank * ROW.step)));
     rows.forEach((c, rank) => this.enter(c, rank, rows.length));
     this.addRecap(v);
-    txt(this, 640, 614, v.footer, { size: 14, color: HEX.dim, origin: [0.5, 0.5] });
+    if (v.verdict) txt(this, 640, 614, `下局试试：${v.verdict.tip}`, { size: 15, bold: true, color: HEX.good, origin: [0.5, 0.5] });
+    else txt(this, 640, 614, v.footer, { size: 14, color: HEX.dim, origin: [0.5, 0.5] });
     new Button(this, 300, 634, { w: 200, h: 52, label: '再来一局', size: 22, fill: 0x8a5a1e }).onClick(() => fadeToScene(this, 'HeroSelect'));
     new Button(this, 530, 634, { w: 220, h: 52, label: '下载对局记录', size: 20 }).onClick(() => downloadRecord(d.record));
     new Button(this, 780, 634, { w: 200, h: 52, label: '返回标题', size: 20 }).onClick(() => fadeToScene(this, 'Title'));
@@ -85,7 +86,8 @@ export class ResultScene extends Phaser.Scene {
 
   private addRecap(v: ResultView): void {
     panel(this, ROW.x, RECAP.y, ROW.w, RECAP.top + v.recap.lines.length * RECAP.line + RECAP.pad, COLORS.panel, COLORS.gold);
-    txt(this, ROW.x + 20, RECAP.y + 10, v.recap.title, { size: 16, bold: true, color: HEX.gold });
+    const title = v.verdict ? `${v.recap.title} · ${v.verdict.standing}` : v.recap.title;
+    txt(this, ROW.x + 20, RECAP.y + 10, title, { size: 16, bold: true, color: HEX.gold });
     v.recap.lines.forEach((line, i) => txt(this, ROW.x + 20, RECAP.y + 34 + i * RECAP.line, line, { size: 14 }));
   }
 }

@@ -55,6 +55,28 @@ describe('first-game coach', () => {
     expect(shining.cue?.text).toContain('三颗');
   });
 
+  it('drops a tip queued behind an unread bubble once its moment has passed, unseen, so the next such moment shows it', () => {
+    const reading = observe(emptyBook(), choice({ kind: 'preRoll' }), copy);
+    expect(reading.cue?.step).toBe('roll');
+    const offered = observe(reading.book, choice({ kind: 'buy', node: 'R1', nodeType: 'land' }), copy);
+    expect(offered.book.waiting.map((c) => c.step)).toEqual(['buy', 'win']);
+    const bought = observe(offered.book, { t: 'event', human: true, seat: 0, type: 'buy', node: 'R1', nodeType: 'land', cultGained: 0, glowing: false }, copy);
+    expect(bought.book.waiting.map((c) => c.step)).toEqual(['win']);
+    const read = nudge(dismiss(bought.book, 'roll'));
+    expect(read.cue?.step).toBe('win');
+    expect(read.book.seen).not.toContain('buy');
+    const again = observe(dismiss(read.book, 'win'), choice({ kind: 'buy', node: 'R2', nodeType: 'land' }), copy);
+    expect(again.cue).toMatchObject({ step: 'buy', at: { t: 'tile', node: 'R2' } });
+  });
+
+  it('keeps a queued tip that is still true after its moment: the 修为条 and the win rule wait their turn', () => {
+    const reading = observe(emptyBook(), choice({ kind: 'action', closure: true }), copy);
+    const grown = observe(reading.book, { t: 'event', human: true, seat: 0, type: 'cult', cultGained: 1, glowing: false }, copy);
+    expect(grown.book.waiting.map((c) => c.step)).toEqual(['cult']);
+    const later = observe(grown.book, { t: 'event', human: false, seat: 1, type: 'turnStart', cultGained: 0, glowing: false }, copy);
+    expect(nudge(dismiss(later.book, 'closure')).cue?.step).toBe('cult');
+  });
+
   it('stays quiet for an AI and when the guide is off', () => {
     const ai = observe(emptyBook(), choice({ kind: 'preRoll', human: false }), copy);
     expect(ai.cue).toBeNull();
