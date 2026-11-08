@@ -48,8 +48,8 @@ describe('result verdict', () => {
     expect(tip()).toMatch(/^这局一颗丹药没炼。带 2 株灵草去丹房/);
     g.state.tiles[g.board.lands[0]] = { owner: 0, level: 0 };
     expect(tip()).toBe('把一块自家灵田升到药圃，就能就地闭关，不必赶回白泽灵台。');
-    p.stats.breakthroughFails = 2;
-    expect(tip()).toMatch(/^这局走火入魔 2 次。/);
+    p.stats.breakthroughFails = 1;
+    expect(tip()).toMatch(/^这局走火入魔 1 次。/);
     p.stats.breakthroughs = 0;
     p.stats.cultWasted = 6;
     expect(tip()).toBe('修为条一满就去白泽灵台或自家药圃以上的灵田闭关，境界只靠闭关升。这局修为条满后白白溢出 6 点。');

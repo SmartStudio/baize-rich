@@ -30,7 +30,7 @@ const TIPS: { fits: (c: Ctx) => boolean; text: (c: Ctx) => string }[] = [
     text: (c) => `修为条一满就去${closurePlaces(c.game.data)}闭关，境界只靠闭关升。${wasted(c)}`,
   },
   {
-    fits: (c) => stats(c).breakthroughFails >= 2,
+    fits: (c) => stats(c).breakthroughFails > 0,
     text: (c) => `这局走火入魔 ${stats(c).breakthroughFails} 次。闭关前多攒几颗丹药押上，成功率更高。`,
   },
   {
