@@ -74,18 +74,19 @@ export class Cutscene {
   rollDice(d: [number, number], ms: number, hold: number, label = `${d[0] + d[1]}`): Promise<void> {
     const s = this.scene;
     const row = diceRow(s, d, label);
-    const ticks = Math.max(2, Math.floor(ms / 60));
-    let k = 0;
+    const restY = row.dice.map((img) => img.y);
     return new Promise((res) => {
-      s.time.addEvent({
-        delay: ms / ticks, repeat: ticks - 1,
-        callback: () => {
-          k++;
+      s.tweens.addCounter({
+        from: 0, to: 1, duration: ms,
+        onUpdate: (tw) => row.dice.forEach((img, i) => tumble(img, restY[i], tw.getValue() ?? 1, TUMBLE.hops[i])),
+        onComplete: () => {
           row.dice.forEach((img, i) => {
-            setFrame(img, `die_${k >= ticks ? d[i] : 1 + Math.floor(Math.random() * 6)}`);
-            img.setAngle(k >= ticks ? 0 : Phaser.Math.Between(-25, 25));
+            setFrame(img, `die_${d[i]}`);
+            img.setY(restY[i]);
           });
-          if (k < ticks) return;
+          TUMBLE.settle.forEach((dy, k) => s.time.delayedCall((k + 1) * TUMBLE.settleStepMs, () => {
+            row.dice.forEach((img, i) => img.setY(restY[i] - dy));
+          }));
           row.sum.setAlpha(1);
           s.tweens.add({
             targets: [row.plate, ...row.dice, row.sum], alpha: 0, duration: 250, delay: hold + 500,
@@ -96,6 +97,23 @@ export class Cutscene {
       });
     });
   }
+}
+
+/** Hops per die (they differ so the pair never moves in step), first hop height, and the landing settle in px. */
+const TUMBLE = { hops: [4, 5], hopPx: 14, settle: [2, 0, 1, 0], settleStepMs: 45 };
+
+/**
+ * One die at tumble progress `t` (0..1): hops that come quick and then slow, each lower than the last, with a
+ * new face at each hop's start. Its y stays on whole pixels.
+ */
+function tumble(img: Phaser.GameObjects.Image, restY: number, t: number, hops: number): void {
+  const n = (1 - (1 - t) ** 2) * hops;
+  const hop = Math.min(Math.floor(n), hops - 1);
+  const f = n - hop;
+  img.setY(restY - Math.round(TUMBLE.hopPx * (1 - hop / hops) * 4 * f * (1 - f)));
+  if (img.getData('hop') === hop) return;
+  img.setData('hop', hop);
+  setFrame(img, `die_${1 + Math.floor(Math.random() * 6)}`);
 }
 
 function bannerContent(s: Phaser.Scene, spec: BannerSpec, cy: number): { root: Phaser.GameObjects.Container; icon: Phaser.GameObjects.Image } {
