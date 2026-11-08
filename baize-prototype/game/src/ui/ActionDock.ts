@@ -322,10 +322,12 @@ export class ActionDock {
   }
 
   private addOffer(offer: DockOffer, x: number, y: number, w: number): number {
+    const live = offer.enabled !== false;
+    const text = live ? HEX.ink : HEX.parchment;
     const button = new Button(this.scene, x, y, {
-      w, h: OFFER_H, label: offer.title, hint: offer.detail, hintColor: HEX.ink,
-      size: FS.sm, fill: COLORS.gold, textColor: HEX.ink,
-    }).onClick(() => this.offerHandler?.(offer.id)).setEnabled(offer.enabled !== false);
+      w, h: OFFER_H, label: offer.title, hint: offer.detail, hintColor: text,
+      size: FS.sm, fill: COLORS.gold, textColor: text, disabledAlpha: 0.85,
+    }).onClick(() => this.offerHandler?.(offer.id)).setEnabled(live);
     this.offerButtons.push({ id: offer.id, button, rect: { x, y, w, h: OFFER_H } });
     return y + OFFER_H + OFFER_GAP;
   }

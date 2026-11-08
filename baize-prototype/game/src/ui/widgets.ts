@@ -24,6 +24,8 @@ export interface ButtonOpts {
   textColor?: string;
   hint?: string;
   hintColor?: string;
+  /** Text alpha while disabled. A row that explains why it is unavailable must stay readable. */
+  disabledAlpha?: number;
 }
 
 /** Rectangle button with hover/disabled states. Origin top-left. */
@@ -33,11 +35,13 @@ export class Button extends Phaser.GameObjects.Container {
   private hintText?: Phaser.GameObjects.Text;
   private enabled = true;
   private fill: number;
+  private disabledAlpha: number;
   private handler: (() => void) | null = null;
 
   constructor(scene: Phaser.Scene, x: number, y: number, o: ButtonOpts) {
     super(scene, x, y);
     this.fill = o.fill ?? COLORS.panelLight;
+    this.disabledAlpha = o.disabledAlpha ?? 0.45;
     this.bg = scene.add.rectangle(0, 0, o.w, o.h, this.fill).setOrigin(0, 0).setStrokeStyle(2, COLORS.outline);
     const hasHint = !!o.hint;
     const size = o.size ?? 14;
@@ -69,8 +73,8 @@ export class Button extends Phaser.GameObjects.Container {
   setEnabled(on: boolean): this {
     this.enabled = on;
     this.bg.setFillStyle(on ? this.fill : COLORS.disabled);
-    this.label.setAlpha(on ? 1 : 0.45);
-    this.hintText?.setAlpha(on ? 1 : 0.45);
+    this.label.setAlpha(on ? 1 : this.disabledAlpha);
+    this.hintText?.setAlpha(on ? 1 : this.disabledAlpha);
     return this;
   }
 
