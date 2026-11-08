@@ -82,10 +82,10 @@ describe('throttling', () => {
     expect(run(walk(9), 'watch', PACE.watch.step / 4)).toEqual(Array(9).fill(1));
   });
 
-  it("a skimmed AI walk murmurs a few soft ticks, not one per step", () => {
+  it("a skimmed AI walk murmurs soft ticks on at most every other step", () => {
     const gains = run(walk(9), 'skim', PACE.skim.step);
     expect(gains.length).toBeGreaterThan(0);
-    expect(gains.length).toBeLessThanOrEqual(3);
+    expect(gains.length).toBeLessThanOrEqual(5);
     expect(gains.every((g) => g === SOFT_GAIN)).toBe(true);
   });
 

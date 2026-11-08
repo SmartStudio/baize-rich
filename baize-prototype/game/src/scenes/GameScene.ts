@@ -25,7 +25,7 @@ import { dockPlan, IDLE_PLAN, type DockPlan } from '../ui/dockPlan';
 import { LEFT, RACE, RIGHT, STAGE, W, type Rect } from '../ui/layout';
 import { LogPanel } from '../ui/LogPanel';
 import { playMiniGame } from '../ui/MiniGame';
-import { AI_TURN, breakthroughBeats, HUMAN_INTRO, nextSpeed, PACE, PAUSE_EVENTS, speedNote, tempoOf, type Pace, type Tempo } from '../ui/pacing';
+import { AI_TURN, breakthroughBeats, HUMAN_INTRO, nextSpeed, PACE, PAUSE_EVENTS, speedNote, tempoOf, type Pace } from '../ui/pacing';
 import { aiTurnNarration, heroNameForSeat, narrateEvent, resumeNarration, roundNarration, turnNarration } from '../ui/narration';
 import { pickPlan, ROUTE_KINDS, type PickCell, type PickPlan } from '../ui/pickPlan';
 import { PlayerCards } from '../ui/PlayerCards';
@@ -54,7 +54,7 @@ const WIN_MS = 2000;
 /** The board fades into the result screen. */
 const RESULT_FADE_MS = 600;
 /** 灵石 changing hands at 1×, when watched: stones in the air, the payee's count running up, the bought building rising. */
-const PAY = { coins: 3, flyMs: 420, countMs: 300, growMs: 360, skimGrowMs: 120 };
+const PAY = { coins: 3, countMs: 300 };
 
 /** Where an event's 灵石 go: to a seat (rent, 过路费) or into the tile they paid for (buy, upgrade). */
 type Payment = { payer: number; amount: number; to: { seat: number } | { node: NodeId } };
@@ -322,7 +322,7 @@ export class GameScene extends Phaser.Scene {
     sound.event(e, tempo, this.humans);
     if (e.snap && (e.type === 'step' || e.type === 'teleport')) this.boardView.markCurrent(e.snap);
     const payment = paymentOf(e);
-    if (payment && e.snap) this.pay(e.snap, payment, tempo);
+    if (payment && e.snap) this.pay(e.snap, payment, pace);
     switch (e.type) {
       case 'step':
         this.cam.follow(seat);
@@ -400,32 +400,27 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * The payer's 灵石 drop at once; when watched, stones hop from their token to where the money went, and only
-   * then does the payee's count run up or the bought building rise. Runs before the beat's pause.
+   * The payer's 灵石 drop at once, stones hop from their token to where the money went, and only then does the
+   * payee's count run up or the bought building rise. Runs before the beat's pause.
    */
-  private pay(snap: GameState, p: Payment, tempo: Tempo): void {
+  private pay(snap: GameState, p: Payment, pace: Pace): void {
     const seat = 'seat' in p.to ? p.to.seat : null;
     const node = 'node' in p.to ? p.to.node : null;
-    const watched = tempo === 'watch';
     if (seat !== null) this.cards.holdStones(seat);
     if (node) this.boardView.holdTile(node);
     this.popDeltas(snap, seat);
     this.renderAll(snap, false);
     const land = (): void => {
       if (seat !== null) {
-        this.cards.releaseStones(seat, watched ? this.ms(PAY.countMs) : 0);
+        this.cards.releaseStones(seat, this.ms(PAY.countMs));
         this.cards.floatStones(seat, `+${p.amount} 灵石`, HEX.good);
       }
-      if (node) this.boardView.releaseTile(node, this.ms(watched ? PAY.growMs : PAY.skimGrowMs));
+      if (node) this.boardView.releaseTile(node, this.ms(pace.grow));
     };
-    if (!watched) {
-      land();
-      return;
-    }
     const body = this.toScreen(this.boardView.tokenRect(p.payer));
     const from = { x: Math.round(body.x + body.w / 2), y: Math.round(body.y + body.h * 0.4) };
     const to = seat !== null ? this.cards.stonesAt(seat) : this.pointToScreen(this.boardView.paidAt(node!));
-    void flyStones(this.hud, from, to, PAY.coins, this.ms(PAY.flyMs)).then(() => { if (this.alive) land(); });
+    void flyStones(this.hud, from, to, PAY.coins, this.ms(pace.fly)).then(() => { if (this.alive) land(); });
   }
 
   /** Both duellists turn to face each other and roll one die each; the row shows their totals. */
@@ -447,7 +442,7 @@ export class GameScene extends Phaser.Scene {
     const p = st.players[seat];
     const name = heroNameForSeat(this.engine, seat);
     if (!this.isHuman(seat)) {
-      this.fx.ribbon(aiTurnNarration(name), '', PLAYER_COLORS[seat], STAGE.turnRibbonY, this.ms(AI_TURN.intro + 400));
+      this.fx.ribbon(aiTurnNarration(name), '', PLAYER_COLORS[seat], STAGE.turnRibbonY, this.ms(AI_TURN.intro + 500));
       await this.wait(this.ms(AI_TURN.intro));
       return;
     }
