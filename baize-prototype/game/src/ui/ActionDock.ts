@@ -4,7 +4,7 @@ import Phaser from 'phaser';
 import type { Game } from '../core/engine';
 import type { GameState } from '../core/types';
 import { addImg, hasFrame, setFrame } from './assets';
-import { IDLE_PLAN, type DockOffer, type DockPlan } from './dockPlan';
+import { IDLE_PLAN, turnReadout, type DockOffer, type DockPlan } from './dockPlan';
 import { DOCK, H, RIGHT, type Rect } from './layout';
 import { SoundControl } from './SoundControl';
 import { COLORS, FLOAT_ALPHA, FS, HEX, PLAYER_COLORS, PLAYER_HEX, txt } from './theme';
@@ -40,7 +40,8 @@ export class ActionDock {
   private handTop = 0;
   private rollGlow: Phaser.GameObjects.Rectangle | null = null;
   private rollPulse: Phaser.Tweens.Tween | null = null;
-  private lastTurn: [GameState, boolean] | null = null;
+  private responsePulse: Phaser.Tweens.Tween;
+  private lastTurn: [GameState, boolean, boolean] | null = null;
   private plan: DockPlan = IDLE_PLAN;
   /** A board pick's line. While set the dock only explains the lit cells: no roll button. */
   private pickHint: string | null = null;
@@ -87,6 +88,10 @@ export class ActionDock {
     this.turnPortrait = addImg(s, 0, 0, 'por_body_s').setOrigin(0, 0);
     this.turnName = txt(s, 0, 0, '', { size: FS.md, bold: true });
     this.turnHint = txt(s, 0, 0, '', { size: FS.xs, color: HEX.dim });
+    this.responsePulse = s.tweens.add({
+      targets: [this.turnName, this.turnHint], alpha: { from: 0.55, to: 1 },
+      duration: 850, yoyo: true, repeat: -1, paused: true,
+    });
     this.planHint = txt(s, 0, 0, '', { size: FS.sm, color: HEX.gold, wrap: rowW });
     this.dice = [0, 1].map(() => addImg(s, 0, 0, 'die_1'));
     this.btnRoll = new Button(s, 0, 0, { w: rowW, h: DOCK.rollH, label: '掷骰子 · 空格', size: FS.xl, fill: COLORS.gold, textColor: HEX.ink });
@@ -123,7 +128,7 @@ export class ActionDock {
     this.pickHint = null;
     this.pickCancel = null;
     this.layout();
-    if (this.lastTurn) this.applyTurn(this.lastTurn[0], this.lastTurn[1]);
+    if (this.lastTurn) this.applyTurn(...this.lastTurn);
   }
 
   /** Answer on the board: the plan goes idle and the dock shows `hint` instead, and 取消 when `cancel` is given. */
@@ -132,7 +137,7 @@ export class ActionDock {
     this.pickHint = hint;
     this.pickCancel = cancel;
     this.layout();
-    if (this.lastTurn) this.applyTurn(this.lastTurn[0], this.lastTurn[1]);
+    if (this.lastTurn) this.applyTurn(...this.lastTurn);
   }
 
   rollRect(): Rect {
@@ -147,18 +152,30 @@ export class ActionDock {
     return this.offerButtons.find((row) => row.id === id)?.rect ?? null;
   }
 
-  setTurn(state: GameState, human: boolean): void {
-    this.lastTurn = [state, human];
-    this.applyTurn(state, human);
+  setTurn(state: GameState, human: boolean, pendingHuman = human): void {
+    this.lastTurn = [state, human, pendingHuman];
+    this.applyTurn(state, human, pendingHuman);
   }
 
-  private applyTurn(state: GameState, human: boolean): void {
+  private applyTurn(state: GameState, human: boolean, pendingHuman: boolean): void {
     const p = state.players[state.current];
+    const readout = turnReadout(state, this.game.pending, this.game.log, human, pendingHuman);
     setFrame(this.turnPortrait, `por_${p.hero}_s`);
-    this.turnName.setText(state.over ? '对局结束' : `${p.name} 的回合`).setColor(PLAYER_HEX[p.seat]);
-    this.turnHint.setText(this.phaseLine(state, human)).setColor(human && !state.over ? HEX.gold : HEX.dim);
-    const lit = human && !state.over;
+    this.turnName.setText(readout.title).setColor(readout.urgent ? HEX.gold : PLAYER_HEX[p.seat]);
+    this.turnHint.setText(readout.hint || this.phaseLine(state, human))
+      .setColor((human || readout.urgent) && !state.over ? HEX.gold : HEX.dim);
+    this.setResponseWaiting(readout.urgent);
+    const lit = (human || readout.urgent) && !state.over;
     this.frame.setStrokeStyle(lit ? 3 : 2, lit ? PLAYER_COLORS[p.seat] : COLORS.gold);
+  }
+
+  private setResponseWaiting(on: boolean): void {
+    if (on) this.responsePulse.resume();
+    else {
+      this.responsePulse.pause();
+      this.turnName.setAlpha(1);
+      this.turnHint.setAlpha(1);
+    }
   }
 
   private phaseLine(state: GameState, human: boolean): string {
@@ -308,7 +325,7 @@ export class ActionDock {
     const button = new Button(this.scene, x, y, {
       w, h: OFFER_H, label: offer.title, hint: offer.detail, hintColor: HEX.ink,
       size: FS.sm, fill: COLORS.gold, textColor: HEX.ink,
-    }).onClick(() => this.offerHandler?.(offer.id));
+    }).onClick(() => this.offerHandler?.(offer.id)).setEnabled(offer.enabled !== false);
     this.offerButtons.push({ id: offer.id, button, rect: { x, y, w, h: OFFER_H } });
     return y + OFFER_H + OFFER_GAP;
   }

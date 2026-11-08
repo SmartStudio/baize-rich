@@ -485,7 +485,7 @@ export class GameScene extends Phaser.Scene {
     if (syncTokens) this.boardView.syncTokens(state);
     this.cards.render(state);
     this.top.render(state);
-    this.side.setTurn(state, this.isHuman(state.current));
+    this.side.setTurn(state, this.isHuman(state.current), this.isHuman(this.engine.pending?.player ?? state.current));
     this.side.btnSpeed.setLabel(`倍速 ×${this.speed} · F`);
     this.showTile();
     this.side.renderHand(state, this.handViewer(state));

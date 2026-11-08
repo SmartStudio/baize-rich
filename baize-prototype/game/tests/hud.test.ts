@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { chance2d6 } from '../src/core/rules';
 import { H, LEFT } from '../src/ui/layout';
-import { barSegments, closeReadout } from '../src/ui/hudReadout';
+import { barSegments, chipFace, closeReadout } from '../src/ui/hudReadout';
 import { tileTip } from '../src/ui/TileInfo';
 import { newGame, ringGame, script } from './helpers';
 import type { PendingChoice } from '../src/core/choices';
@@ -21,6 +21,14 @@ describe('seat column', () => {
     const parts = barSegments(width, 4, 2);
     expect(parts.every((w) => Number.isInteger(w) && w > 0)).toBe(true);
     expect(parts.reduce((sum, w) => sum + w, 0) + 2 * 3).toBe(width);
+  });
+
+  it('names when a ready skill is usable or why its cost blocks it', () => {
+    const g = ringGame();
+    expect(chipFace(g.state, g.data, 0).tags[0].label).toBe('技能 就绪 · 行动阶段');
+    expect(chipFace(g.state, g.data, 2).tags[0].label).toBe('技能 缺丹 1 · 掷骰前');
+    g.state.players[2].pills = 1;
+    expect(chipFace(g.state, g.data, 2).tags[0].label).toBe('技能 就绪 · 掷骰前');
   });
 });
 

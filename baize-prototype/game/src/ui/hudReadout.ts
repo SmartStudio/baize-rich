@@ -118,8 +118,8 @@ export function seatTags(state: GameState, data: GameData, seat: number): ChipTa
   const p = state.players[seat];
   const tags: ChipTag[] = [];
   pushDebuffs(tags, p);
-  pushBuffs(tags, state, data, seat);
   tags.push(skillTag(data, p));
+  pushBuffs(tags, state, data, seat);
   return tags;
 }
 
@@ -193,9 +193,16 @@ function pushBuffs(tags: ChipTag[], state: GameState, data: GameData, seat: numb
 
 function skillTag(data: GameData, p: PlayerState): ChipTag {
   const hero = data.heroes.find((h) => h.id === p.hero)!;
+  const phase = hero.skill.timing === 'preroll' ? '掷骰前' : '行动阶段';
   const wait = p.skillReadyTurn - p.turnsTaken;
+  const missing = Math.max(0, hero.skill.pillCost - p.pills);
+  const label = wait > 0
+    ? `技能 冷却 ${wait}`
+    : missing > 0
+      ? `技能 缺丹 ${missing} · ${phase}`
+      : `技能 就绪 · ${phase}`;
   return {
-    label: wait > 0 ? `技能 冷却 ${wait}` : '技能 就绪',
+    label,
     desc: `【${hero.skill.name}】${hero.skill.desc}。${skillTerms(hero.skill)}（按 K 或在「出符」菜单发动）。\n被动【${hero.passive.name}】${hero.passive.desc}。`,
     tone: 'text',
   };
