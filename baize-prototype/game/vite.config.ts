@@ -15,6 +15,18 @@ const hasAtlas = !process.env.BAIZE_NO_ATLAS &&
 
 export default defineConfig({
   base: './',
+  // Cloudflare Rocket Loader rewrites module scripts and can prevent startup when
+  // its extra loader request fails. Apply the opt-out after Vite emits the entry.
+  plugins: [{
+    name: 'cloudflare-module-entry',
+    transformIndexHtml: {
+      order: 'post',
+      handler: (html) => html.replace(
+        /<script\b(?=[^>]*\btype=["']module["'])/g,
+        '<script data-cfasync="false"',
+      ),
+    },
+  }],
   // ../assets is served at the web root: atlas.png -> ./atlas.png
   publicDir: assetsDir,
   define: {

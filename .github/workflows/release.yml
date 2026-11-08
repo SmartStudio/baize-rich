@@ -1,0 +1,155 @@
+name: Release image and deploy
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Image version (empty uses bootstrap-<commit>)
+        required: false
+        type: string
+      deploy:
+        description: Deploy the published image to Dokploy
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: baize-rich-production
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/joesmart/baize-rich
+
+jobs:
+  publish:
+    if: >-
+      (github.event_name == 'release' && !github.event.release.prerelease) ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      revision: ${{ steps.version.outputs.revision }}
+      image: ${{ steps.push.outputs.image }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Select release version
+        id: version
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          MANUAL_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          revision="$(git rev-parse HEAD)"
+          version="${RELEASE_TAG:-${MANUAL_VERSION:-bootstrap-${revision:0:12}}}"
+          if [[ ! "$version" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ || "$version" == latest ]]; then
+            echo "The release version must be a valid Docker tag other than latest" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "revision=$revision" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - name: Build and test Linux amd64 image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          load: true
+          platforms: linux/amd64
+          tags: baize-rich:check
+          build-args: |
+            APP_VERSION=${{ steps.version.outputs.version }}
+            VCS_REF=${{ steps.version.outputs.revision }}
+          cache-from: type=gha,scope=baize-rich-amd64
+          cache-to: type=gha,scope=baize-rich-amd64,mode=max
+      - name: Verify the image before publishing
+        env:
+          EXPECTED_REVISION: ${{ steps.version.outputs.revision }}
+        run: |
+          set -euo pipefail
+          docker run -d --name baize-rich-check -p 127.0.0.1:8080:80 baize-rich:check
+          trap 'docker rm -f baize-rich-check >/dev/null' EXIT
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8080/healthz >/dev/null; then break; fi
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:8080/healthz
+          curl -fsS http://127.0.0.1:8080/version.json |
+            jq -e --arg revision "$EXPECTED_REVISION" '.revision == $revision'
+          curl -fsS http://127.0.0.1:8080/atlas.json >/dev/null
+          curl -fsS http://127.0.0.1:8080/atlas.png >/dev/null
+          curl -fsS http://127.0.0.1:8080/ | grep -q 'data-cfasync="false" type="module"'
+      - name: Sign in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: joesmart
+          password: ${{ secrets.GHCR_PUSH_TOKEN || github.token }}
+      - name: Publish tested image
+        id: push
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          REVISION: ${{ steps.version.outputs.revision }}
+          GH_TOKEN: ${{ secrets.GHCR_PUSH_TOKEN || github.token }}
+        run: |
+          set -euo pipefail
+          for tag in "$VERSION" "sha-$REVISION"; do
+            docker tag baize-rich:check "$IMAGE:$tag"
+            docker push "$IMAGE:$tag"
+          done
+          visibility="$(gh api users/joesmart/packages/container/baize-rich --jq .visibility)"
+          if [[ "$visibility" != private ]]; then
+            echo "The GHCR package must remain private" >&2
+            exit 1
+          fi
+          docker tag baize-rich:check "$IMAGE:latest"
+          docker push "$IMAGE:latest"
+          image="$(docker image inspect "$IMAGE:$VERSION" --format '{{index .RepoDigests 0}}')"
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+          printf 'Published image: `%s`\n\nVersion: `%s`\n' "$image" "$VERSION" >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    needs: publish
+    if: github.event_name == 'release' || inputs.deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Trigger this application's deployment
+        env:
+          DOKPLOY_DEPLOY_WEBHOOK: ${{ secrets.DOKPLOY_DEPLOY_WEBHOOK }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$DOKPLOY_DEPLOY_WEBHOOK" ]]; then
+            echo "Configure the application-specific DOKPLOY_DEPLOY_WEBHOOK secret first" >&2
+            exit 1
+          fi
+          curl --fail --silent --show-error --max-time 30 \
+            --request POST --header 'Content-Type: application/json' \
+            --data '{}' "$DOKPLOY_DEPLOY_WEBHOOK"
+      - name: Verify the deployed revision
+        env:
+          EXPECTED_REVISION: ${{ needs.publish.outputs.revision }}
+          EXPECTED_VERSION: ${{ needs.publish.outputs.version }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 90); do
+            if curl -fsS --max-time 10 --header 'Cache-Control: no-cache' \
+                "https://rich.fxai.ai/version.json?run=$GITHUB_RUN_ID&attempt=$attempt" |
+                jq -e --arg revision "$EXPECTED_REVISION" --arg version "$EXPECTED_VERSION" \
+                  '.revision == $revision and .version == $version' >/dev/null; then
+              printf 'Deployed and verified: https://rich.fxai.ai/ (%s)\n' "$EXPECTED_VERSION" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "The expected release did not become available at https://rich.fxai.ai/" >&2
+          exit 1
