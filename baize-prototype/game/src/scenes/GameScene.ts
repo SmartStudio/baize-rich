@@ -479,8 +479,8 @@ export class GameScene extends Phaser.Scene {
     this.side.setPick(multiHuman ? `${this.engine.state.players[c.player].name} · ${plan.hint}` : plan.hint);
     this.setNodeOptions(plan.cells);
     this.boardView.setClickable(plan.cells.map((cell) => cell.node));
-    this.pick.show(plan.cells);
-    this.frameTargets(c.player);
+    this.pick.show(plan.cells, this.engine.state.players.map((p) => this.boardView.tokenRect(p.seat)));
+    this.cam.framePick(this.targetsRect(c.player), c.player);
     return new Promise((resolve) => { this.picking = { plan, resolve }; });
   }
 
@@ -584,9 +584,12 @@ export class GameScene extends Phaser.Scene {
 
   /** Bring the highlighted choice targets and the deciding seat's token into view together. */
   private frameTargets(seat: number): void {
-    if (this.nodeOptions.size === 0) return;
+    if (this.nodeOptions.size > 0) this.cam.frameChoice(this.targetsRect(seat), seat);
+  }
+
+  private targetsRect(seat: number): Rect {
     const rects = [...this.nodeOptions.keys()].map((n) => this.boardView.nodeRect(n));
-    this.cam.frameChoice(unionRect([...rects, this.boardView.tokenRect(seat)]), seat);
+    return unionRect([...rects, this.boardView.tokenRect(seat)]);
   }
 
   /** 回到棋子: centre on whoever is deciding (or moving) and follow them again. */
