@@ -43,8 +43,8 @@ function unusual(g: Game, c: PendingChoice): boolean {
   return g.state.players[c.player].dazed || g.state.turn.reverse || g.state.roadblock !== null || c.kind === 'rollValue';
 }
 
-/** AI games, stopping at walk asks (rifts teleport, they are checked on their own): the first few, and every unusual one. */
-function walkAsks(): { g: Game; c: PendingChoice }[] {
+/** Every ask `keep` takes from AI games over SEEDS, each on its own replayed copy; `keep` sees the asks taken so far in that game. */
+function aiAsks(keep: (g: Game, c: PendingChoice, taken: number) => boolean): { g: Game; c: PendingChoice }[] {
   const found: { g: Game; c: PendingChoice }[] = [];
   for (const seed of SEEDS) {
     const g = newGame(seed);
@@ -52,13 +52,19 @@ function walkAsks(): { g: Game; c: PendingChoice }[] {
     g.start();
     for (let n = 0; !g.over;) {
       const c = g.pending!;
-      if (isPickKind(c.kind) && c.kind !== 'node' && (n++ < ASKS_PER_SEED || unusual(g, c))) {
+      if (keep(g, c, n)) {
+        n++;
         found.push({ g: Game.replay(g.setup, g.history, g.data), c });
       }
       g.answer(ais[c.player].decide(c));
     }
   }
   return found;
+}
+
+/** Walk asks (rifts teleport and 镇山 places a mountain, they are checked on their own): the first few, and every unusual one. */
+function walkAsks(): { g: Game; c: PendingChoice }[] {
+  return aiAsks((g, c, n) => isPickKind(c.kind) && c.kind !== 'node' && c.kind !== 'target' && (n < ASKS_PER_SEED || unusual(g, c)));
 }
 
 describe('board picks', () => {
@@ -161,6 +167,28 @@ describe('board picks', () => {
     const c = { seq: 1, player: 0, kind: 'node', title: '秘境裂隙', desc: '选择要去的秘境', options, ctx: { purpose: 'rift' } } as PendingChoice;
     const cells = pickPlan(g, c)!.cells;
     expect(cells.map((x) => [x.node, x.id, x.label])).toEqual(secrets.map((id) => [id, id, g.nodeName(id)]));
+  });
+
+  it('puts 镇山 on the board: lights exactly the cells the engine lets the mountain fall on, each placing it there, Esc backing out', () => {
+    const asks = aiAsks((_g, c) => c.kind === 'target' && c.ctx.purpose === 'roadblock');
+    for (const { g, c } of asks) {
+      const plan = pickPlan(g, c)!;
+      expect(plan.cells.map((x) => x.node)).toEqual(g.skillTargets(c.player));
+      for (const cell of plan.cells) {
+        expect(Game.replay(g.setup, [...g.history, cell.id], g.data).state.roadblock).toEqual({ node: cell.node, seat: c.player });
+      }
+      const backed = Game.replay(g.setup, [...g.history, plan.cancelId!], g.data);
+      expect(backed.state.roadblock).toBeNull();
+      expect(backed.skillTargets(c.player)).toEqual(g.skillTargets(c.player));
+    }
+    expect(asks.length).toBeGreaterThan(0);
+  }, 60000);
+
+  it('leaves a target ask naming players (迷魂丹, 夺丹) to the modal', () => {
+    const g = newGame();
+    const options = [{ id: 'p1', label: 'B', value: { t: 'player', seat: 1 } }, { id: 'cancel', label: '取消', value: { t: 'cancel' } }];
+    const c = { seq: 1, player: 0, kind: 'target', title: '迷魂丹', options, cancelId: 'cancel', ctx: { purpose: 'daze' } } as PendingChoice;
+    expect(pickPlan(g, c)).toBeNull();
   });
 
   it('leaves every other kind to the modal', () => {

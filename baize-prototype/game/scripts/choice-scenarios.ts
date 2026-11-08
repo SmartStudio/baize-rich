@@ -9,6 +9,7 @@ import { toRecord, type GameRecord } from '../src/core/record';
 import type { HeroId } from '../src/core/types';
 import { pickPlan } from '../src/ui/pickPlan';
 import { newSession, quickSeats } from '../src/ui/session';
+import { TD, unionRect, WorldMap } from '../src/ui/world';
 
 const MAX_SEED = 400;
 
@@ -45,6 +46,16 @@ const lights = (n: number) => (g: Game, c: PendingChoice): boolean => {
   return plan.cells.length >= n && !plan.asksLater;
 };
 
+const world = new WorldMap(defaultData.board);
+
+/** A walk pick whose cells and the seat's token fit the screen at zoom 2, so the camera frames it close. */
+const close = (g: Game, c: PendingChoice): boolean => {
+  const plan = pickPlan(g, c)!;
+  const seat = world.rect(g.state.players[0].pos);
+  const token = { ...seat, y: seat.y - TD / 2, h: seat.h + TD / 2 };
+  return lights(2)(g, c) && world.fitZoom(unionRect([token, ...plan.cells.map((x) => world.rect(x.node))]), 2) === 2;
+};
+
 const stake = findAsk('body', 'stake', stakeDecides);
 const stakeAsk = Game.replay(stake.setup, stake.history).pending!;
 console.log(JSON.stringify({
@@ -55,4 +66,6 @@ console.log(JSON.stringify({
   manifest: { record: findAsk('body', 'manifestPick', (_g, c) => c.options.length >= 3) },
   fork: { record: findAsk('sword', 'fork', lights(3)) },
   adjust: { record: findAsk('body', 'adjust', (g, c) => c.options.length >= 3 && lights(3)(g, c)) },
+  forkClose: { record: findAsk('sword', 'fork', close) },
+  roadblock: { record: findAsk('body', 'target', (g, c) => c.ctx.purpose === 'roadblock' && lights(3)(g, c)) },
 }));

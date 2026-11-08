@@ -474,24 +474,29 @@ export class GameScene extends Phaser.Scene {
 
   /** A spatial ask answered on the board: the landing cells lit and numbered, the dock saying what they mean. */
   private boardChoice(c: PendingChoice, plan: PickPlan): Promise<string> {
-    if (plan.cells.length === 1 && !plan.asksLater) return Promise.resolve(this.takeRoute(plan.cells[0]));
+    if (plan.cells.length === 1 && !plan.asksLater && !plan.cancelId) return Promise.resolve(this.takeRoute(plan.cells[0]));
     const multiHuman = this.ais.filter((a) => a === null).length > 1;
-    this.side.setPick(multiHuman ? `${this.engine.state.players[c.player].name} · ${plan.hint}` : plan.hint);
+    const cancelId = plan.cancelId;
+    this.side.setPick(multiHuman ? `${this.engine.state.players[c.player].name} · ${plan.hint}` : plan.hint, cancelId ? () => this.finishPick(cancelId) : null);
     this.setNodeOptions(plan.cells);
     this.boardView.setClickable(plan.cells.map((cell) => cell.node));
-    this.pick.show(plan.cells);
-    this.frameTargets(c.player);
+    this.pick.show(plan.cells, this.engine.state.players.map((p) => this.boardView.tokenRect(p.seat)));
+    this.cam.framePick(this.targetsRect(c.player), c.player);
     return new Promise((resolve) => { this.picking = { plan, resolve }; });
   }
 
   private answerPick(cell: PickCell): void {
+    if (this.picking) this.finishPick(this.takeRoute(cell));
+  }
+
+  private finishPick(id: string): void {
     const p = this.picking;
     if (!p) return;
     this.picking = null;
     this.pick.clear();
     this.setMainButtons(null);
     this.cam.release();
-    p.resolve(this.takeRoute(cell));
+    p.resolve(id);
   }
 
   private takeRoute(cell: PickCell): string {
@@ -500,7 +505,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   private pickKey(k: string, ev: KeyboardEvent): void {
-    const cells = this.picking!.plan.cells;
+    const { cells, cancelId } = this.picking!.plan;
+    if (k === 'Escape' && cancelId) {
+      this.finishPick(cancelId);
+      return;
+    }
     const cell = k === ' ' || k === 'Enter' ? cells.find((x) => x.primary) : cells.find((x) => x.key === k);
     if (!cell) return;
     ev.preventDefault();
@@ -584,9 +593,12 @@ export class GameScene extends Phaser.Scene {
 
   /** Bring the highlighted choice targets and the deciding seat's token into view together. */
   private frameTargets(seat: number): void {
-    if (this.nodeOptions.size === 0) return;
+    if (this.nodeOptions.size > 0) this.cam.frameChoice(this.targetsRect(seat), seat);
+  }
+
+  private targetsRect(seat: number): Rect {
     const rects = [...this.nodeOptions.keys()].map((n) => this.boardView.nodeRect(n));
-    this.cam.frameChoice(unionRect([...rects, this.boardView.tokenRect(seat)]), seat);
+    return unionRect([...rects, this.boardView.tokenRect(seat)]);
   }
 
   /** 回到棋子: centre on whoever is deciding (or moving) and follow them again. */

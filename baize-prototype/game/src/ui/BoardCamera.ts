@@ -82,6 +82,11 @@ export class BoardCamera {
     this.setFrame(rect, seat, this.world.fitZoom(rect, this.userZoom) ?? ZOOMS[0]);
   }
 
+  /** Show a board pick's cells and the deciding token as close as they fit: zoom 2 when they do, else zoom 1. */
+  framePick(rect: Rect, seat: number): void {
+    this.setFrame(rect, seat, this.world.fitZoom(rect, ZOOMS[ZOOMS.length - 1]) ?? ZOOMS[0]);
+  }
+
   /** Show both ends of a teleport or swap when they fit on screen at a resting zoom; otherwise just follow. */
   frameTeleport(rect: Rect, seat: number): void {
     if (this.mode.kind === 'free') return;
