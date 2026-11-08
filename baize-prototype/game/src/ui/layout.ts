@@ -11,12 +11,16 @@ export const BOARD_COL = { x: (W - BOARD_W) / 2, w: BOARD_W };
 const SIDE_W = (W - BOARD_W) / 2 - 2 * M;
 /** Left margin: round line, one chip per seat, 战报 ticker. chipH fits the realm bar, resources and a tag row above the ticker. */
 export const LEFT = { x: M, w: SIDE_W, lineY: M, lineH: 30, chipY: 48, chipH: 88, chipGap: 8, tickerY: H - M - 28, tickerH: 28 };
+/** A seat chip's compact form while the camera is zoomed in: portrait, realm and 灵石 on one strip. */
+export const SLIM_CHIP = { w: 148, h: 30, gap: 4 };
 /** Right margin: utility pills on top, the action dock at the bottom. */
 export const RIGHT = { x: W - M - SIDE_W, w: SIDE_W, utilY: M, utilH: 28 };
 /** Dock rows, top to bottom. The dock is bottom-anchored; AI-only games show only the header. */
 export const DOCK = { pad: 10, headH: 46, rollH: 58, btnH: 32, handH: 64, gap: 8 };
 /** Realm race under the utility pills. 回到棋子 sits under it, only while the camera is zoomed in. */
 export const RACE = { y: RIGHT.utilY + RIGHT.utilH + 6, h: 170, gap: 4, btnH: 24 };
+/** The realm race's compact form while the camera is zoomed in: one line of seats in standing order. */
+export const SLIM_RACE = { h: 26 };
 /**
  * Transient overlays in screen space: dice, ribbons, toasts.
  * The dice row sits under the turn ribbon and the cutscene strip sits under that row,

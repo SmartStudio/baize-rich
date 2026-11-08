@@ -1,15 +1,17 @@
 // Left-column seat chips. Realm and the segmented 修为 bar are the spine.
-// 灵草, 丹药, 灵石, 心境 and the status tags sit under that bar.
+// 灵草, 丹药, 灵石, 心境 and the status tags sit under that bar. While the camera is zoomed in each chip folds to a
+// slim strip of portrait, realm and 灵石 (HudFold).
 import Phaser from 'phaser';
 import type { Game } from '../core/engine';
 import type { GameState } from '../core/types';
 import { addImg } from './assets';
 import { ensureHudIcons } from './hudIcons';
+import { gather, HudFold } from './HudFold';
 import {
   barSegments, chipFace, closeDetail, failLine, resourceTip, seatTags,
   type ChipFace, type ChipTag, type TagTone,
 } from './hudReadout';
-import { LEFT, type Rect } from './layout';
+import { LEFT, SLIM_CHIP, type Rect } from './layout';
 import { COLORS, FLOAT_ALPHA, FS, HEX, PLAYER_COLORS, PLAYER_HEX, txt } from './theme';
 import type { Tooltip, TipContent } from './Tooltip';
 
@@ -30,6 +32,13 @@ interface ChipView {
   tags: Phaser.GameObjects.Text[];
 }
 
+interface SlimView {
+  frame: Phaser.GameObjects.Rectangle;
+  realm: Phaser.GameObjects.Text;
+  stoneIcon: Phaser.GameObjects.Image;
+  stones: Phaser.GameObjects.Text;
+}
+
 const TEXT_X = 52;
 const BAR_W = LEFT.w - TEXT_X - 8;
 const BAR_H = 8;
@@ -39,6 +48,8 @@ const RESOURCE_FRAMES = ['ic_herb', 'ic_pill', 'ic_stone', 'ic_mind'] as const;
 
 export class PlayerCards {
   private views: ChipView[] = [];
+  private slims: SlimView[] = [];
+  private fold: HudFold;
   private state: GameState;
   /** 灵石 a chip shows instead of its seat's real count, while incoming stones are still in the air or counting up. */
   private shownStones = new Map<number, number>();
@@ -47,8 +58,17 @@ export class PlayerCards {
   constructor(private scene: Phaser.Scene, private game: Game, private labels: string[], private humans: ReadonlySet<number>, private tip: Tooltip) {
     ensureHudIcons(scene);
     this.state = game.state;
-    game.state.players.forEach((p, i) => this.views.push(this.buildChip(scene, i, p.hero)));
+    const players = game.state.players;
+    const full = gather(scene, () => players.forEach((p, i) => this.views.push(this.buildChip(scene, i, p.hero))));
+    const slim = gather(scene, () => players.forEach((p, i) => this.slims.push(this.buildSlim(scene, i, p.hero))));
+    const column = (h: number, gap: number, w: number): Rect => ({ x: LEFT.x, y: LEFT.chipY, w, h: players.length * (h + gap) - gap });
+    this.fold = new HudFold(scene, full, slim, column(LEFT.chipH, LEFT.chipGap, LEFT.w), column(SLIM_CHIP.h, SLIM_CHIP.gap, SLIM_CHIP.w));
     this.render(game.state);
+  }
+
+  /** Fold every chip to its slim strip (camera zoomed in) or open it again. */
+  setCompact(on: boolean): void {
+    this.fold.setCompact(on);
   }
 
   render(state: GameState): void {
@@ -82,7 +102,7 @@ export class PlayerCards {
 
   /** Screen point of a seat's 灵石 icon, where incoming stones land. */
   stonesAt(seat: number): { x: number; y: number } {
-    const { icon } = this.views[seat].resources[RESOURCE_FRAMES.indexOf('ic_stone')];
+    const icon = this.fold.folded ? this.slims[seat].stoneIcon : this.views[seat].resources[RESOURCE_FRAMES.indexOf('ic_stone')].icon;
     return { x: icon.x + Math.floor(icon.width / 2), y: icon.y + Math.floor(icon.height / 2) };
   }
 
@@ -118,6 +138,21 @@ export class PlayerCards {
     addImg(scene, x + 6, y + 6, `por_${hero}_s`).setOrigin(0, 0);
     this.bindChip(scene, i, rect);
     return view;
+  }
+
+  private buildSlim(scene: Phaser.Scene, i: number, hero: string): SlimView {
+    const x = LEFT.x;
+    const y = LEFT.chipY + i * (SLIM_CHIP.h + SLIM_CHIP.gap);
+    const frame = scene.add.rectangle(x, y, SLIM_CHIP.w, SLIM_CHIP.h, COLORS.panel, FLOAT_ALPHA).setOrigin(0, 0).setStrokeStyle(2, COLORS.outline);
+    scene.add.rectangle(x, y, 4, SLIM_CHIP.h, PLAYER_COLORS[i]).setOrigin(0, 0);
+    addImg(scene, x + 7, y + 3, `por_${hero}_s`).setOrigin(0, 0).setDisplaySize(SLIM_CHIP.h - 6, SLIM_CHIP.h - 6);
+    const mid = y + SLIM_CHIP.h / 2;
+    return {
+      frame,
+      realm: txt(scene, x + SLIM_CHIP.h + 6, mid, '', { size: FS.sm, origin: [0, 0.5] }),
+      stoneIcon: addImg(scene, x + 78, mid, 'ic_stone').setOrigin(0, 0.5),
+      stones: txt(scene, x + 96, mid, '', { size: FS.sm, origin: [0, 0.5] }),
+    };
   }
 
   private addFrame(scene: Phaser.Scene, x: number, y: number, i: number): Phaser.GameObjects.Rectangle {
@@ -158,6 +193,13 @@ export class PlayerCards {
     this.paintBar(v, face.filled, face.total);
     this.paintResources(v, { ...face, stones: this.shownStones.get(i) ?? face.stones });
     this.paintTags(v, face.tags);
+    this.paintSlim(this.slims[i], i, active, face.realm, this.shownStones.get(i) ?? face.stones);
+  }
+
+  private paintSlim(v: SlimView, i: number, active: boolean, realm: string, stones: number): void {
+    v.frame.setStrokeStyle(active ? 3 : 2, active ? PLAYER_COLORS[i] : COLORS.outline).setFillStyle(active ? COLORS.panelLight : COLORS.panel, FLOAT_ALPHA);
+    v.realm.setText(realm);
+    v.stones.setText(String(stones));
   }
 
   private paintFrame(v: ChipView, i: number, active: boolean, glow: boolean): void {
