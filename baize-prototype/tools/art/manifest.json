@@ -375,5 +375,165 @@
     "colors": 40,
     "aspect": "3:4",
     "prompt": "HD-2D pixel art game sprite (Octopath Traveler style), crisp square pixels, clean 1px dark outline, limited palette, light from the upper left. A white jade statue of Baize, the auspicious white mythical beast of Chinese legend: a majestic fluffy white lion-like guardian beast with a calm wise face, a flowing pale blue-white mane, two golden curved horns, a gold collar with a round jade jewel, a bushy cloud-like tail, sitting upright and facing the viewer directly (front view, symmetric), on a round two-tier white stone lotus pedestal, a glowing golden halo ring behind its head. Seen from in front and slightly above. Single object centred, occupying about 85% of the image. Background: flat bright pure magenta #FF00FF (255,0,255) everywhere else, not maroon, not dark red. No ground plane, no cast shadow, no scenery, no text."
+  },
+  "baize": {
+    "fit": "box",
+    "size": [
+      100,
+      104
+    ],
+    "colors": 40,
+    "aspect": "1:1",
+    "ref": "ft_altar, por_body",
+    "prompt": "Square 1024x1024 image. HD-2D pixel art game sprite (Octopath Traveler style), crisp square pixels, clean 1px dark outline, limited palette, light from the upper left, same pixel style and palette as the reference sprites. Subject: Baize, the auspicious white mythical beast of Chinese legend, alive (the same creature as the white jade statue on the reference altar): a majestic fluffy white lion-like guardian beast with a calm wise face, a flowing pale blue-white cloud-curl mane, two golden curved horns, a gold collar with a round jade jewel, a bushy cloud-like tail curling up behind it, standing on all four legs in 3/4 view turned toward the viewer and facing left, head raised, a faint golden halo ring behind its head. Compact silhouette about as tall as it is wide. Single object centred, occupying about 85% of the image. Background: flat bright pure magenta #FF00FF (255,0,255) everywhere else, not maroon, not dark red. No ground plane, no cast shadow, no scenery, no text."
+  },
+  "obj_furnace": {
+    "fit": "box",
+    "size": [
+      40,
+      44
+    ],
+    "colors": 32,
+    "aspect": "1:1",
+    "ref": "lm_alchemy",
+    "prompt": "Square 1024x1024 image. HD-2D pixel art game sprite (Octopath Traveler style), crisp square pixels, clean 1px dark outline, limited palette, light from the upper left, same pixel style and palette as the reference sprites. The sprite will be shown only 40 pixels tall, so use big simple shapes, strong light-to-dark contrast and no fine engraved patterns. Subject: an alchemy furnace: a squat round-bellied bronze three-legged ding cauldron with two big upright ear handles and a domed lid topped with a round knob, warm bright bronze-gold with a few dark green patina patches, one large glowing orange-yellow fire window on the front of the belly, a short wisp of pale grey smoke from the lid. Strict front view, symmetric left-right. No flames around it, no hearth, no stand. About as wide as it is tall. Single object centred, occupying about 85% of the image. Background: flat bright pure magenta #FF00FF (255,0,255) everywhere else, not maroon, not dark red. No ground plane, no cast shadow, no scenery, no text."
+  },
+  "card_art_attack": {
+    "fit": "tile",
+    "size": [
+      74,
+      54
+    ],
+    "colors": 32,
+    "aspect": "3:2",
+    "ref": "lm_market",
+    "prompt": "Landscape 1536x1024 image. Full-bleed HD-2D pixel art card illustration (Octopath Traveler style) for a xianxia talisman spell card, crisp square pixels on a chunky grid of about 96 pixels across, bold dark outlines, limited palette, light from the upper left, same pixel style as the reference sprite. The scene fills the whole image edge to edge with no border, no frame, no card outline, no text, no letters, no symbols. One big bold central motif that still reads when shrunk to 74x54 pixels. Subject: Two crossed golden flying swords crackling with bright yellow lightning, diving down out of dark purple-indigo storm clouds, a jagged lightning bolt behind them, purple night sky."
+  },
+  "card_art_guard": {
+    "fit": "tile",
+    "size": [
+      74,
+      54
+    ],
+    "colors": 32,
+    "aspect": "3:2",
+    "ref": "lm_market",
+    "prompt": "Landscape 1536x1024 image. Full-bleed HD-2D pixel art card illustration (Octopath Traveler style) for a xianxia talisman spell card, crisp square pixels on a chunky grid of about 96 pixels across, bold dark outlines, limited palette, light from the upper left, same pixel style as the reference sprite. The scene fills the whole image edge to edge with no border, no frame, no card outline, no text, no letters, no symbols. One big bold central motif that still reads when shrunk to 74x54 pixels. Subject: A big glowing golden bell-shaped qi barrier (golden bell shield) with a bright rim and soft rays, standing on a stone floor, against a deep blue night sky with faint stars; the bell is plain gold with simple horizontal bands, no writing."
+  },
+  "card_art_move": {
+    "fit": "tile",
+    "size": [
+      74,
+      54
+    ],
+    "colors": 32,
+    "aspect": "3:2",
+    "ref": "lm_market",
+    "prompt": "Landscape 1536x1024 image. Full-bleed HD-2D pixel art card illustration (Octopath Traveler style) for a xianxia talisman spell card, crisp square pixels on a chunky grid of about 96 pixels across, bold dark outlines, limited palette, light from the upper left, same pixel style as the reference sprite. The scene fills the whole image edge to edge with no border, no frame, no card outline, no text, no letters, no symbols. One big bold central motif that still reads when shrunk to 74x54 pixels. Subject: A swift white auspicious cloud with curled Chinese cloud scrolls streaking diagonally across a bright pale-cyan sky, long white wind streaks trailing behind it, a few green bamboo leaves blown along."
+  },
+  "card_art_wealth": {
+    "fit": "tile",
+    "size": [
+      74,
+      54
+    ],
+    "colors": 32,
+    "aspect": "3:2",
+    "ref": "lm_market",
+    "prompt": "Landscape 1536x1024 image. Full-bleed HD-2D pixel art card illustration (Octopath Traveler style) for a xianxia talisman spell card, crisp square pixels on a chunky grid of about 96 pixels across, bold dark outlines, limited palette, light from the upper left, same pixel style as the reference sprite. The scene fills the whole image edge to edge with no border, no frame, no card outline, no text, no letters, no symbols. One big bold central motif that still reads when shrunk to 74x54 pixels. Subject: A heap of glowing cyan spirit stone crystals and shiny gold yuanbao ingots on a red cloth, golden sparkles rising, warm golden-yellow glowing background."
+  },
+  "card_divine": {
+    "fit": "quad",
+    "quad": [
+      0,
+      0,
+      0,
+      1536,
+      1024,
+      1536,
+      1024,
+      0
+    ],
+    "size": [
+      80,
+      108
+    ],
+    "colors": 32,
+    "aspect": "2:3",
+    "prompt": "Portrait 1024x1536 image. HD pixel art for a xianxia card game (Octopath Traveler style), crisp square pixels on a chunky grid of about 80 pixels across, bold dark outline, limited palette, light from the upper left. A blank vertical playing card filling the whole image edge to edge: a slim ornamental border only about one twentieth of the card width (the same thickness on all four sides), tiny cut corners with small corner ornaments that stay inside the corners, and a very large flat plain light centre panel with nothing in it, reaching close to the top edge (a title and text will be printed on it later). No text, no letters, no symbols, no figures inside the centre panel. Flat solid pure magenta #FF00FF only outside the card corners. A fortune card: the centre panel is plain warm cream parchment; the border is gold with a thin dark red inner line, small gold cloud scroll ornaments at the four corners."
+  },
+  "card_heaven": {
+    "fit": "quad",
+    "quad": [
+      0,
+      0,
+      0,
+      1536,
+      1024,
+      1536,
+      1024,
+      0
+    ],
+    "size": [
+      80,
+      108
+    ],
+    "colors": 32,
+    "aspect": "2:3",
+    "prompt": "Portrait 1024x1536 image. HD pixel art for a xianxia card game (Octopath Traveler style), crisp square pixels on a chunky grid of about 80 pixels across, bold dark outline, limited palette, light from the upper left. A blank vertical playing card filling the whole image edge to edge: a slim ornamental border only about one twentieth of the card width (the same thickness on all four sides), tiny cut corners with small corner ornaments that stay inside the corners, and a very large flat plain light centre panel with nothing in it, reaching close to the top edge (a title and text will be printed on it later). No text, no letters, no symbols, no figures inside the centre panel. Flat solid pure magenta #FF00FF only outside the card corners. A Baize heavenly card: the centre panel is plain pale blue-white silk; the border is sky blue with a thin white cloud trim and a thin silver inner line, small silver-white cloud scroll ornaments at the four corners."
+  },
+  "decor_wood": {
+    "fit": "h",
+    "size": 34,
+    "colors": 16,
+    "aspect": "1:1",
+    "ref": "ft_land_wood",
+    "prompt": "Square 1024x1024 image. HD-2D pixel art game sprite (Octopath Traveler style), crisp square pixels, clean 1px dark outline, limited palette, light from the upper left, same pixel style and palette as the reference ground tile it will stand on. A small ground scatter prop shown only about 24 pixels tall, so use big simple shapes and strong contrast. Front view from in front and a little above. Single object centred, occupying about 85% of the image. Background: flat bright pure magenta #FF00FF (255,0,255) everywhere else. No ground plane, no cast shadow, no scenery, no text. Subject: two thick bright jade-green bamboo stalks side by side, each as wide as one fifth of the image, with clear pale-green node rings, a few big bright green leaves at the top, a small tuft of bright grass at the base; tall silhouette, bright saturated greens, not olive."
+  },
+  "decor_fire": {
+    "fit": "h",
+    "size": 26,
+    "colors": 16,
+    "aspect": "1:1",
+    "ref": "ft_land_fire",
+    "prompt": "Square 1024x1024 image. HD-2D pixel art game sprite (Octopath Traveler style), crisp square pixels, clean 1px dark outline, limited palette, light from the upper left, same pixel style and palette as the reference ground tile it will stand on. A small ground scatter prop shown only about 24 pixels tall, so use big simple shapes and strong contrast. Front view from in front and a little above. Single object centred, occupying about 85% of the image. Background: flat bright pure magenta #FF00FF (255,0,255) everywhere else. No ground plane, no cast shadow, no scenery, no text. Subject: a small black volcanic rock spire with bright glowing orange-yellow lava cracks and a single bright orange-yellow flame burning on its top; the rock is near-black so it stands out on a dark red ground, the flame is the brightest part."
+  },
+  "decor_water": {
+    "fit": "h",
+    "size": 26,
+    "colors": 16,
+    "aspect": "1:1",
+    "ref": "ft_land_water",
+    "prompt": "Square 1024x1024 image. HD-2D pixel art game sprite (Octopath Traveler style), crisp square pixels, clean 1px dark outline, limited palette, light from the upper left, same pixel style and palette as the reference ground tile it will stand on. A small ground scatter prop shown only about 24 pixels tall, so use big simple shapes and strong contrast. Front view from in front and a little above. Single object centred, occupying about 85% of the image. Background: flat bright pure magenta #FF00FF (255,0,255) everywhere else. No ground plane, no cast shadow, no scenery, no text. Subject: a cluster of three pale cyan ice crystals of different heights rising from a small mound of snow; no pink, no purple."
+  },
+  "decor_earth": {
+    "fit": "h",
+    "size": 22,
+    "colors": 16,
+    "aspect": "1:1",
+    "ref": "ft_land_earth",
+    "prompt": "Square 1024x1024 image. HD-2D pixel art game sprite (Octopath Traveler style), crisp square pixels, clean 1px dark outline, limited palette, light from the upper left, same pixel style and palette as the reference ground tile it will stand on. A small ground scatter prop shown only about 24 pixels tall, so use big simple shapes and strong contrast. Front view from in front and a little above. Single object centred, occupying about 85% of the image. Background: flat bright pure magenta #FF00FF (255,0,255) everywhere else. No ground plane, no cast shadow, no scenery, no text. Subject: a cluster of three small glowing night mushrooms with pale cyan glowing caps and white stems on a mossy dark slate stone; no pink, no purple, no magenta."
+  },
+  "ic_baize": {
+    "fit": "box",
+    "size": [
+      16,
+      16
+    ],
+    "colors": 8,
+    "aspect": "1:1",
+    "ref": "ic_pill, ic_cult",
+    "prompt": "Square 1024x1024 image. Tiny game UI icon drawn on an exact 16x16 pixel grid (every pixel is a 64x64 block, perfectly aligned, no anti-aliasing), 1-pixel black outline, at most 6 flat colours, same style as the reference icons, on solid magenta (#FF00FF), no shadow, no text: the head of Baize, a white mythical lion-like beast, front view: a round white face, two big curved golden horns sticking up and out, two gold eyes, a small pale blue mane tuft on each cheek. Silhouette must read at 16x16."
+  },
+  "ic_demon": {
+    "fit": "box",
+    "size": [
+      16,
+      16
+    ],
+    "colors": 12,
+    "aspect": "1:1",
+    "ref": "ic_pill, ic_cult",
+    "prompt": "Square 1024x1024 image. Tiny game UI icon drawn on an exact 16x16 pixel grid (every pixel is a 64x64 block, perfectly aligned, no anti-aliasing), 1-pixel black outline, at most 6 flat colours, same style as the reference icons, on solid magenta (#FF00FF), no shadow, no text, no flames: a heart-demon face, front view: a round violet face (mid purple, clearly lighter than the black outline), two short curved bone-white horns, two big bright red glowing eyes, a jagged white-fanged grin. Silhouette must read at 16x16."
   }
 }

@@ -58,7 +58,8 @@ function humanPrompt(page) {
     if (!p || p.player !== 0) return { shown, seat, ask: null };
     if (sc.modal.isOpen) return { shown, seat, ask: 'modal' };
     if (sc.mainChoice) return { shown, seat, ask: p.kind };
-    return { shown, seat, ask: null };
+    if (sc.picking) return { shown, seat, ask: 'pick' };
+    return { shown, seat, ask: p.kind === 'miniGame' ? 'miniGame' : null };
   });
 }
 
@@ -95,7 +96,7 @@ function humanPrompt(page) {
       last = { at: now, seat, round: shown };
       if (!starts.has(shown)) starts.set(shown, now);
       if (starts.has(ROUNDS + 2)) break;
-      if (ask === 'preRoll' || ask === 'modal') await page.keyboard.press('Space');
+      if (ask === 'preRoll' || ask === 'modal' || ask === 'pick') await page.keyboard.press('Space');
       else if (ask === 'action') await page.keyboard.press('Enter');
       else if (ask === 'miniGame') await page.keyboard.press('Space');
       await sleep(ask ? 120 : 40);

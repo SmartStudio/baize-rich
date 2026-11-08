@@ -36,7 +36,11 @@ RED = (217, 67, 75, 255)
 DIE = 24
 PROPS = [f'lm_{t}' for t in ('start', 'gate', 'alchemy', 'market', 'secret', 'spring', 'beast', 'ruins', 'eye')] + [
     f'bld_{n}' for n in (1, 2, 3)] + [
-    f'ic_{n}' for n in ('stone', 'herb', 'pill', 'cult', 'mind')]
+    f'ic_{n}' for n in ('stone', 'herb', 'pill', 'cult', 'mind', 'baize', 'demon')] + [
+    f'decor_{r}' for r in ('wood', 'fire', 'water', 'earth')] + ['baize', 'obj_furnace', 'card_divine', 'card_heaven']
+# Spell cards keep their pixel chrome (category name, cost seal, border); the generated art fills the window.
+CARDS = ('attack', 'guard', 'move', 'wealth')
+CARD_ART_AT = (7, 21)
 
 # Front-tilt blocks (docs/assets.md 2b): a 48px top face over a 16px front face. Per block, how many rows the
 # top surface may hang over the front edge (grass tufts, snow lips).
@@ -144,6 +148,12 @@ def ft_altar() -> Image.Image:
     return limit_palette(frame, FT_ALTAR_COLOURS)
 
 
+def card(cat: str) -> Image.Image:
+    frame = Image.open(ROOT / 'src' / f'card_frame_{cat}.png').convert('RGBA')
+    frame.paste(Image.open(ROOT / 'out' / f'card_art_{cat}.png').convert('RGBA'), CARD_ART_AT)
+    return frame
+
+
 def frames() -> dict[str, Image.Image]:
     made: dict[str, Image.Image] = {name: ft_block(name, overhang) for name, overhang in FT_BLOCKS.items()}
     made['ft_altar'] = ft_altar()
@@ -155,6 +165,8 @@ def frames() -> dict[str, Image.Image]:
         made[f'tok_{h}'] = Image.open(ROOT / 'out' / f'tok_{h}.png').convert('RGBA')
     for n in range(1, 7):
         made[f'die_{n}'] = die(n)
+    for cat in CARDS:
+        made[f'card_{cat}'] = card(cat)
     return made
 
 

@@ -40,9 +40,11 @@ const RESOURCE_FRAMES = ['ic_herb', 'ic_pill', 'ic_stone', 'ic_mind'] as const;
 export class PlayerCards {
   private views: ChipView[] = [];
   private state: GameState;
+  /** 灵石 a chip shows instead of its seat's real count, while incoming stones are still in the air or counting up. */
+  private shownStones = new Map<number, number>();
 
   /** `humans`: seats whose own hand counts in their 闭关 odds; an AI's hand stays hidden. */
-  constructor(scene: Phaser.Scene, private game: Game, private labels: string[], private humans: ReadonlySet<number>, private tip: Tooltip) {
+  constructor(private scene: Phaser.Scene, private game: Game, private labels: string[], private humans: ReadonlySet<number>, private tip: Tooltip) {
     ensureHudIcons(scene);
     this.state = game.state;
     game.state.players.forEach((p, i) => this.views.push(this.buildChip(scene, i, p.hero)));
@@ -53,6 +55,35 @@ export class PlayerCards {
     this.state = state;
     state.players.forEach((_, i) => this.paint(state, i));
     this.refreshPin();
+  }
+
+  /** Keep showing a seat's current 灵石 through later renders, until `releaseStones`. */
+  holdStones(seat: number): void {
+    if (!this.shownStones.has(seat)) this.shownStones.set(seat, this.state.players[seat].stones);
+  }
+
+  /** Count a held seat's 灵石 up (or down) to its real value over `ms`. */
+  releaseStones(seat: number, ms: number): void {
+    const from = this.shownStones.get(seat);
+    if (from === undefined) return;
+    const n = { v: from };
+    this.scene.tweens.add({
+      targets: n, v: this.state.players[seat].stones, duration: ms,
+      onUpdate: () => {
+        this.shownStones.set(seat, Math.round(n.v));
+        this.paint(this.state, seat);
+      },
+      onComplete: () => {
+        this.shownStones.delete(seat);
+        this.paint(this.state, seat);
+      },
+    });
+  }
+
+  /** Screen point of a seat's 灵石 icon, where incoming stones land. */
+  stonesAt(seat: number): { x: number; y: number } {
+    const { icon } = this.views[seat].resources[RESOURCE_FRAMES.indexOf('ic_stone')];
+    return { x: icon.x + Math.floor(icon.width / 2), y: icon.y + Math.floor(icon.height / 2) };
   }
 
   /** A short label that rises at the free end of a seat's resource row, e.g. a 过路费 coming in. */
@@ -125,7 +156,7 @@ export class PlayerCards {
     this.paintFrame(v, i, active, face.glow);
     this.paintRealm(v, face);
     this.paintBar(v, face.filled, face.total);
-    this.paintResources(v, face);
+    this.paintResources(v, { ...face, stones: this.shownStones.get(i) ?? face.stones });
     this.paintTags(v, face.tags);
   }
 

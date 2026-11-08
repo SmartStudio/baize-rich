@@ -68,11 +68,12 @@ export class Cutscene {
 
   /**
    * Dice tumbling near the top of the screen, landing on `d`. Resolves after they land and the sum
-   * has been on screen for `hold` ms; they fade out afterwards without blocking.
+   * has been on screen for `hold` ms; they fade out afterwards without blocking. `label` replaces the sum
+   * (a duel shows both totals, one die per side).
    */
-  rollDice(d: [number, number], ms: number, hold: number): Promise<void> {
+  rollDice(d: [number, number], ms: number, hold: number, label = `${d[0] + d[1]}`): Promise<void> {
     const s = this.scene;
-    const row = diceRow(s, d);
+    const row = diceRow(s, d, label);
     const ticks = Math.max(2, Math.floor(ms / 60));
     let k = 0;
     return new Promise((res) => {
@@ -132,9 +133,9 @@ interface DiceRow {
   sum: Phaser.GameObjects.Text;
 }
 
-function diceRow(scene: Phaser.Scene, d: [number, number]): DiceRow {
-  const dice = [0, 1].map(() => addImg(scene, 0, 0, 'die_1').setScale(STAGE.dice));
-  const sum = txt(scene, 0, 0, `${d[0] + d[1]}`, {
+function diceRow(scene: Phaser.Scene, d: [number, number], label: string): DiceRow {
+  const dice = d.map(() => addImg(scene, 0, 0, 'die_1').setScale(STAGE.dice));
+  const sum = txt(scene, 0, 0, label, {
     size: FS.hero, bold: true, color: HEX.gold, stroke: HEX.ink, origin: [0.5, 0.5],
   }).setAlpha(0);
   const dieW = dice[0].displayWidth;

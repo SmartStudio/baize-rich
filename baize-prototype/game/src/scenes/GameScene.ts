@@ -7,7 +7,7 @@ import { sound } from '../audio/Sound';
 import type { PendingChoice } from '../core/choices';
 import { defaultData } from '../core/data';
 import { Game } from '../core/engine';
-import type { GameEvent, GameEventType } from '../core/events';
+import type { DuelResult, GameEvent, GameEventType } from '../core/events';
 import { toRecord, type GameRecord } from '../core/record';
 import { isGlowing } from '../core/rules';
 import type { GameState, NodeId } from '../core/types';
@@ -25,7 +25,7 @@ import { dockPlan, IDLE_PLAN, type DockPlan } from '../ui/dockPlan';
 import { LEFT, RACE, RIGHT, STAGE, W, type Rect } from '../ui/layout';
 import { LogPanel } from '../ui/LogPanel';
 import { playMiniGame } from '../ui/MiniGame';
-import { AI_TURN, breakthroughBeats, HUMAN_INTRO, nextSpeed, PACE, PAUSE_EVENTS, speedNote, tempoOf, type Pace } from '../ui/pacing';
+import { AI_TURN, breakthroughBeats, HUMAN_INTRO, nextSpeed, PACE, PAUSE_EVENTS, speedNote, tempoOf, type Pace, type Tempo } from '../ui/pacing';
 import { aiTurnNarration, heroNameForSeat, narrateEvent, resumeNarration, roundNarration, turnNarration } from '../ui/narration';
 import { pickPlan, ROUTE_KINDS, type PickCell, type PickPlan } from '../ui/pickPlan';
 import { PlayerCards } from '../ui/PlayerCards';
@@ -39,8 +39,9 @@ import { HOVER_IDLE_MS, hoverTipOpen } from '../ui/hoverTip';
 import { tileTip } from '../ui/TileInfo';
 import { Tooltip } from '../ui/Tooltip';
 import { TopBar } from '../ui/TopBar';
-import { Button } from '../ui/widgets';
-import { unionRect } from '../ui/world';
+import { flyStones } from '../ui/StoneFlight';
+import { Button, fadeToScene } from '../ui/widgets';
+import { unionRect, type Point } from '../ui/world';
 import type { ResultData } from './ResultScene';
 
 /** preRoll / action option ids reached through the 出符 menu (C) rather than their own button. */
@@ -50,6 +51,20 @@ const isCastId = (id: string): boolean =>
 /** Round ribbon lifetime. The turn banner starts only after this, so the two never share the board. */
 const ROUND_RIBBON_MS = 1000;
 const WIN_MS = 2000;
+/** The board fades into the result screen. */
+const RESULT_FADE_MS = 600;
+/** 灵石 changing hands at 1×, when watched: stones in the air, the payee's count running up, the bought building rising. */
+const PAY = { coins: 3, flyMs: 420, countMs: 300, growMs: 360, skimGrowMs: 120 };
+
+/** Where an event's 灵石 go: to a seat (rent, 过路费) or into the tile they paid for (buy, upgrade). */
+type Payment = { payer: number; amount: number; to: { seat: number } | { node: NodeId } };
+
+function paymentOf(e: GameEvent): Payment | null {
+  if (e.player === undefined || !e.amount) return null;
+  if ((e.type === 'rent' || e.type === 'passToll') && e.payee !== undefined) return { payer: e.player, amount: e.amount, to: { seat: e.payee } };
+  if ((e.type === 'buy' || e.type === 'upgrade') && e.node) return { payer: e.player, amount: e.amount, to: { node: e.node } };
+  return null;
+}
 
 /** Big events get a full-width cutscene banner; a null spec means this instance is not big. */
 const CUTSCENES: Partial<Record<GameEventType, (g: Game, e: GameEvent) => BannerSpec | null>> = {
@@ -248,7 +263,7 @@ export class GameScene extends Phaser.Scene {
       this.renderAll(this.engine.state);
       if (this.engine.over) {
         await this.wait(500);
-        if (this.alive) this.scene.start('Result', this.resultData());
+        if (this.alive) this.endGame();
         return;
       }
       const c = this.engine.pending!;
@@ -265,6 +280,10 @@ export class GameScene extends Phaser.Scene {
       this.engine.answer(id);
       this.autosave();
     }
+  }
+
+  private endGame(): void {
+    fadeToScene(this, 'Result', this.resultData(), RESULT_FADE_MS, null);
   }
 
   private record(): GameRecord {
@@ -302,6 +321,8 @@ export class GameScene extends Phaser.Scene {
     const pace = PACE[tempo];
     sound.event(e, tempo, this.humans);
     if (e.snap && (e.type === 'step' || e.type === 'teleport')) this.boardView.markCurrent(e.snap);
+    const payment = paymentOf(e);
+    if (payment && e.snap) this.pay(e.snap, payment, tempo);
     switch (e.type) {
       case 'step':
         this.cam.follow(seat);
@@ -319,8 +340,9 @@ export class GameScene extends Phaser.Scene {
           this.side.setDice(e.dice);
         }
         break;
-      case 'passToll':
-        this.cards.floatStones(e.payee!, `+${e.amount} 灵石`, HEX.good);
+      case 'duel':
+        if (e.duel) await this.duelDice(e.duel, pace);
+        await this.present(e, { ...pace, banner: Math.max(pace.banner - pace.roll - pace.rollHold, pace.banner * 0.6) });
         break;
       case 'manifest':
         this.boardView.showBaize(true);
@@ -332,7 +354,10 @@ export class GameScene extends Phaser.Scene {
         break;
       case 'roundStart':
         if (e.snap && e.snap.round !== this.engine.data.config.manifest.round) this.boardView.showBaize(false);
-        if (e.snap) this.roundRibbon(e.snap);
+        if (e.snap) {
+          this.renderAll(e.snap, false);
+          this.roundRibbon(e.snap);
+        }
         await this.wait(this.ms(ROUND_RIBBON_MS) + 40);
         break;
       case 'turnStart':
@@ -374,6 +399,43 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * The payer's 灵石 drop at once; when watched, stones hop from their token to where the money went, and only
+   * then does the payee's count run up or the bought building rise. Runs before the beat's pause.
+   */
+  private pay(snap: GameState, p: Payment, tempo: Tempo): void {
+    const seat = 'seat' in p.to ? p.to.seat : null;
+    const node = 'node' in p.to ? p.to.node : null;
+    const watched = tempo === 'watch';
+    if (seat !== null) this.cards.holdStones(seat);
+    if (node) this.boardView.holdTile(node);
+    this.popDeltas(snap, seat);
+    this.renderAll(snap, false);
+    const land = (): void => {
+      if (seat !== null) {
+        this.cards.releaseStones(seat, watched ? this.ms(PAY.countMs) : 0);
+        this.cards.floatStones(seat, `+${p.amount} 灵石`, HEX.good);
+      }
+      if (node) this.boardView.releaseTile(node, this.ms(watched ? PAY.growMs : PAY.skimGrowMs));
+    };
+    if (!watched) {
+      land();
+      return;
+    }
+    const body = this.toScreen(this.boardView.tokenRect(p.payer));
+    const from = { x: Math.round(body.x + body.w / 2), y: Math.round(body.y + body.h * 0.4) };
+    const to = seat !== null ? this.cards.stonesAt(seat) : this.pointToScreen(this.boardView.paidAt(node!));
+    void flyStones(this.hud, from, to, PAY.coins, this.ms(PAY.flyMs)).then(() => { if (this.alive) land(); });
+  }
+
+  /** Both duellists turn to face each other and roll one die each; the row shows their totals. */
+  private async duelDice(d: DuelResult, pace: Pace): Promise<void> {
+    this.boardView.faceEachOther(d.attacker, d.defender);
+    this.cam.frameTeleport(unionRect([this.boardView.tokenRect(d.attacker), this.boardView.tokenRect(d.defender)]), d.attacker);
+    await this.fx.rollDice(d.rolls, this.ms(pace.roll), this.ms(pace.rollHold), `${d.totals[0]} : ${d.totals[1]}`);
+    this.cam.release();
+  }
+
   private roundRibbon(st: GameState): void {
     const copy = roundNarration(this.engine, st);
     this.fx.ribbon(copy.title, copy.sub, COLORS.gold, STAGE.cy, this.ms(ROUND_RIBBON_MS));
@@ -399,8 +461,11 @@ export class GameScene extends Phaser.Scene {
     }, this.ms(HUMAN_INTRO));
   }
 
-  /** Float each seat's 灵石 / 丹药 / 灵草 / 修为 change since the last snapshot over its token. */
-  private popDeltas(snap: GameState): void {
+  /**
+   * Float each seat's 灵石 / 丹药 / 灵草 / 修为 change since the last snapshot over its token. A seat being paid
+   * (`payee`) gets its 灵石 on its chip instead, when the stones land.
+   */
+  private popDeltas(snap: GameState, payee: number | null = null): void {
     const prev = this.lastSnap;
     this.lastSnap = snap;
     if (!prev) return;
@@ -408,7 +473,7 @@ export class GameScene extends Phaser.Scene {
       let k = 0;
       for (const d of DELTAS) {
         const diff = d.of(this.engine, snap, i) - d.of(this.engine, prev, i);
-        if (diff === 0) continue;
+        if (diff === 0 || (i === payee && d.label === '灵石')) continue;
         this.boardView.floatText(i, `${diff > 0 ? '+' : '−'}${Math.abs(diff)} ${d.label}`, d.color[diff > 0 ? 0 : 1], k++ * this.ms(200));
       }
     });
@@ -691,6 +756,11 @@ export class GameScene extends Phaser.Scene {
   /** Board (world) rect to HUD (screen) coordinates through the board camera. */
   private toScreen(r: Rect): Rect {
     return this.cam.toScreen(r);
+  }
+
+  private pointToScreen(p: Point): Point {
+    const r = this.cam.toScreen({ x: p.x, y: p.y, w: 0, h: 0 });
+    return { x: Math.round(r.x), y: Math.round(r.y) };
   }
 
   /** Where a token will be on screen once the camera settles, so a modal opened now does not cover it. */

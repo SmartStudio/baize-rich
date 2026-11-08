@@ -7,7 +7,7 @@ import Phaser from 'phaser';
 import { ALTAR, type Board } from '../core/board';
 import type { GameState, HeroId, NodeId } from '../core/types';
 import { addAmbient, Manifest, STAND_DY } from './Ambient';
-import { addImg, ensureCanvas, setFrame } from './assets';
+import { addImg, ensureCanvas, frameRef, setFrame } from './assets';
 import { drawGround } from './Ground';
 import type { Rect } from './layout';
 import { Occluders } from './Occluders';
@@ -24,6 +24,11 @@ const STATUE_DY = 16;
 const STATUE_SIZE = { w: 70, h: 112 };
 /** Neighbours on a shared cell step aside or back this fast, at most. */
 const MAKE_ROOM_MS = 140;
+/**
+ * A rising building's depth over its resting one: above its own cell's tokens (feet ≤ 9.5 px in front of it)
+ * and below the next row's blocks (14 px in front).
+ */
+const GROW_LIFT = 10;
 
 /** Face overlay textures: what is drawn on a top face and how. Light parts are white, tinted at use. */
 type Overlay = 'mark' | 'focus';
@@ -92,6 +97,10 @@ function chevronKey(scene: Phaser.Scene, dir: Facing): string {
 
 export class BoardView {
   private buildings = new Map<NodeId, Phaser.GameObjects.Image>();
+  /** Building level each land tile shows (0 = none). */
+  private levels = new Map<NodeId, number>();
+  private heldTiles = new Set<NodeId>();
+  private state: GameState | null = null;
   private tokens: Token[] = [];
   /** Where labels are still rising, so a new one near them stacks above instead of on top. */
   private rising: { x: number; y: number }[] = [];
@@ -286,19 +295,78 @@ export class BoardView {
     this.scene.tweens.add({ targets: t, alpha: 0, duration: 300, delay: delay + 900, onComplete: done });
   }
 
-  /** Refresh ownership marks, buildings and markers from a (snapshot) state. */
+  /** Refresh ownership marks, buildings and markers from a (snapshot) state. Held tiles keep their building. */
   render(state: GameState): void {
-    for (const [id, bld] of this.buildings) {
-      const { owner, level } = state.tiles[id];
-      bld.setVisible(owner !== null && level > 0);
-      if (level > 0) setFrame(bld, `bld_${level}`);
-    }
-    this.owners.render(state);
+    this.state = state;
+    for (const id of this.buildings.keys()) if (!this.heldTiles.has(id)) this.paintBuilding(id, 0);
+    this.owners.render(state, this.heldTiles);
     if (state.roadblock) {
       const p = this.world.centre(state.roadblock.node);
       this.rock.setVisible(true).setPosition(p.x, p.y - TD / 2).setColor(PLAYER_HEX[state.roadblock.seat]);
     } else this.rock.setVisible(false);
     this.markCurrent(state);
+  }
+
+  /** Keep a tile's building as it is through later renders (the stones paying for it are still in the air). */
+  holdTile(id: NodeId): void {
+    this.heldTiles.add(id);
+  }
+
+  /** Show a held tile's building as of the latest render; a higher level rises out of the ground over `ms`. */
+  releaseTile(id: NodeId, ms: number): void {
+    if (!this.heldTiles.delete(id) || !this.state) return;
+    this.paintBuilding(id, ms);
+    this.owners.plant(id, this.state, ms);
+  }
+
+  /** Where the stones paying for a tile land, as of the latest render: its building, or its pennant on bare land. */
+  paidAt(id: NodeId): Point {
+    const level = this.state?.tiles[id]?.level ?? 0;
+    if (level === 0) return this.owners.flagAt(id);
+    const r = this.world.rect(id);
+    const h = this.scene.textures.getFrame(...frameRef(this.scene, `bld_${level}`)).height;
+    return { x: r.x + r.w / 2, y: r.y + r.h / 2 + STAND_DY - Math.round(h / 2) };
+  }
+
+  /** Two seats turn to face each other (a duel). */
+  faceEachOther(a: number, b: number): void {
+    this.tokens[a].face(this.tokens[b]);
+    this.tokens[b].face(this.tokens[a]);
+  }
+
+  private paintBuilding(id: NodeId, growMs: number): void {
+    const bld = this.buildings.get(id);
+    if (!bld || !this.state) return;
+    const { owner, level } = this.state.tiles[id];
+    const shown = owner === null ? 0 : level;
+    const was = this.levels.get(id) ?? 0;
+    this.levels.set(id, shown);
+    bld.setVisible(shown > 0);
+    if (shown === 0) return;
+    const before = bld.height;
+    setFrame(bld, `bld_${shown}`);
+    if (shown > was && growMs > 0) this.grow(bld, was > 0 ? Math.min(before, bld.height) : 0, growMs);
+  }
+
+  /**
+   * Reveal a building from the ground up, one whole pixel row at a time, from `rows` already standing. While it
+   * rises it draws over the tokens on its own cell (below the next row), so the player sees it go up.
+   */
+  private grow(bld: Phaser.GameObjects.Image, rows: number, ms: number): void {
+    const { width: w, height: h } = bld;
+    const depth = DEPTH.stand(bld.y);
+    const n = { rows };
+    bld.setDepth(depth + GROW_LIFT).setCrop(0, h - rows, w, rows);
+    this.scene.tweens.add({
+      targets: n, rows: h, duration: ms, ease: 'Quad.easeOut',
+      onUpdate: () => {
+        const r = Math.round(n.rows);
+        bld.setCrop(0, h - r, w, r);
+      },
+      onComplete: () => {
+        bld.setCrop().setDepth(depth);
+      },
+    });
   }
 
   /** 白泽现世: the altar's own statue lights up. Idempotent. */

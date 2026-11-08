@@ -8,7 +8,7 @@ import { STAND_DY } from './Ambient';
 import { ensureCanvas } from './assets';
 import { paintPixels } from './sprites';
 import { PLAYER_COLORS } from './theme';
-import { DEPTH, type WorldMap } from './world';
+import { DEPTH, type Point, type WorldMap } from './world';
 
 const POLE = ['yY', 'Yy', ...Array<string>(13).fill('nN')];
 /** Two flutter frames of a swallow-tailed pennant flying right from the pole; `m` is the fold shading. */
@@ -37,6 +37,8 @@ const FOOT = { dx: 2, dy: -2 };
 /** The cloth hangs off the pole's right outline, just under the finial. */
 const CLOTH_AT = { dx: 3, dy: 3 };
 const FLUTTER_MS = 520;
+/** A new pennant falls this far onto its pole foot. */
+const PLANT_DROP = 14;
 const WASH_ALPHA = 0.22;
 
 interface Mark {
@@ -108,17 +110,44 @@ export class OwnerMarks {
     for (const m of this.marks.values()) m.cloth.setTexture(`own_cloth${(this.tick + m.phase) % CLOTH.length}`);
   }
 
-  render(state: GameState): void {
-    for (const [id, m] of this.marks) {
-      const { owner } = state.tiles[id];
-      m.wash.setVisible(owner !== null);
-      m.flag.setVisible(owner !== null);
-      if (owner === null) continue;
-      const street = this.board.streetOf(id);
-      const whole = street.length > 0 && street.every((s) => state.tiles[s].owner === owner);
-      const r = this.world.rect(id);
-      m.wash.setTexture(washKey(this.scene, r.w, r.h, whole)).setTint(PLAYER_COLORS[owner]);
-      m.cloth.setTint(PLAYER_COLORS[owner]);
-    }
+  /** Paint every tile's marks from a state, except the `held` ones (their purchase has not landed yet). */
+  render(state: GameState, held: ReadonlySet<NodeId> = new Set()): void {
+    for (const id of this.marks.keys()) if (!held.has(id)) this.paint(id, state);
+  }
+
+  /** Paint one tile's marks; a pennant that was not up drops onto its pole foot over `ms`, a pixel at a time. */
+  plant(id: NodeId, state: GameState, ms: number): void {
+    const m = this.marks.get(id);
+    if (!m) return;
+    const was = m.flag.visible;
+    this.paint(id, state);
+    if (was || !m.flag.visible || ms <= 0) return;
+    const rest = m.flag.y;
+    const t = { k: 0 };
+    m.flag.setY(rest - PLANT_DROP);
+    this.scene.tweens.add({
+      targets: t, k: 1, duration: ms, ease: 'Bounce.easeOut',
+      onUpdate: () => m.flag.setY(Math.round(rest - PLANT_DROP * (1 - t.k))),
+      onComplete: () => m.flag.setY(rest),
+    });
+  }
+
+  /** World point at the pennant's cloth, where the stones that buy a bare tile land. */
+  flagAt(id: NodeId): Point {
+    const r = this.world.rect(id);
+    return { x: r.x + FOOT.dx + CLOTH_AT.dx + 5, y: r.y + r.h + FOOT.dy - POLE.length + CLOTH_AT.dy + 4 };
+  }
+
+  private paint(id: NodeId, state: GameState): void {
+    const m = this.marks.get(id)!;
+    const { owner } = state.tiles[id];
+    m.wash.setVisible(owner !== null);
+    m.flag.setVisible(owner !== null);
+    if (owner === null) return;
+    const street = this.board.streetOf(id);
+    const whole = street.length > 0 && street.every((s) => state.tiles[s].owner === owner);
+    const r = this.world.rect(id);
+    m.wash.setTexture(washKey(this.scene, r.w, r.h, whole)).setTint(PLAYER_COLORS[owner]);
+    m.cloth.setTint(PLAYER_COLORS[owner]);
   }
 }
