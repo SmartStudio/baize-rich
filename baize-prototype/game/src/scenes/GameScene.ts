@@ -325,7 +325,7 @@ export class GameScene extends Phaser.Scene {
     if (payment && e.snap) this.pay(e.snap, payment, pace);
     switch (e.type) {
       case 'step':
-        this.cam.follow(seat);
+        this.cam.follow(seat, this.isHuman(seat));
         await this.boardView.moveToken(seat, e.node!, this.ms(pace.step));
         break;
       case 'teleport':
