@@ -23,11 +23,11 @@ export interface Pace {
 
 export const PACE: Record<Tempo, Pace> = {
   watch: { step: 300, teleport: 640, roll: 900, rollHold: 800, pause: 850, banner: 1700, fly: 460, grow: 380 },
-  skim: { step: 200, teleport: 440, roll: 700, rollHold: 450, pause: 520, banner: 1200, fly: 340, grow: 280 },
+  skim: { step: 180, teleport: 440, roll: 480, rollHold: 280, pause: 400, banner: 1200, fly: 340, grow: 280 },
 };
 
 /** An AI seat's turn: how long its turn ribbon holds and how long it seems to think before each answer. */
-export const AI_TURN = { intro: 650, think: 350, thinkModal: 480 };
+export const AI_TURN = { intro: 550, think: 300, thinkModal: 400 };
 /** A human seat's "轮到你了" banner; not awaited, the roll is live under it. */
 export const HUMAN_INTRO = 1100;
 
