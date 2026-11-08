@@ -24,7 +24,7 @@ Dockerfile 使用仓库根目录作为构建上下文，保留 `game/` 同级的
 - Docker Image：`ghcr.io/joesmart/baize-rich:latest`。
 - Registry URL：`ghcr.io`；Username：`joesmart`；Password：具备 `read:packages` 的拉取令牌。
 - 启用 Auto Deploy，将本应用 Webhook 作为上述 GitHub Secret。
-- 域名继续映射容器端口 `80`。`rich.fxai.ai` 与 `baize.fxai.ai` 均可使用。
+- 域名映射容器端口 `80`，正式访问地址为 `https://rich.fxai.ai/`。
 - 镜像保持私有。不要为方便拉取而修改包的可见性。
 
 恢复旧版本时，在 Dokploy 将 Docker Image 改为已发布的版本标签或 `@sha256:<digest>` 后部署。
