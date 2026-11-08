@@ -5,8 +5,10 @@
 import { ALTAR } from '../core/board';
 import type { ChoiceKind, PendingChoice, PendingChoiceOf } from '../core/choices';
 import type { Game } from '../core/engine';
+import type { GameEventType } from '../core/events';
 import { passToll } from '../core/rules';
 import type { NodeId } from '../core/types';
+import { landingLabel } from './landingNote';
 
 export const PICK_KINDS = ['fork', 'exitRoad', 'altarPass', 'adjust', 'rollValue', 'node', 'target'] as const;
 export type PickKind = (typeof PICK_KINDS)[number];
@@ -47,6 +49,8 @@ interface Landing {
   /** Paid the altar's pill to walk on through it. */
   borrowed: boolean;
   toll: number;
+  /** Stones in hand on arrival. */
+  stones: number;
 }
 
 interface Candidate {
@@ -74,18 +78,18 @@ const KEYS = 9;
 const PLANNERS: { [K in PickKind]: Planner<K> } = {
   fork: (g, c) => ({
     lead: `岔路口，还剩 ${c.ctx.remaining} 步。`,
-    candidates: c.options.flatMap((o) => byLanding(g, o.id, stepInto(g, c.player, c.ctx.node!, o.value, c.ctx.remaining!))),
+    candidates: c.options.flatMap((o) => byLanding(g, c.player, o.id, stepInto(g, c.player, c.ctx.node!, o.value, c.ctx.remaining!))),
     defaultId: c.defaultId,
   }),
   exitRoad: (g, c) => ({
     lead: `离开白泽灵台，走 ${c.ctx.remaining} 步。`,
-    candidates: c.options.flatMap((o) => byLanding(g, o.id, stepInto(g, c.player, ALTAR, o.value, c.ctx.remaining!))),
+    candidates: c.options.flatMap((o) => byLanding(g, c.player, o.id, stepInto(g, c.player, ALTAR, o.value, c.ctx.remaining!))),
   }),
   altarPass: (g, c) => ({
     lead: `停在白泽灵台，或付 ${g.data.config.altarToll} 颗丹药借道再走 ${c.ctx.remaining} 步。`,
     candidates: c.options.flatMap((o) => (o.value === 'stop'
-      ? [landed(o.id, { node: ALTAR, route: [], borrowed: false, toll: 0 }, '停留')]
-      : byLanding(g, o.id, stepInto(g, c.player, ALTAR, o.value, c.ctx.remaining!, true)))),
+      ? byLanding(g, c.player, o.id, [{ node: ALTAR, route: [], borrowed: false, toll: 0, stones: g.state.players[c.player].stones }])
+      : byLanding(g, c.player, o.id, stepInto(g, c.player, ALTAR, o.value, c.ctx.remaining!, true)))),
     defaultId: c.defaultId,
   }),
   adjust: (g, c) => ({
@@ -93,8 +97,8 @@ const PLANNERS: { [K in PickKind]: Planner<K> } = {
     candidates: c.options.flatMap((o) => walkFrom(g, c.player, o.value.steps).map((l) => ({
       id: o.id,
       landing: l,
-      label: `${o.value.steps} 步`,
-      sub: costLine(o.value.card || o.value.steer !== 0 ? o.hint : undefined, l),
+      label: landingLabel(g, { seat: c.player, node: l.node, stones: l.stones }),
+      sub: costLine([`${o.value.steps} 步`, o.value.card || o.value.steer !== 0 ? o.hint ?? '' : ''], l),
       rank: o.id === c.defaultId ? 0 : o.value.card ? 2 : 1,
     }))),
     defaultId: c.defaultId,
@@ -102,19 +106,19 @@ const PLANNERS: { [K in PickKind]: Planner<K> } = {
   rollValue: (g, c) => ({
     lead: '御骰符：选本次点数。',
     candidates: c.options.flatMap((o) => walkFrom(g, c.player, o.value).map((l) => ({
-      id: o.id, landing: l, label: `${o.value} 点`, sub: costLine(undefined, l), rank: 0, key: valueKey(o.value),
+      id: o.id, landing: l, label: landingLabel(g, { seat: c.player, node: l.node, stones: l.stones }), sub: costLine([`${o.value} 点`], l), rank: 0, key: valueKey(o.value),
     }))),
   }),
   node: (g, c) => ({
     lead: `${c.title}：${c.desc ?? ''}。`,
-    candidates: c.options.map((o) => landed(o.id, { node: o.value, route: [], borrowed: false, toll: 0 }, g.nodeName(o.value))),
+    candidates: c.options.map((o) => landed(o.id, placed(o.value), g.nodeName(o.value))),
   }),
   target: (g, c) => {
     const cells = c.options.filter((o) => o.id !== c.cancelId);
     if (!cells.every((o) => o.node)) return null;
     return {
       lead: `${c.title}：${c.desc ?? ''}。`,
-      candidates: cells.map((o) => landed(o.id, { node: o.node!, route: [], borrowed: false, toll: 0 }, g.nodeName(o.node!))),
+      candidates: cells.map((o) => landed(o.id, placed(o.node!), g.nodeName(o.node!))),
     };
   },
 };
@@ -139,7 +143,26 @@ export function pickPlan(g: Game, c: PendingChoice): PickPlan | null {
   const space = primary.key ? `空格选 ${primary.key}。` : '空格选金色那格。';
   const later = asksLater ? '后面的岔路到了再选。' : '';
   const esc = c.cancelId ? 'Esc 取消。' : '';
-  return { hint: `${ask.lead}点击发光的格子或按数字键，${space}${later}${esc}`, cells, asksLater, cancelId: c.cancelId };
+  const so = ROUTE_KINDS.includes(c.kind) ? soFar(g, c.player) : '';
+  return { hint: `${so}${ask.lead}点击发光的格子或按数字键，${space}${later}${esc}`, cells, asksLater, cancelId: c.cancelId };
+}
+
+/** Events a walk emits between its first step and an ask on the way. */
+const WALK_EVENTS: ReadonlySet<GameEventType> = new Set<GameEventType>(['step', 'passToll', 'fork', 'toll', 'salary']);
+const TRAIL_SHOWN = 3;
+
+/** For an ask partway through a walk: how far it has come and over which cells, so the second ask reads as the same move. */
+function soFar(g: Game, seat: number): string {
+  const steps: NodeId[] = [];
+  for (let i = g.log.length - 1; i >= 0; i--) {
+    const e = g.log[i];
+    if (e.player !== seat || !WALK_EVENTS.has(e.type)) break;
+    if (e.type === 'step') steps.unshift(e.node!);
+  }
+  if (steps.length === 0) return '';
+  const names = steps.slice(-TRAIL_SHOWN).map((n) => g.nodeName(n));
+  const trail = `${steps.length > TRAIL_SHOWN ? '… → ' : ''}${names.join(' → ')}`;
+  return `接着选路，已走 ${steps.length} 步：${trail}。`;
 }
 
 /** The best-ranked answer reaching each node, the one paying less 过路费 on a tie, in option order. */
@@ -174,12 +197,17 @@ function toCells(kept: Candidate[], defaultId: string | undefined): PickCell[] {
   });
 }
 
-function byLanding(g: Game, id: string, landings: Landing[]): Candidate[] {
-  return landings.map((l) => landed(id, l, g.nodeName(l.node)));
+function byLanding(g: Game, seat: number, id: string, landings: Landing[]): Candidate[] {
+  return landings.map((l) => landed(id, l, landingLabel(g, { seat, node: l.node, stones: l.stones })));
+}
+
+/** A cell picked outright (a rift, a mountain), not walked to. */
+function placed(node: NodeId): Landing {
+  return { node, route: [], borrowed: false, toll: 0, stones: 0 };
 }
 
 function landed(id: string, landing: Landing, label: string): Candidate {
-  return { id, landing, label, sub: costLine(undefined, landing), rank: landing.borrowed ? 1 : 0 };
+  return { id, landing, label, sub: costLine([], landing), rank: landing.borrowed ? 1 : 0 };
 }
 
 /** 2–9 by their digit, 10 by 0; 11 and 12 are click-only. */
@@ -187,8 +215,8 @@ function valueKey(v: number): string | null {
   return v <= 9 ? String(v) : v === 10 ? '0' : null;
 }
 
-function costLine(how: string | undefined, l: Landing): string | undefined {
-  return [how, l.borrowed ? '借道' : '', l.toll ? `过路费 ${l.toll}` : ''].filter(Boolean).join(' · ') || undefined;
+function costLine(how: string[], l: Landing): string | undefined {
+  return [...how, l.borrowed ? '借道' : '', l.toll ? `过路费 ${l.toll}` : ''].filter(Boolean).join(' · ') || undefined;
 }
 
 /** Every place a move of `steps` from the seat's cell can end, one entry per way through the forks. */
@@ -236,7 +264,7 @@ class Walker {
     const left = remaining - 1;
     const rb = g.state.roadblock;
     const stones = t.stones + (g.board.node(to).type === 'start' && left > 0 ? g.data.config.salaryPass : 0);
-    if (left === 0 || (rb && rb.node === to && rb.seat !== this.seat)) return [landing(to, t)];
+    if (left === 0 || (rb && rb.node === to && rb.seat !== this.seat)) return [landing(to, { ...t, stones })];
     const fee = Math.min(stones, passToll(g.state, g.board, g.data, to, this.seat));
     const paid = { ...t, stones: stones - fee, toll: t.toll + fee };
     if (to === ALTAR) return this.altar(left, paid);
@@ -253,5 +281,5 @@ class Walker {
 }
 
 function landing(node: NodeId, t: Trail): Landing {
-  return { node, route: t.route, borrowed: t.borrowed, toll: t.toll };
+  return { node, route: t.route, borrowed: t.borrowed, toll: t.toll, stones: t.stones };
 }

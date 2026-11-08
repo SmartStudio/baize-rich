@@ -134,8 +134,8 @@ describe('board picks', () => {
     p.hand = ['swiftstep'];
     const c = { seq: 1, player: 0, kind: 'adjust', title: '', options: g.adjustOptions(0, 4), defaultId: 'n4', ctx: { base: 4 } } as PendingChoice;
     const cells = pickPlan(g, c)!.cells;
-    expect(cells.find((x) => x.id === 'n4')).toMatchObject({ label: '4 步', sub: undefined, primary: true });
-    expect(cells.find((x) => x.id === 'n5')).toMatchObject({ label: '5 步', sub: '神行符 +1' });
+    expect(cells.find((x) => x.id === 'n4')).toMatchObject({ sub: '4 步', primary: true });
+    expect(cells.find((x) => x.id === 'n5')).toMatchObject({ sub: '5 步 · 神行符 +1' });
   });
 
   it('puts the 过路费 a way pays on its cell, capped by the stones in hand', () => {
@@ -146,9 +146,9 @@ describe('board picks', () => {
     g.state.tiles.R1 = { owner: 1, level: 1 }; // toll 15
     g.state.tiles.R2 = { owner: 2, level: 0 }; // toll 5
     const c = { seq: 1, player: 0, kind: 'adjust', title: '', options: g.adjustOptions(0, 3), defaultId: 'n3', ctx: { base: 3 } } as PendingChoice;
-    expect(pickPlan(g, c)!.cells).toEqual([expect.objectContaining({ node: 'R3', toll: 20, sub: '过路费 20' })]);
+    expect(pickPlan(g, c)!.cells).toEqual([expect.objectContaining({ node: 'R3', toll: 20, sub: '3 步 · 过路费 20' })]);
     p.stones = 17;
-    expect(pickPlan(g, c)!.cells).toEqual([expect.objectContaining({ node: 'R3', toll: 17, sub: '过路费 17' })]);
+    expect(pickPlan(g, c)!.cells).toEqual([expect.objectContaining({ node: 'R3', toll: 17, sub: '3 步 · 过路费 17' })]);
   });
 
   it('keys 御骰符 cells by the value itself, 10 by 0, and leaves 11 and 12 to the mouse', () => {
@@ -157,8 +157,44 @@ describe('board picks', () => {
     const options = Array.from({ length: 11 }, (_, i) => ({ id: `v${i + 2}`, label: `${i + 2} 点`, value: i + 2 }));
     const c = { seq: 1, player: 0, kind: 'rollValue', title: '御骰符', options, ctx: {} } as unknown as PendingChoice;
     const cells = pickPlan(g, c)!.cells;
-    expect(cells.map((x) => [x.label, x.key])).toEqual(options.map((o) => [o.label, o.value <= 9 ? String(o.value) : o.value === 10 ? '0' : null]));
+    expect(cells.map((x) => [x.sub?.split(' · ')[0], x.key])).toEqual(options.map((o) => [o.label, o.value <= 9 ? String(o.value) : o.value === 10 ? '0' : null]));
   });
+
+  it('names what happens where each walk ends: rent owed, land the stones left can buy, a furnace the herbs can feed, a closure', () => {
+    const g = ringGame();
+    g.state.players.forEach((q) => { q.pos = 'R16'; });
+    const p = g.state.players[0];
+    Object.assign(p, { pos: 'R0', hand: [], stones: 1000, herbs: 1 });
+    const label = (steps: number): string => {
+      const c = { seq: 1, player: 0, kind: 'adjust', title: '', options: g.adjustOptions(0, steps), defaultId: `n${steps}`, ctx: { base: steps } } as PendingChoice;
+      return pickPlan(g, c)!.cells.find((x) => x.id === `n${steps}`)!.label;
+    };
+    g.state.tiles.R2 = { owner: 2, level: 1 };
+    expect(label(2)).toBe('燕回的地 · 交 33');
+    p.stones = 136; // the 16 过路费 at R2 leaves 120, R3's price
+    expect(label(3)).toBe('空地 · 可买');
+    p.stones = 135;
+    expect(label(3)).toBe('空地 · 买不起');
+    expect(label(6)).toBe(`${g.nodeName('R6')} · 灵草不够`);
+    p.herbs = 2;
+    expect(label(6)).toBe(`${g.nodeName('R6')} · 可炼丹`);
+    g.state.tiles.R5 = { owner: 0, level: 1 };
+    expect(label(5)).toBe('自家药圃 · 打坐 +1');
+    p.cult = g.data.config.realms[p.realm].bar;
+    expect(label(5)).toBe('自家药圃 · 可闭关');
+  });
+
+  it('tells an ask partway through a walk how far the move has come and over which cells', () => {
+    const later = aiAsks((g, c) => ROUTE_KINDS.includes(c.kind) && g.log.at(-1)?.type === 'step' && g.log.at(-1)?.player === c.player);
+    for (const { g, c } of later) {
+      const here = g.nodeName(g.state.players[c.player].pos);
+      expect(pickPlan(g, c)!.hint).toMatch(new RegExp(`^接着选路，已走 \\d+ 步：(… → )?([^。]+ → )?${here}。`));
+    }
+    expect(later.length).toBeGreaterThan(0);
+    const first = aiAsks((g, c) => c.kind === 'exitRoad' && g.log.at(-1)?.type !== 'step');
+    for (const { g, c } of first) expect(pickPlan(g, c)!.hint).not.toContain('已走');
+    expect(first.length).toBeGreaterThan(0);
+  }, 60000);
 
   it('puts a 秘境裂隙 on the board: one cell per 秘境, named', () => {
     const g = newGame();
