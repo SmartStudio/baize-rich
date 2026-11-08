@@ -115,6 +115,14 @@ export function facingFor(from: Point, to: Point, prev: Facing): Facing {
   return dy > 0 ? 'down' : 'up';
 }
 
+/** A land's building stands this far in front of its top face's back edge, so the road and token feet in front show. */
+const BUILDING_FOOT_DY = 18;
+
+/** World point a land's building stands on. */
+export function buildingFoot(face: Rect): Point {
+  return { x: face.x + face.w / 2, y: face.y + BUILDING_FOOT_DY };
+}
+
 /**
  * Feet offsets from a cell's top-face centre for `count` tokens sharing it, in seat order. They stand in front
  * of the landmark's feet, spread across the cell, alternate seats a step further forward so every head shows.
