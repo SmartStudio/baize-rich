@@ -7,7 +7,8 @@ baize-prototype/
 ├── docs/
 │   ├── GDD.md        游戏设计文档：规则的唯一来源
 │   ├── script.md     旁白、台词、新手引导、系统提示文案
-│   └── assets.md     资产清单、图集帧名约定、音频清单
+│   ├── assets.md     资产清单、图集帧名约定、音频清单
+│   └── dev-summary.md 开发总结：本轮改动、架构、验证与出图流程、待决事项
 ├── data/             数值与内容配置（原型直接读取）
 │   ├── config.json     全局数值
 │   ├── board.json      地图：41 个节点、坐标、灵域、地价
@@ -16,7 +17,7 @@ baize-prototype/
 │   ├── events.json     宗门任务与机缘事件
 │   └── blessings.json  境界、神通、天赐
 ├── assets/
-│   ├── atlas.png / atlas.json   Phaser 图集（81 帧）
+│   ├── atlas.png / atlas.json   Phaser 图集（103 帧）
 │   ├── sprites/  sprites_x4/    单帧 1× 与 4 倍预览
 │   └── mockups/                 效果图、地图路线图、弹窗样稿
 └── game/             Phaser 3 + TypeScript + Vite 原型工程（见 game/README.md）
