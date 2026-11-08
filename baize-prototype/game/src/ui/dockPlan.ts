@@ -181,6 +181,7 @@ function actionHint(offers: DockOffer[], more: number, cast: boolean): string {
   if (close) return '可以闭关。做完再结束。';
   if (eat) return '可以服丹。做完再结束。';
   if (cast) return '可以出符或炼丹。做完再结束。';
+  if (offers.some((o) => o.id === 'upgrade-used')) return '没有别的事可做了，结束回合吧。';
   return '这一回合没有能升级的灵田。';
 }
 

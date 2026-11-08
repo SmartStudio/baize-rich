@@ -52,12 +52,14 @@ describe('action dock plan', () => {
   it('explains why upgrade rows disappear after this turn already upgraded a plot', () => {
     const g = ringGame();
     g.state.turn.upgraded = true;
-    const row = dockPlan(g, askAction(g)).offers.find((offer) => offer.id === 'upgrade-used');
+    const plan = dockPlan(g, askAction(g));
+    const row = plan.offers.find((offer) => offer.id === 'upgrade-used');
     expect(row).toMatchObject({
       title: '本回合已升级',
       detail: '每回合限 1 块',
       enabled: false,
     });
+    expect(plan.hint).not.toContain('没有能升级');
   });
 
   it('keeps a disabled 闭关 row when the bar is full away from a closure site', () => {
