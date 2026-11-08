@@ -2,8 +2,9 @@
 // a 白泽 gift or a breakthrough attempt is worth to one player right now.
 import type { Board } from '../core/board';
 import type { ManifestGift } from '../core/choices';
+import { closureOdds } from '../core/closureOdds';
 import {
-  barSize, chance2d6, closureBonus, closureSite, hasAbility, hasTrait, insightRoom, isGlowing, rentFor, sitGain, winRealm,
+  barSize, chance2d6, closureSite, hasAbility, hasTrait, insightRoom, isGlowing, rentFor, sitGain, winRealm,
 } from '../core/rules';
 import type { EventEffect, GameData, GameState, NodeId, PlayerState } from '../core/types';
 
@@ -39,11 +40,9 @@ export function nearlyFull(v: View): boolean {
 
 /** Success chance for 闭关 with site bonus `site` and up to `pills` staked (清心符 included when held). */
 export function closureChance(v: View, site: number, pills: number): number {
-  const p = me(v);
-  const b = v.data.config.breakthrough;
-  const fixed = closureBonus(v.st, v.data, v.seat, site) + (p.hand.includes('calm') ? b.calmBonus : 0);
-  const stake = Math.min(pills, b.maxPills, p.pills);
-  return chance2d6(v.data.config.realms[p.realm].target - fixed - stake * b.pillBonus);
+  const held = Math.min(v.data.config.breakthrough.maxPills, me(v).pills);
+  const stake = Math.min(pills, held);
+  return closureOdds(v.st, v.data, v.seat, site).stakes[stake].chance;
 }
 
 /** Smallest stake reaching `want` success chance at site bonus `site`, else everything allowed. */
