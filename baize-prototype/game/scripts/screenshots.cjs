@@ -101,7 +101,17 @@ async function resume(page, record) {
   await sleep(1500);
 }
 
-async function choiceShots(page) {
+// 镇山 on the board: Esc must hand the engine its cancel, back to the action phase with no mountain.
+async function roadblockShot(page, errors, record) {
+  await resume(page, record);
+  await shot(page, '16-roadblock-board.png');
+  await page.keyboard.press('Escape');
+  await sleep(500);
+  const after = await page.evaluate(() => ({ kind: window.__baize.pending?.kind, roadblock: window.__baize.state.roadblock }));
+  if (after.kind !== 'action' || after.roadblock) errors.push(`镇山 Esc: ${JSON.stringify(after)}`);
+}
+
+async function choiceShots(page, errors) {
   const sc = choiceScenarios();
   await resume(page, sc.stake.record);
   await shot(page, '09-stake.png');
@@ -114,11 +124,12 @@ async function choiceShots(page) {
   await page.keyboard.press(sc.stake.lose);
   await sleep(3200);
   await shot(page, '09d-breakthrough-fail.png');
-  const picks = [['fork', '14-fork-board.png'], ['adjust', '15-adjust-board.png']];
+  const picks = [['fork', '14-fork-board.png'], ['forkClose', '14b-fork-board-zoom2.png'], ['adjust', '15-adjust-board.png']];
   for (const [name, file] of [['brew', '10-brew.png'], ['market', '11-market.png'], ['fortune', '12-fortune.png'], ['manifest', '13-manifest.png'], ...picks]) {
     await resume(page, sc[name].record);
     await shot(page, file);
   }
+  await roadblockShot(page, errors, sc.roadblock.record);
 }
 
 // Point at a node's top face, k of the way from its centre to its left edge, and screenshot its popover.
@@ -265,7 +276,7 @@ async function waitForServer(url, tries = 50) {
 
     if (ONLY !== 'choices') await tourShots(page, errors);
 
-    await choiceShots(page);
+    await choiceShots(page, errors);
   } finally {
     if (browser) await browser.close();
     server.kill();
