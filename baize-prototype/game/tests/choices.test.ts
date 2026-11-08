@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ChoiceKind, PendingChoice } from '../src/core/choices';
 import type { Flow, Game } from '../src/core/engine';
-import { chance2d6 } from '../src/core/rules';
+import { chance2d6, nominalRent, passToll } from '../src/core/rules';
 import type { NodeId } from '../src/core/types';
 import { breakthroughView } from '../src/ui/breakthroughView';
 import { onlyAnswer, presentChoice } from '../src/ui/choices/registry';
@@ -128,6 +128,19 @@ describe('机缘 and 白泽现世 screens', () => {
     g.runFlow(g.testRoundStart(), script({}, seen));
     const picks = seen.filter((c) => c.kind === 'manifestPick');
     expect(picks.map((c) => onlyAnswer(c))).toEqual([null, null, null, picks[3].options[0].id]);
+  });
+});
+
+describe('购买 screen', () => {
+  it('puts the passing toll on the same line as the level-0 rent', () => {
+    const g = newGame();
+    const node = g.board.lands.find((id) => g.board.node(id).price === 110)!;
+    const { spec, choice } = screenFor(g, g.testSettle(0, node), 'buy');
+    const rent = nominalRent(g.data, 110, 0);
+    const toll = passToll(g.state, g.board, g.data, node);
+    expect(rent).toBe(11);
+    expect(toll).toBe(5);
+    expect(spec.desc).toBe(`${choice.desc}\n基础租金 ${rent} 灵石 · 路过交 ${toll}`);
   });
 });
 
