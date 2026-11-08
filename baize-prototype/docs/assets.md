@@ -1,6 +1,6 @@
 # 白泽秘境大富翁 · 资产清单 v0.3
 
-所有美术资产都是**程序绘制的风格样稿**，用于原型开发和美术外包参考，基准分辨率 1280×720。正式版需要画师精修，尤其是角色动画帧。
+图集帧除骰子外都是 **gpt-image 生成、再像素化的样稿**（流程见 `tools/art/pixelize.py`），用于原型开发和美术外包参考，基准分辨率 1280×720。正式版需要画师精修，尤其是角色动画帧。
 
 ## 1. 目录
 
@@ -39,17 +39,19 @@
 
 | 帧名 | 尺寸 | 用途与摆放 |
 |---|---|---|
-| `decor_wood` / `_fire` / `_water` / `_earth` | 不定 | 棋盘外地面上的散布装饰，底部居中 |
-| `baize` | 100×104 | 白泽单独形象（白泽现世横幅、突破过场） |
-| `obj_furnace` | 40×40 | 炼丹小游戏里的丹炉，3× 显示 |
+| `decor_wood` / `_fire` / `_water` / `_earth` | 不定（高 20–34） | 棋盘外地面上的散布装饰，底部居中：竹丛、黑曜石火苗、冰晶、夜光菇（HD 像素，`tools/art`） |
+| `baize` | 100×104 | 白泽单独形象（白泽现世横幅、突破过场），面朝左站立，底部居中（HD 像素，`tools/art`） |
+| `obj_furnace` | 40×44 | 炼丹小游戏里的青铜丹炉，3× 显示，底部居中；火焰和光晕由代码叠加（HD 像素，`tools/art`） |
 | `tok_body` `tok_magic` `tok_sword` `tok_alch` | 48×64 | 等于各自的 `_d0` 行走帧，给棋盘以外的界面用 |
 | `por_body` … `por_alch` | 64×64 | 大头像，只按 1×/2×/3× 整数倍显示 |
 | `por_body_s` … `por_alch_s` | 40×40 | 小头像（玩家卡、行动栏、高级设置），1× 显示 |
 | `ic_stone` `ic_herb` `ic_pill` `ic_cult` `ic_mind` | 16×16 | 灵石、灵草、丹药、修为、心境（HD 像素，`tools/art`） |
-| `ic_baize` `ic_demon` | 16×16 | 白泽、心魔图标 |
+| `ic_baize` `ic_demon` | 16×16 | 白泽、心魔图标（HD 像素，`tools/art`） |
 | `die_1`–`die_6` | 24×24 | 正面骰子，4px 点数，2× 显示 |
-| `card_attack` `card_guard` `card_move` `card_wealth` | 88×120 | 符箓卡底（含插画，不含文字）；卡名约在 y=80，费用写在右上角 |
-| `card_divine` `card_heaven` | 80×108 | 机缘卡、白泽现世卡的空白底框 |
+| `card_attack` `card_guard` `card_move` `card_wealth` | 88×120 | 符箓卡底；卡名约在 y=80，费用写在右上角。边框、类别字和印章是像素底框（`tools/art/src/card_frame_<cat>.png`），插画窗口 (7, 21) 起 74×54 由 `card_art_<cat>` 生成图填满 |
+| `card_divine` `card_heaven` | 80×108 | 机缘卡（金边米纸）、白泽现世卡（天蓝云纹边）的空白底框，2× 显示，标题、图标、选项字由代码写在中间面板上（HD 像素，`tools/art`） |
+
+标「HD 像素，`tools/art`」的帧由 gpt-image 生成原图（`tools/art/src/<id>.jpg`，提示词在 `manifest.json`），`pixelize.py` 抠色缩成像素图，`pack.py` 打进图集。`"fit": "box"` 把主体缩进固定帧尺寸并底部居中，帧尺寸不变，游戏代码不用改。
 
 ## 3. 正式美术需要补的内容（首版）
 
