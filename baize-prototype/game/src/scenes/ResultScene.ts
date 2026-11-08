@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { sound } from '../audio/Sound';
 import type { GameRecord } from '../core/record';
 import { addImg } from '../ui/assets';
 import type { ResultRow, ResultView } from '../ui/resultReadout';
@@ -22,6 +23,7 @@ export class ResultScene extends Phaser.Scene {
   create(d: ResultData): void {
     const v = d.view;
     this.cameras.main.setBackgroundColor(COLORS.bg);
+    sound.music('title');
     txt(this, 640, 44, v.title, { size: 40, bold: true, color: HEX.gold, origin: [0.5, 0.5] });
     txt(this, 640, 90, v.sub, { size: 18, origin: [0.5, 0.5] });
     txt(this, 640, 120, v.rule, { size: 14, color: HEX.dim, origin: [0.5, 0.5] });

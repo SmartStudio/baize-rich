@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { sound } from './audio/Sound';
 import { BootScene } from './scenes/BootScene';
 import { GameScene } from './scenes/GameScene';
 import { HeroSelectScene } from './scenes/HeroSelectScene';
@@ -8,6 +9,8 @@ import { SetupScene } from './scenes/SetupScene';
 import { TitleScene } from './scenes/TitleScene';
 import { VersusScene } from './scenes/VersusScene';
 import { H, W } from './ui/layout';
+
+sound.install();
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,

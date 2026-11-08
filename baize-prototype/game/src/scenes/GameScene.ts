@@ -3,6 +3,7 @@
 // short delay) or the human UI (buttons / modal / board clicks).
 import Phaser from 'phaser';
 import { AIController, DIFFICULTY_LABEL, PERSONALITY_LABEL } from '../ai/ai';
+import { sound } from '../audio/Sound';
 import type { PendingChoice } from '../core/choices';
 import { defaultData } from '../core/data';
 import { Game } from '../core/engine';
@@ -146,6 +147,7 @@ export class GameScene extends Phaser.Scene {
     this.route = [];
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => { this.alive = false; this.game.scene.stop('Hud'); });
     this.cameras.main.setBackgroundColor(COLORS.bg);
+    sound.music('board');
 
     // Resuming replays the saved answers before any listener is attached, so nothing animates.
     this.engine = session.history
@@ -307,6 +309,7 @@ export class GameScene extends Phaser.Scene {
     const seat = e.player ?? 0;
     const tempo = tempoOf(e, this.lastSnap, this.humans);
     const pace = PACE[tempo];
+    sound.event(e, tempo, this.humans);
     if (e.snap && (e.type === 'step' || e.type === 'teleport')) this.boardView.markCurrent(e.snap);
     switch (e.type) {
       case 'step':
@@ -334,7 +337,7 @@ export class GameScene extends Phaser.Scene {
         break;
       case 'breakthrough':
         this.cam.follow(seat);
-        await this.breakthrough.play(breakthroughView(this.engine, e), breakthroughBeats(this.isHuman(seat), this.speed));
+        await sound.duckDuring(this.breakthrough.play(breakthroughView(this.engine, e), breakthroughBeats(this.isHuman(seat), this.speed)));
         break;
       case 'roundStart':
         if (e.snap && e.snap.round !== this.engine.data.config.manifest.round) this.boardView.showBaize(false);
@@ -368,7 +371,7 @@ export class GameScene extends Phaser.Scene {
   private async present(e: GameEvent, pace: Pace): Promise<void> {
     const banner = CUTSCENES[e.type]?.(this.engine, e);
     if (banner) {
-      await this.fx.banner(banner, this.ms(e.type === 'win' ? WIN_MS : pace.banner));
+      await sound.duckDuring(this.fx.banner(banner, this.ms(e.type === 'win' ? WIN_MS : pace.banner)));
       return;
     }
     const rib = RIBBONS[e.type]?.(this.engine, e);
@@ -493,6 +496,7 @@ export class GameScene extends Phaser.Scene {
     const p = this.picking;
     if (!p) return;
     this.picking = null;
+    sound.cue(id === p.plan.cancelId ? 'cancel' : 'confirm');
     this.pick.clear();
     this.setMainButtons(null);
     this.cam.release();
@@ -541,6 +545,7 @@ export class GameScene extends Phaser.Scene {
   private mainAnswer(id: string): void {
     const c = this.mainChoice;
     if (!c || !this.mainResolve || !c.options.some((o) => o.id === id)) return;
+    if (id !== 'roll') sound.cue('confirm');
     if (this.modal.isOpen) this.modal.close(null);
     const res = this.mainResolve;
     this.mainChoice = null;
@@ -635,8 +640,8 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     if (this.picking) this.answerPick(this.picking.plan.cells.find((cell) => cell.node === n)!);
-    else if (ids.length > 1 && this.modal.isOpen) this.modal.close(`${NARROW}${n}`);
-    else if (this.modal.isOpen) this.modal.close(ids[0]);
+    else if (ids.length > 1 && this.modal.isOpen) this.modal.answer(`${NARROW}${n}`);
+    else if (this.modal.isOpen) this.modal.answer(ids[0]);
     else if (this.mainChoice) this.mainAnswer(ids[0]);
   }
 
@@ -710,6 +715,7 @@ export class GameScene extends Phaser.Scene {
 
   private cycleSpeed(): void {
     this.speed = nextSpeed(this.speed);
+    sound.cue('click');
     this.side.btnSpeed.setLabel(`倍速 ×${this.speed} · F`);
     this.toast(`倍速 ×${this.speed} · ${speedNote(this.speed)}`);
   }
@@ -724,6 +730,7 @@ export class GameScene extends Phaser.Scene {
     if (this.coach.isOpen) this.dismissCoach();
     if (k === 'f' || k === 'F') { this.cycleSpeed(); return; }
     if (k === 'l' || k === 'L') { this.logPanel.toggle(); return; }
+    if (k === 'Escape' && this.side.sound.isOpen) { this.side.sound.close(); return; }
     if (k === 'Escape' && this.logPanel.isOpen) { this.logPanel.toggle(false); return; }
     if (k === 'Escape' && this.tip.pinned && !this.modal.isOpen) { this.tip.unpin(); return; }
     if (k === 'h' || k === 'H' || k === 'Home') { this.recentre(); return; }

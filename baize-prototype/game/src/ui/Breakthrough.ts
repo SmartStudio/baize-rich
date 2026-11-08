@@ -3,6 +3,7 @@
 // shake, what was lost). Beat lengths come from the caller (ui/pacing), already scaled by the speed setting.
 // Every position and scale is an integer, so the pixel art stays crisp.
 import Phaser from 'phaser';
+import { sound } from '../audio/Sound';
 import { addImg, setFrame } from './assets';
 import type { BreakthroughView } from './breakthroughView';
 import { signed } from './choices/spec';
@@ -34,9 +35,11 @@ export class Breakthrough {
     panel.add(s.add.rectangle(0, 0, PW, PH, COLORS.ink, 0.96).setOrigin(0, 0).setStrokeStyle(4, COLORS.gold));
     this.header(panel, v);
     await this.fade([layer, dim], 1, beat.in);
+    sound.cue('charge');
     const total = await this.roll(panel, v, beat);
     await this.addBonuses(panel, v, total, beat);
     await this.wait(beat.verdict);
+    sound.cue(v.success ? 'ascend' : 'deviate');
     await (v.success ? this.ascend(layer, panel, v, beat) : this.fail(layer, panel, v, beat));
     await this.wait(beat.result);
     await this.fade([layer], 0, beat.out);

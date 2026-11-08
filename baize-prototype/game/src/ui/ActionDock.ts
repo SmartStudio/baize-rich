@@ -1,4 +1,4 @@
-// Floating HUD on the right. Utility pills sit on top. The dock under them lists the
+// Floating HUD on the right. Utility pills (倍速, 战报, 记录, the speaker) sit on top. The dock under them lists the
 // human's current choices: a roll, or the upgrades, 服丹 and 闭关 the engine is offering.
 import Phaser from 'phaser';
 import type { Game } from '../core/engine';
@@ -6,6 +6,7 @@ import type { GameState } from '../core/types';
 import { addImg, hasFrame, setFrame } from './assets';
 import { IDLE_PLAN, type DockOffer, type DockPlan } from './dockPlan';
 import { DOCK, H, RIGHT, type Rect } from './layout';
+import { SoundControl } from './SoundControl';
 import { COLORS, FLOAT_ALPHA, FS, HEX, PLAYER_COLORS, PLAYER_HEX, txt } from './theme';
 import type { Tooltip, TipContent } from './Tooltip';
 import { Button } from './widgets';
@@ -15,6 +16,7 @@ const CARD_GAP = 6;
 const PORTRAIT = 40;
 const OFFER_H = 48;
 const OFFER_GAP = 4;
+const PILL_W = { text: 62, sound: 32 };
 const QUIET_END = COLORS.panelLight;
 const LOUD_END = 0xc03a40;
 
@@ -54,6 +56,7 @@ export class ActionDock {
   readonly btnSpeed: Button;
   readonly btnLog: Button;
   readonly btnSave: Button;
+  readonly sound: SoundControl;
   readonly btnCast: Button;
   readonly btnEnd: Button;
   readonly btnRoll: Button;
@@ -65,10 +68,18 @@ export class ActionDock {
   constructor(private scene: Phaser.Scene, private game: Game, private tip: Tooltip, private actions: boolean) {
     const s = scene;
     const { x, w } = this;
-    const uw = (w - 8) / 3;
-    this.btnSpeed = new Button(s, x, RIGHT.utilY, { w: uw, h: RIGHT.utilH, label: '', size: FS.sm });
-    this.btnLog = new Button(s, x + uw + 4, RIGHT.utilY, { w: uw, h: RIGHT.utilH, label: '战报 · L', size: FS.sm });
-    this.btnSave = new Button(s, x + 2 * (uw + 4), RIGHT.utilY, { w: uw, h: RIGHT.utilH, label: '记录 · S', size: FS.sm });
+    // 倍速 takes the slack: its label is the only one that grows (×0.5).
+    const speedW = w - PILL_W.sound - 2 * PILL_W.text - 12;
+    let px = x;
+    const pill = (pw: number, label: string) => {
+      const b = new Button(s, px, RIGHT.utilY, { w: pw, h: RIGHT.utilH, label, size: FS.sm });
+      px += pw + 4;
+      return b;
+    };
+    this.btnSpeed = pill(speedW, '');
+    this.btnLog = pill(PILL_W.text, '战报 · L');
+    this.btnSave = pill(PILL_W.text, '记录 · S');
+    this.sound = new SoundControl(s, px, RIGHT.utilY, PILL_W.sound, RIGHT.utilH);
 
     const rowW = w - 2 * DOCK.pad;
     this.halfW = Math.floor((rowW - DOCK.gap) / 2);

@@ -1,5 +1,6 @@
 // Browser side of 对局记录: the localStorage autosave and the JSON download.
 // Storage can throw (private mode, quota, blocked site data); the game must keep working.
+import { DEFAULT_PREFS, snapVolume, type AudioPrefs } from '../audio/mix';
 import { defaultData } from '../core/data';
 import { parseRecord, replayRecord, type GameRecord } from '../core/record';
 import { isCoachStep, type CoachStep } from './coachTriggers';
@@ -7,6 +8,7 @@ import { isCoachStep, type CoachStep } from './coachTriggers';
 const AUTOSAVE_KEY = 'baize.autosave';
 const TUTORIAL_KEY = 'baize.tutorialSeen';
 const COACH_KEY = 'baize.coach';
+const AUDIO_KEY = 'baize.audio';
 
 /** An unfinished autosave that still replays, with a one-line summary for the 继续上局 button. */
 export function findResumable(): { record: GameRecord; summary: string } | null {
@@ -76,6 +78,36 @@ export function parseCoachSave(raw: string | null): { armed: boolean; seen: Coac
   const armed = 'armed' in json ? json.armed : undefined;
   const seen = Array.isArray(seenRaw) ? seenRaw.filter((step): step is CoachStep => typeof step === 'string' && isCoachStep(step)) : [];
   return { armed: armed !== false, seen };
+}
+
+export function loadAudioPrefs(): AudioPrefs {
+  try {
+    return parseAudioPrefs(localStorage.getItem(AUDIO_KEY));
+  } catch {
+    return DEFAULT_PREFS;
+  }
+}
+
+export function saveAudioPrefs(p: AudioPrefs): void {
+  try {
+    localStorage.setItem(AUDIO_KEY, JSON.stringify(p));
+  } catch {
+    /* storage blocked: the settings hold for this tab */
+  }
+}
+
+/** Unknown or broken fields fall back one by one, so an old save keeps whatever still reads. */
+export function parseAudioPrefs(raw: string | null): AudioPrefs {
+  let json: unknown = null;
+  try {
+    json = raw ? JSON.parse(raw) : null;
+  } catch {
+    /* unreadable: defaults */
+  }
+  const o = json && typeof json === 'object' ? (json as Record<string, unknown>) : {};
+  const flag = (k: 'muted' | 'music' | 'sfx') => (typeof o[k] === 'boolean' ? o[k] : DEFAULT_PREFS[k]);
+  const volume = typeof o.volume === 'number' && Number.isFinite(o.volume) ? snapVolume(o.volume) : DEFAULT_PREFS.volume;
+  return { muted: flag('muted'), music: flag('music'), sfx: flag('sfx'), volume };
 }
 
 export function saveAutosave(r: GameRecord): void {

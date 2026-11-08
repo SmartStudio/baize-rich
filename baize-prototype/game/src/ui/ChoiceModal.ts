@@ -6,6 +6,7 @@
 //  - `avoid` (screen rect, usually the deciding player's token): the modal moves to the half of the
 //    screen away from it, so it never covers the token.
 import Phaser from 'phaser';
+import { sound } from '../audio/Sound';
 import { frameRef } from './assets';
 import { buildCards } from './choices/CardSheet';
 import { buildStepper } from './choices/StepperSheet';
@@ -46,9 +47,16 @@ export class ChoiceModal {
     this.close(null);
     this.spec = spec;
     this.pickable = spec.options.filter((o) => !o.disabled).map((o) => o.id);
-    this.sheet = LAYOUTS[spec.layout ?? 'list'](this.scene, spec, (id) => this.close(id), (id) => this.setFocus(id));
+    this.sheet = LAYOUTS[spec.layout ?? 'list'](this.scene, spec, (id) => this.answer(id), (id) => this.setFocus(id));
     this.setFocus(spec.defaultId && this.pickable.includes(spec.defaultId) ? spec.defaultId : this.pickable[0] ?? null);
     return new Promise((res) => { this.resolve = res; });
+  }
+
+  /** The player's own answer: sounds it, then closes with it. `close` alone is for the scene tidying up. */
+  answer(id: string | null): void {
+    if (!this.spec) return;
+    sound.cue(id === null || id === '__close' || id === this.spec.cancelId ? 'cancel' : 'confirm');
+    this.close(id);
   }
 
   close(id: string | null): void {
@@ -66,12 +74,12 @@ export class ChoiceModal {
     const spec = this.spec;
     if (!spec) return false;
     if (key === 'ESC') {
-      if (spec.cancelId) this.close(spec.cancelId);
-      else if (spec.closable || spec.cancelId === null) this.close(null);
+      if (spec.cancelId) this.answer(spec.cancelId);
+      else if (spec.closable || spec.cancelId === null) this.answer(null);
       return true;
     }
     if (key === 'SPACE') {
-      if (this.focus) this.close(this.focus);
+      if (this.focus) this.answer(this.focus);
       return true;
     }
     const arrow = ARROWS[key];
@@ -82,7 +90,7 @@ export class ChoiceModal {
       return true;
     }
     const picked = spec.options.find((o, i) => optionKey(o, i) === key);
-    if (picked) this.close(picked.id);
+    if (picked) this.answer(picked.id);
     return !!picked;
   }
 
