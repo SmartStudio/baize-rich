@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { sound } from '../audio/Sound';
 import { Board } from '../core/board';
 import { defaultData } from '../core/data';
-import { addImg } from '../ui/assets';
+import { addImg, ensureCanvas } from '../ui/assets';
 import { BoardView } from '../ui/BoardView';
 import { HowToPlay } from '../ui/HowToPlay';
 import { TITLE_SUBTITLE, titleNarration } from '../ui/narration';
@@ -15,11 +15,26 @@ import { Button, fadeToScene } from '../ui/widgets';
 
 const INTRO = titleNarration(defaultData);
 const LINE_MS = 3200;
+const TITLE_LIGHT = 0xb9dcff;
 
 const depthOf = (obj: Phaser.GameObjects.GameObject): number => {
   const withDepth = obj as Phaser.GameObjects.GameObject & { depth?: number };
   return withDepth.depth ?? 0;
 };
+
+function titleHalo(scene: Phaser.Scene): Phaser.GameObjects.Image {
+  ensureCanvas(scene, 'title_halo', 240, 192, (ctx) => {
+    for (let y = 0; y < 192; y += 4) {
+      for (let x = 0; x < 240; x += 4) {
+        const d = ((x + 2 - 120) / 120) ** 2 + ((y + 2 - 96) / 96) ** 2;
+        if (d > 1 || (x / 4 + y / 4) % (d < 0.46 ? 4 : 3) === 0) continue;
+        ctx.fillStyle = `rgba(255,255,255,${d < 0.46 ? 0.34 : d < 0.72 ? 0.22 : 0.12})`;
+        ctx.fillRect(x, y, 4, 4);
+      }
+    }
+  });
+  return scene.add.image(640, 300, 'title_halo').setTint(TITLE_LIGHT).setAlpha(0.7);
+}
 
 /** Title: a skippable narrated intro over an animated backdrop, then 开始游戏 / 继续上局 / 玩法说明. */
 export class TitleScene extends Phaser.Scene {
@@ -59,10 +74,8 @@ export class TitleScene extends Phaser.Scene {
     const plate = this.boardPlate();
     this.tweens.add({ targets: plate, scale: 2.08, x: 610, duration: 14000, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     this.add.rectangle(0, 0, 1280, 720, COLORS.bg, 0.5).setOrigin(0, 0);
-    const glow = this.add.graphics();
-    glow.fillStyle(COLORS.gold, 0.10).fillCircle(640, 300, 190);
-    glow.fillStyle(COLORS.parchment, 0.08).fillCircle(640, 300, 130);
-    this.tweens.add({ targets: glow, alpha: 0.4, duration: 2200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    const glow = titleHalo(this);
+    this.tweens.add({ targets: glow, alpha: 0.34, duration: 2200, yoyo: true, repeat: -1, ease: 'Stepped', easeParams: [5] });
     for (let i = 0; i < 7; i++) this.cloud(Phaser.Math.Between(0, 1280), 60 + i * 95, Phaser.Math.FloatBetween(0.6, 1.4), i % 2 ? 1 : -1);
     for (let i = 0; i < 40; i++) this.mote();
   }
