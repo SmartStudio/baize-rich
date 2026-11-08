@@ -6,12 +6,12 @@ import Phaser from 'phaser';
 import type { Board } from '../core/board';
 import type { TileType } from '../core/types';
 import { ensureCanvas } from './assets';
-import { COLORS } from './theme';
 import { DEPTH, type Point, type WorldMap } from './world';
 
 /** A landmark's feet sit this far below its cell's top-face centre (docs/assets.md §2b). */
 export const STAND_DY = 10;
 const GOLD_LIGHT = 0xffe7a0;
+const MANIFEST_LIGHT = 0xb9dcff;
 
 type Effect = (scene: Phaser.Scene, feet: Point) => void;
 
@@ -89,29 +89,43 @@ function ensureFxTextures(s: Phaser.Scene): void {
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, w, w);
   });
-  radial('fx_glow', 96, 96, 0.9);
   radial('fx_aura', 160, 136, 1);
-  ensureCanvas(s, 'fx_beam', 76, 384, (ctx) => {
-    const across = ctx.createLinearGradient(0, 0, 76, 0);
-    across.addColorStop(0, 'rgba(255,255,255,0)');
-    across.addColorStop(0.5, 'rgba(255,255,255,0.9)');
-    across.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = across;
-    ctx.fillRect(0, 0, 76, 384);
-    ctx.globalCompositeOperation = 'destination-in';
-    const up = ctx.createLinearGradient(0, 0, 0, 384);
-    up.addColorStop(0, 'rgba(0,0,0,0)');
-    up.addColorStop(0.6, 'rgba(0,0,0,1)');
-    up.addColorStop(1, 'rgba(0,0,0,0.6)');
-    ctx.fillStyle = up;
-    ctx.fillRect(0, 0, 76, 384);
-  });
+  manifestTextures(s);
   const block = (key: string, w: number, h: number, fill = '#ffffff'): void => ensureCanvas(s, key, w, h, (ctx) => { ctx.fillStyle = fill; ctx.fillRect(0, 0, w, h); });
   block('fx_mote', 2, 2);
   block('fx_ember', 2, 1);
   block('fx_glint', 3, 1);
   ensureCanvas(s, 'fx_smoke', 4, 4, (ctx) => { ctx.fillStyle = '#ffffff'; ctx.fillRect(1, 0, 2, 4); ctx.fillRect(0, 1, 4, 2); });
   ensureCanvas(s, 'fx_spark', 6, 6, (ctx) => { ctx.fillStyle = '#ffffff'; ctx.fillRect(1, 0, 4, 6); ctx.fillRect(0, 1, 6, 4); });
+}
+
+function manifestTextures(s: Phaser.Scene): void {
+  ensureCanvas(s, 'fx_beam', 80, 384, (ctx) => {
+    for (let y = 0; y < 384; y += 4) {
+      const half = 10 + Math.floor(y / 48) * 4;
+      for (let x = 0; x < 80; x += 4) {
+        if (Math.abs(x - 40) > half || (y > 248 && Math.abs(x - 40) < 20)) continue;
+        const band = Math.floor(y / 32) % 3;
+        if ((x / 4 + y / 4 + band) % 4 === 0) continue;
+        ctx.fillStyle = `rgba(255,255,255,${[0.16, 0.24, 0.32][band]})`;
+        ctx.fillRect(x, y, 4, 4);
+      }
+    }
+  });
+  pixelRing(s, 'fx_manifest_ring_s', 112, 72);
+  pixelRing(s, 'fx_manifest_ring_l', 152, 96);
+}
+
+function pixelRing(s: Phaser.Scene, key: string, w: number, h: number): void {
+  ensureCanvas(s, key, w, h, (ctx) => {
+    ctx.fillStyle = '#ffffff';
+    for (let y = 0; y < h; y += 2) {
+      for (let x = 0; x < w; x += 2) {
+        const d = ((x + 1 - w / 2) / (w / 2)) ** 2 + ((y + 1 - h / 2) / (h / 2)) ** 2;
+        if (d <= 1 && d >= 0.82 && (x / 2 + y / 2) % 3 !== 0) ctx.fillRect(x, y, 2, 2);
+      }
+    }
+  });
 }
 
 /** Every landmark's ambient effect, the altar glow and the drifting motes. */
@@ -132,7 +146,7 @@ export function addAmbient(scene: Phaser.Scene, world: WorldMap, board: Board, s
  */
 export class Manifest {
   private layer: Phaser.GameObjects.Container;
-  private parts: { beam: Phaser.GameObjects.Image; glow: Phaser.GameObjects.Image; halos: Phaser.GameObjects.Ellipse[] };
+  private parts: { beam: Phaser.GameObjects.Image; halos: Phaser.GameObjects.Image[] };
   private sparks: Phaser.GameObjects.Particles.ParticleEmitter;
   private loops: Phaser.Tweens.Tween[] = [];
   private on = false;
@@ -141,11 +155,12 @@ export class Manifest {
     const s = scene;
     ensureFxTextures(s);
     const depth = DEPTH.stand(feet.y) + 0.1;
-    const beam = s.add.image(0, 0, 'fx_beam').setOrigin(0.5, 1).setTint(GOLD_LIGHT).setBlendMode(Phaser.BlendModes.ADD);
-    const glow = s.add.image(0, -44, 'fx_glow').setTint(GOLD_LIGHT).setBlendMode(Phaser.BlendModes.ADD);
-    const halos = [0, 1].map(() => s.add.ellipse(0, 0, 150, 96).setStrokeStyle(3, COLORS.gold).setFillStyle());
-    this.parts = { beam, glow, halos };
-    this.layer = s.add.container(feet.x, feet.y, [beam, ...halos, glow]).setDepth(depth).setVisible(false);
+    const beam = s.add.image(0, 0, 'fx_beam').setOrigin(0.5, 1).setTint(MANIFEST_LIGHT);
+    const halos = ['fx_manifest_ring_s', 'fx_manifest_ring_l'].map((key) =>
+      s.add.image(0, 0, key).setTint(MANIFEST_LIGHT).setAlpha(0),
+    );
+    this.parts = { beam, halos };
+    this.layer = s.add.container(feet.x, feet.y, [beam, ...halos]).setDepth(depth).setVisible(false);
     this.sparks = s.add.particles(feet.x, feet.y, 'fx_spark', {
       speedY: { min: -70, max: -30 }, speedX: { min: -12, max: 12 }, lifespan: 1800,
       alpha: { start: 1, end: 0 }, frequency: 90, tint: [GOLD_LIGHT, 0xffffff], blendMode: 'ADD',
@@ -165,15 +180,14 @@ export class Manifest {
       return;
     }
     const s = this.scene;
-    const { beam, glow, halos } = this.parts;
+    const { beam, halos } = this.parts;
     this.layer.setVisible(true).setAlpha(0);
     this.sparks.start();
     this.loops.push(
       s.tweens.add({ targets: this.layer, alpha: 1, duration: 700 }),
-      s.tweens.add({ targets: beam, alpha: { from: 0.55, to: 0.9 }, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' }),
-      s.tweens.add({ targets: glow, alpha: { from: 0.35, to: 0.8 }, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' }),
+      s.tweens.add({ targets: beam, alpha: { from: 0.48, to: 0.72 }, duration: 900, yoyo: true, repeat: -1, ease: 'Stepped', easeParams: [4] }),
       ...halos.map((h, i) => s.tweens.add({
-        targets: h, scale: { from: 0.5, to: 1.5 }, alpha: { from: 1, to: 0 }, duration: 1600, delay: i * 800, repeat: -1, ease: 'Sine.easeOut',
+        targets: h, alpha: { from: 0.62, to: 0.12 }, duration: 1200, delay: i * 600, yoyo: true, repeat: -1, ease: 'Stepped', easeParams: [4],
       })),
     );
   }

@@ -27,7 +27,7 @@ export class Cutscene {
   /** A strip across the board column in the upper screen. Resolves when it has gone. */
   banner(spec: BannerSpec, ms: number): Promise<void> {
     const s = this.scene;
-    const cy = STAGE.bannerY;
+    const cy = spec.icon === 'baize' ? H - 132 : STAGE.bannerY;
     const dim = spec.dim ? s.add.rectangle(0, 0, W, H, 0x000000, 0.35).setOrigin(0, 0).setAlpha(0) : null;
     const { x, w } = BOARD_COL;
     const strip = s.add.rectangle(x, cy, w, BANNER_H, COLORS.ink, 0.94).setOrigin(0, 0.5);
