@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PendingChoice } from '../src/core/choices';
 import { Game } from '../src/core/engine';
-import { rentFor, upgradeCost, winRealm } from '../src/core/rules';
+import { duelWinChance, rentFor, upgradeCost, winRealm } from '../src/core/rules';
 import { AIController } from '../src/ai/ai';
 import { newGame, ringGame, rngFor, script } from './helpers';
 
@@ -23,6 +23,15 @@ function closureOffered(g: Game, seat: number): boolean {
   g.runFlow(g.testActionPhase(seat), script({ action: 'end' }, seen));
   return seen[0].options.some((o) => o.id === 'closure');
 }
+
+describe('斗法胜率', () => {
+  it('counts all 1D6 pairs with ties going to the defender', () => {
+    expect(duelWinChance(0)).toBe(15 / 36);
+    expect(duelWinChance(1)).toBe(21 / 36);
+    expect(duelWinChance(-6)).toBe(0);
+    expect(duelWinChance(6)).toBe(1);
+  });
+});
 
 describe('灵田', () => {
   it('rent is price × rentRate × the level multiplier', () => {

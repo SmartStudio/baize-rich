@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ChoiceKind, PendingChoice } from '../src/core/choices';
 import type { Flow, Game } from '../src/core/engine';
-import { chance2d6, nominalRent, passToll } from '../src/core/rules';
+import { chance2d6, duelBonus, duelWinChance, nominalRent, passToll } from '../src/core/rules';
 import type { NodeId } from '../src/core/types';
 import { breakthroughView } from '../src/ui/breakthroughView';
 import { onlyAnswer, presentChoice } from '../src/ui/choices/registry';
@@ -141,6 +141,55 @@ describe('购买 screen', () => {
     expect(rent).toBe(11);
     expect(toll).toBe(5);
     expect(spec.desc).toBe(`${choice.desc}\n基础租金 ${rent} 灵石 · 路过交 ${toll}`);
+  });
+});
+
+describe('斗法 screen', () => {
+  it('shows the attacker chance, tie rule, prize, and loss on each target', () => {
+    const g = ringGame();
+    g.state.players[1].pills = g.data.config.duel.glowAt;
+    const choice: PendingChoice = {
+      seq: 1,
+      player: 0,
+      kind: 'duel',
+      title: '斗法',
+      options: [
+        { id: 'p1', label: `挑战 ${g.state.players[1].name}`, value: 1 },
+        { id: 'none', label: '不斗法', value: null },
+      ],
+      ctx: {},
+    };
+    const hint = presentChoice(choice, { game: g }).options[0].hint!;
+    const bonus = duelBonus(g.state, g.data, 0, 1);
+    expect(hint).toContain(`胜 ${Math.round(duelWinChance(bonus[0] - bonus[1]) * 100)}%`);
+    expect(hint).toContain(`赢 ${g.data.config.duel.glowSteal} 颗丹药`);
+    expect(hint).toContain(`输 ${g.data.config.duel.lossStones} 灵石`);
+    expect(hint).toContain('平局守方胜');
+  });
+
+  it('shows the defender chance and both outcomes before countering', () => {
+    const g = ringGame();
+    g.state.players[1].hand = ['goldlight'];
+    g.state.players[0].pills = 1;
+    g.state.players[1].pills = 1;
+    const choice: PendingChoice = {
+      seq: 1,
+      player: 1,
+      kind: 'guardReact',
+      title: '是否反制？',
+      desc: `${g.state.players[0].name} 对你发起斗法`,
+      options: [
+        { id: 'goldlight', label: '金光符 · 抵挡', value: true },
+        { id: 'no', label: '不反制', value: false },
+      ],
+      ctx: { threat: 'duel', attacker: 0 },
+    };
+    const spec = presentChoice(choice, { game: g });
+    const bonus = duelBonus(g.state, g.data, 0, 1);
+    expect(spec.desc).toContain(`守住 ${Math.round((1 - duelWinChance(bonus[0] - bonus[1])) * 100)}%`);
+    expect(spec.desc).toContain('胜可夺 1 颗丹药');
+    expect(spec.desc).toContain('输掉 1 颗丹药');
+    expect(spec.desc).toContain('平局你胜');
   });
 });
 
