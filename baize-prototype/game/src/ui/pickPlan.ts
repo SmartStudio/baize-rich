@@ -1,4 +1,4 @@
-// Choices that only decide where a token goes, asked on the board instead of in a modal: the cells each
+// Choices that only decide where a token goes or a 镇山 mountain falls, asked on the board instead of in a modal: the cells each
 // answer leads to, their number keys and labels, and the dock line. Pure, so GameScene and the tests share it.
 // The walk projection mirrors Game.walk: forks branch, the altar stops a walk unless its pill is paid,
 // a 镇山 mountain stops it, 迷魂丹 halves the steps, every rival land walked past takes its 过路费.
@@ -8,7 +8,7 @@ import type { Game } from '../core/engine';
 import { passToll } from '../core/rules';
 import type { NodeId } from '../core/types';
 
-export const PICK_KINDS = ['fork', 'exitRoad', 'altarPass', 'adjust', 'rollValue', 'node'] as const;
+export const PICK_KINDS = ['fork', 'exitRoad', 'altarPass', 'adjust', 'rollValue', 'node', 'target'] as const;
 export type PickKind = (typeof PICK_KINDS)[number];
 
 /** The asks a walk can still raise after this one; a picked cell's route answers them in order. */
@@ -37,6 +37,8 @@ export interface PickPlan {
   cells: PickCell[];
   /** Too many landings to light: cells show each option's default way and later forks are still asked. */
   asksLater: boolean;
+  /** The engine's back-out answer (Esc), when the ask has one. */
+  cancelId?: string;
 }
 
 interface Landing {
@@ -64,7 +66,8 @@ interface Ask {
   defaultId?: string;
 }
 
-type Planner<K extends PickKind> = (g: Game, c: PendingChoiceOf<K>) => Ask;
+/** Null when this ask of the kind is not about cells (a target ask naming players). */
+type Planner<K extends PickKind> = (g: Game, c: PendingChoiceOf<K>) => Ask | null;
 
 const KEYS = 9;
 
@@ -106,6 +109,14 @@ const PLANNERS: { [K in PickKind]: Planner<K> } = {
     lead: `${c.title}：${c.desc ?? ''}。`,
     candidates: c.options.map((o) => landed(o.id, { node: o.value, route: [], borrowed: false, toll: 0 }, g.nodeName(o.value))),
   }),
+  target: (g, c) => {
+    const cells = c.options.filter((o) => o.id !== c.cancelId);
+    if (!cells.every((o) => o.node)) return null;
+    return {
+      lead: `${c.title}：${c.desc ?? ''}。`,
+      candidates: cells.map((o) => landed(o.id, { node: o.node!, route: [], borrowed: false, toll: 0 }, g.nodeName(o.node!))),
+    };
+  },
 };
 
 export function isPickKind(kind: ChoiceKind): kind is PickKind {
@@ -120,13 +131,15 @@ export function isPickKind(kind: ChoiceKind): kind is PickKind {
 export function pickPlan(g: Game, c: PendingChoice): PickPlan | null {
   if (!isPickKind(c.kind)) return null;
   const ask = (PLANNERS[c.kind] as Planner<PickKind>)(g, c as PendingChoiceOf<PickKind>);
+  if (!ask) return null;
   const every = distinct(ask.candidates);
   const asksLater = every.length > KEYS;
   const cells = toCells(asksLater ? distinct(defaultWays(ask.candidates)) : every, ask.defaultId);
   const primary = cells.find((cell) => cell.primary)!;
   const space = primary.key ? `空格选 ${primary.key}。` : '空格选金色那格。';
   const later = asksLater ? '后面的岔路到了再选。' : '';
-  return { hint: `${ask.lead}点击发光的格子或按数字键，${space}${later}`, cells, asksLater };
+  const esc = c.cancelId ? 'Esc 取消。' : '';
+  return { hint: `${ask.lead}点击发光的格子或按数字键，${space}${later}${esc}`, cells, asksLater, cancelId: c.cancelId };
 }
 
 /** The best-ranked answer reaching each node, the one paying less 过路费 on a tie, in option order. */

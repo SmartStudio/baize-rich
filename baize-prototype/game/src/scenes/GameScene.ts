@@ -474,9 +474,10 @@ export class GameScene extends Phaser.Scene {
 
   /** A spatial ask answered on the board: the landing cells lit and numbered, the dock saying what they mean. */
   private boardChoice(c: PendingChoice, plan: PickPlan): Promise<string> {
-    if (plan.cells.length === 1 && !plan.asksLater) return Promise.resolve(this.takeRoute(plan.cells[0]));
+    if (plan.cells.length === 1 && !plan.asksLater && !plan.cancelId) return Promise.resolve(this.takeRoute(plan.cells[0]));
     const multiHuman = this.ais.filter((a) => a === null).length > 1;
-    this.side.setPick(multiHuman ? `${this.engine.state.players[c.player].name} · ${plan.hint}` : plan.hint);
+    const cancelId = plan.cancelId;
+    this.side.setPick(multiHuman ? `${this.engine.state.players[c.player].name} · ${plan.hint}` : plan.hint, cancelId ? () => this.finishPick(cancelId) : null);
     this.setNodeOptions(plan.cells);
     this.boardView.setClickable(plan.cells.map((cell) => cell.node));
     this.pick.show(plan.cells, this.engine.state.players.map((p) => this.boardView.tokenRect(p.seat)));
@@ -485,13 +486,17 @@ export class GameScene extends Phaser.Scene {
   }
 
   private answerPick(cell: PickCell): void {
+    if (this.picking) this.finishPick(this.takeRoute(cell));
+  }
+
+  private finishPick(id: string): void {
     const p = this.picking;
     if (!p) return;
     this.picking = null;
     this.pick.clear();
     this.setMainButtons(null);
     this.cam.release();
-    p.resolve(this.takeRoute(cell));
+    p.resolve(id);
   }
 
   private takeRoute(cell: PickCell): string {
@@ -500,7 +505,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   private pickKey(k: string, ev: KeyboardEvent): void {
-    const cells = this.picking!.plan.cells;
+    const { cells, cancelId } = this.picking!.plan;
+    if (k === 'Escape' && cancelId) {
+      this.finishPick(cancelId);
+      return;
+    }
     const cell = k === ' ' || k === 'Enter' ? cells.find((x) => x.primary) : cells.find((x) => x.key === k);
     if (!cell) return;
     ev.preventDefault();

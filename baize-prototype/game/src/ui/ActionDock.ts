@@ -42,6 +42,8 @@ export class ActionDock {
   private plan: DockPlan = IDLE_PLAN;
   /** A board pick's line. While set the dock only explains the lit cells: no roll button. */
   private pickHint: string | null = null;
+  /** Backs out of a board pick the engine lets you cancel; null hides 取消. */
+  private pickCancel: (() => void) | null = null;
   private offerButtons: OfferButton[] = [];
   private moreButton: Button | null = null;
   private offerHandler: ((id: string) => void) | null = null;
@@ -55,6 +57,7 @@ export class ActionDock {
   readonly btnCast: Button;
   readonly btnEnd: Button;
   readonly btnRoll: Button;
+  private btnBack: Button;
   private cardClick: ((card: string) => void) | null = null;
   private castable = new Set<string>();
 
@@ -78,6 +81,7 @@ export class ActionDock {
     this.btnRoll = new Button(s, 0, 0, { w: rowW, h: DOCK.rollH, label: '掷骰子 · 空格', size: FS.xl, fill: COLORS.gold, textColor: HEX.ink });
     this.btnCast = new Button(s, 0, 0, { w: this.halfW, h: DOCK.btnH, label: '出符 · C', size: FS.sm });
     this.btnEnd = new Button(s, 0, 0, { w: this.halfW, h: DOCK.btnH, label: '结束 · ↵', size: FS.sm, fill: LOUD_END });
+    this.btnBack = new Button(s, 0, 0, { w: rowW, h: DOCK.btnH, label: '取消 · Esc', size: FS.sm }).onClick(() => this.pickCancel?.());
     this.handLayer = s.add.container(0, 0);
     if (actions) {
       this.handLabel = txt(s, 0, 0, '', { size: FS.xs, color: HEX.dim });
@@ -106,14 +110,16 @@ export class ActionDock {
   setPlan(plan: DockPlan): void {
     this.plan = plan;
     this.pickHint = null;
+    this.pickCancel = null;
     this.layout();
     if (this.lastTurn) this.applyTurn(this.lastTurn[0], this.lastTurn[1]);
   }
 
-  /** Answer on the board: the plan goes idle and the dock shows `hint` instead. */
-  setPick(hint: string): void {
+  /** Answer on the board: the plan goes idle and the dock shows `hint` instead, and 取消 when `cancel` is given. */
+  setPick(hint: string, cancel: (() => void) | null): void {
     this.setPlan(IDLE_PLAN);
     this.pickHint = hint;
+    this.pickCancel = cancel;
     this.layout();
     if (this.lastTurn) this.applyTurn(this.lastTurn[0], this.lastTurn[1]);
   }
@@ -321,15 +327,18 @@ export class ActionDock {
   private placeRow(cursor: number): number {
     const showCast = this.plan.cast || this.plan.end;
     const showEnd = this.plan.end;
+    const showBack = this.pickCancel !== null;
     this.btnCast.setVisible(this.actions && showCast);
     this.btnEnd.setVisible(this.actions && showEnd);
-    if (!showCast && !showEnd) {
+    this.btnBack.setVisible(this.actions && showBack);
+    if (!showCast && !showEnd && !showBack) {
       this.endRectBox = { x: 0, y: 0, w: 0, h: 0 };
       return cursor;
     }
     const y = cursor + DOCK.gap;
     const x = this.x + DOCK.pad;
     this.btnCast.setPosition(x, y);
+    this.btnBack.setPosition(x, y);
     const endX = showCast ? x + this.halfW + DOCK.gap : x;
     this.btnEnd.setPosition(endX, y);
     this.endRectBox = showEnd ? { x: endX, y, w: this.halfW, h: DOCK.btnH } : { x: 0, y: 0, w: 0, h: 0 };
@@ -348,13 +357,14 @@ export class ActionDock {
   }
 
   private showsRow(): boolean {
-    return this.actions && (this.plan.end || this.plan.cast);
+    return this.actions && (this.plan.end || this.plan.cast || this.pickCancel !== null);
   }
 
   private hideControls(): void {
     this.btnRoll.setVisible(false);
     this.btnCast.setVisible(false);
     this.btnEnd.setVisible(false);
+    this.btnBack.setVisible(false);
     this.planHint.setVisible(false);
   }
 
