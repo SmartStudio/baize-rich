@@ -169,7 +169,7 @@ export class GameScene extends Phaser.Scene {
     this.top = new TopBar(hud, this.engine, this.tip);
     this.cards = new PlayerCards(hud, this.engine, labels, this.humans, this.tip);
     this.side = new ActionDock(hud, this.engine, this.tip, session.seats.some((s) => s.human));
-    this.modal = new ChoiceModal(hud);
+    this.modal = new ChoiceModal(hud, this.tip);
     this.logPanel = new LogPanel(hud);
     this.fx = new Cutscene(hud);
     this.breakthrough = new Breakthrough(hud);

@@ -14,6 +14,7 @@ import { optionKey, type ModalLayout, type ModalOption, type ModalSpec } from '.
 import { buildTiles } from './choices/TileSheet';
 import { H, RIGHT } from './layout';
 import { COLORS, FS, HEX, txt } from './theme';
+import type { Tooltip } from './Tooltip';
 import { Button } from './widgets';
 
 export type { ModalOption, ModalSpec };
@@ -33,13 +34,15 @@ export class ChoiceModal {
   private pickable: string[] = [];
   private focus: string | null = null;
 
-  constructor(private scene: Phaser.Scene) {}
+  constructor(private scene: Phaser.Scene, private tip: Tooltip) {}
 
   get isOpen(): boolean {
     return this.sheet !== null;
   }
 
   open(spec: ModalSpec): Promise<string | null> {
+    // A pinned tile tip ignores the hover gate and would stay above this sheet.
+    if (this.tip.pinned?.startsWith('tile:')) this.tip.unpin();
     this.close(null);
     this.spec = spec;
     this.pickable = spec.options.filter((o) => !o.disabled).map((o) => o.id);
