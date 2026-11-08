@@ -1,10 +1,12 @@
 // One seat's figure on the board: a walker sprite whose feet sit on the container origin, a soft shadow and a
 // ring in the seat's colour under them, and the current-turn pointer over its head. It faces the way it steps,
 // cycles its walk frames while moving and bobs one pixel while it stands. Its feet stay on whole pixels.
-// While art in front covers it, an outline of its figure in the seat's colour draws above the whole board.
+// A light rim around its figure keeps it readable on dark art. While art in front covers it, an outline of its
+// figure in the seat's colour draws above the whole board.
 import Phaser from 'phaser';
 import { addImg, ensureCanvas, frameRef, setFrame, TOKEN_FRAME, WALK_FRAMES, walkFrame, type WalkDir } from './assets';
 import type { Rect } from './layout';
+import { COLORS } from './theme';
 import { DEPTH, facingFor, type Facing, type Point } from './world';
 
 const POSE: Record<Facing, { dir: WalkDir; flip: boolean }> = {
@@ -19,12 +21,15 @@ const BOB_MS = 560;
 const POINTER_Y = -60;
 /** Head and body box around the feet, for camera focus, modals and floating labels. */
 export const TOKEN_BOX = { w: 32, h: 52 };
+/** The rim's share of the seat colour; the rest is parchment, so the rim reads as light, not as a pick highlight. */
+const RIM_TINT = 0.3;
+const RIM_ALPHA = 0.85;
 /** Above every landmark, building and token, under the board's labels. */
 const XRAY_DEPTH = DEPTH.top - 1;
 
-/** A frame's x-ray: the 1-px ring of pixels around its figure, white so it tints to the seat colour. */
-function xrayKey(scene: Phaser.Scene, name: string): string {
-  const key = `xray_${name}`;
+/** The 1-px ring of pixels around a frame's figure, white so it tints: the token's rim and its x-ray. */
+function outlineKey(scene: Phaser.Scene, name: string): string {
+  const key = `outline_${name}`;
   const [texKey, frameName] = frameRef(scene, name);
   const f = scene.textures.getFrame(texKey, frameName);
   const { cutX, cutY, cutWidth: w, cutHeight: h } = f;
@@ -71,6 +76,7 @@ export class Token {
   readonly root: Phaser.GameObjects.Container;
   private figure: Phaser.GameObjects.Image;
   private pointer: Phaser.GameObjects.Image;
+  private rim: Phaser.GameObjects.Image;
   private xray: Phaser.GameObjects.Image;
   private facing: Facing = 'down';
   private phase = 0;
@@ -85,9 +91,11 @@ export class Token {
     const shadow = scene.add.image(0, 0, 'tok_shadow').setDisplayOrigin(13, 4);
     const ring = scene.add.image(0, 0, 'tok_ring').setDisplayOrigin(15, 5).setTint(colour).setAlpha(0.85);
     this.figure = addImg(scene, 0, 0, walkFrame(hero, 'd', 0)).setDisplayOrigin(TOKEN_FRAME.footX, TOKEN_FRAME.footY);
+    this.rim = scene.add.image(0, 0, '__DEFAULT').setTint(rimColour(colour)).setAlpha(RIM_ALPHA);
     this.pointer = scene.add.image(0, POINTER_Y, 'tok_pointer').setDisplayOrigin(4, 5).setTint(colour).setVisible(false);
-    this.root = scene.add.container(0, 0, [shadow, ring, this.figure, this.pointer]);
+    this.root = scene.add.container(0, 0, [shadow, ring, this.rim, this.figure, this.pointer]);
     this.xray = scene.add.image(0, 0, '__DEFAULT').setTint(colour).setDepth(XRAY_DEPTH).setVisible(false);
+    this.pose();
     scene.time.addEvent({ delay: BOB_MS, startAt: seat * 130, loop: true, callback: () => this.tickBob() });
   }
 
@@ -161,7 +169,7 @@ export class Token {
   private startCycle(frameMs: number): void {
     this.halt?.remove();
     this.halt = null;
-    this.figure.y = 0;
+    this.figure.y = this.rim.y = 0;
     this.pose();
     if (this.cycle?.delay === frameMs) return;
     this.cycle?.remove();
@@ -183,7 +191,7 @@ export class Token {
 
   private tickBob(): void {
     this.bob ^= 1;
-    if (!this.cycle) this.figure.y = -this.bob;
+    if (!this.cycle) this.figure.y = this.rim.y = -this.bob;
     this.pointer.y = POINTER_Y - 2 * this.bob;
     this.syncXray();
   }
@@ -192,13 +200,24 @@ export class Token {
     const { dir, flip } = POSE[this.facing];
     setFrame(this.figure, walkFrame(this.hero, dir, this.phase));
     this.figure.setFlipX(flip).setDisplayOrigin(TOKEN_FRAME.footX, TOKEN_FRAME.footY);
+    this.rim.setTexture(outlineKey(this.scene, walkFrame(this.hero, dir, this.phase))).setFlipX(flip)
+      .setDisplayOrigin(TOKEN_FRAME.footX, TOKEN_FRAME.footY);
     this.syncXray();
   }
 
   private syncXray(): void {
     if (!this.xray.visible) return;
     const { dir, flip } = POSE[this.facing];
-    this.xray.setTexture(xrayKey(this.scene, walkFrame(this.hero, dir, this.phase))).setFlipX(flip)
+    this.xray.setTexture(outlineKey(this.scene, walkFrame(this.hero, dir, this.phase))).setFlipX(flip)
       .setDisplayOrigin(TOKEN_FRAME.footX, TOKEN_FRAME.footY).setPosition(this.x, this.y + this.figure.y);
   }
+}
+
+function rimColour(seat: number): number {
+  const mix = (shift: number): number => {
+    const a = (seat >> shift) & 0xff;
+    const b = (COLORS.parchment >> shift) & 0xff;
+    return Math.round(a * RIM_TINT + b * (1 - RIM_TINT)) << shift;
+  };
+  return mix(16) | mix(8) | mix(0);
 }
