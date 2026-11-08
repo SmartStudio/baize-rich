@@ -3,7 +3,7 @@ import type { PendingChoice } from '../src/core/choices';
 import type { Game } from '../src/core/engine';
 import { nominalRent, upgradeCost } from '../src/core/rules';
 import { presentChoice } from '../src/ui/choices/registry';
-import { dockPlan } from '../src/ui/dockPlan';
+import { dockPlan, turnReadout } from '../src/ui/dockPlan';
 import { ringGame, script } from './helpers';
 
 function askAction(g: Game): PendingChoice {
@@ -47,6 +47,28 @@ describe('action dock plan', () => {
     expect(plan.cast).toBe(true);
     expect(plan.endLoud).toBe(false);
     expect(plan.hint).toContain('出符');
+  });
+
+  it('explains why upgrade rows disappear after this turn already upgraded a plot', () => {
+    const g = ringGame();
+    g.state.turn.upgraded = true;
+    const row = dockPlan(g, askAction(g)).offers.find((offer) => offer.id === 'upgrade-used');
+    expect(row).toMatchObject({
+      title: '本回合已升级',
+      detail: '每回合限 1 块',
+      enabled: false,
+    });
+  });
+
+  it('keeps a disabled 闭关 row when the bar is full away from a closure site', () => {
+    const g = ringGame();
+    const p = g.state.players[0];
+    p.cult = g.data.config.realms[p.realm].bar;
+    p.pos = 'R0';
+    const row = dockPlan(g, askAction(g)).offers.find((offer) => offer.id === 'closure-unavailable');
+    expect(row).toMatchObject({ title: '闭关 · 暂不可用', enabled: false });
+    expect(row?.detail).toContain('走到白泽灵台或自家');
+    expect(row?.detail).toContain('才能闭关');
   });
 
   it('puts 服丹 and 闭关 on the same list, after the lands', () => {
@@ -132,5 +154,38 @@ describe('action dock plan', () => {
     expect(plan.hint).toContain(`租 ${nominalRent(g.data, price, 0)}→${nominalRent(g.data, price, 1)}`);
     expect(plan.hint).toContain(`服丹 +${g.data.config.cultivation.pill} 修为`);
     expect(plan.end).toBe(false);
+  });
+});
+
+describe('turn readout', () => {
+  it('replaces an AI turn label when another human must answer', () => {
+    const g = ringGame();
+    g.state.current = 2;
+    const pending: PendingChoice = {
+      seq: 1,
+      player: 0,
+      kind: 'guardReact',
+      title: '是否反制？',
+      desc: `${g.state.players[2].name} 对你发起斗法`,
+      options: [{ id: 'no', label: '不反制', value: false }],
+      ctx: { threat: 'duel', attacker: 2 },
+    };
+    expect(turnReadout(g.state, pending, [], false, true)).toEqual({
+      title: '等你回应',
+      hint: `${g.state.players[2].name} 对你发起斗法`,
+      urgent: true,
+    });
+  });
+
+  it('shows AI progress and its latest action from this turn', () => {
+    const g = ringGame();
+    g.state.current = 2;
+    const name = g.state.players[2].name;
+    const events = [
+      { seq: 1, round: 1, type: 'turnStart' as const, player: 2, text: `${name} 开始回合` },
+      { seq: 2, round: 1, type: 'cult' as const, player: 2, text: `${name} 服丹，修为 +1` },
+    ];
+    const readout = turnReadout(g.state, null, events, false, false);
+    expect(readout.hint).toBe('对手 2/3 行动中 · 服丹，修为 +1');
   });
 });
