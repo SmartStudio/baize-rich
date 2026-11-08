@@ -13,7 +13,7 @@ Dockerfile 使用仓库根目录作为构建上下文，保留 `game/` 同级的
 仓库 Actions Secret：
 
 - `DOKPLOY_DEPLOY_WEBHOOK`：仅针对此应用的 Dokploy 部署 Webhook URL。不要使用账号管理员 API Key。
-- `GHCR_PUSH_TOKEN`：仅当仓库自带 `GITHUB_TOKEN` 无法发布到个人命名空间 `joesmart` 时使用。需要 `joesmart` 的 classic PAT，权限为 `write:packages`；不需要 `repo` 或 `delete:packages`。
+- `GHCR_PUSH_TOKEN`：`SmartStudio` 仓库的内置 `GITHUB_TOKEN` 无法发布到个人命名空间 `joesmart`，因此需要 `joesmart` 的 classic PAT，权限为 `write:packages`；不需要 `repo` 或 `delete:packages`。
 
 不要把任何令牌或 Webhook URL 写进代码、日志或 Release 说明。
 
