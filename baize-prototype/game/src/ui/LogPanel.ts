@@ -12,6 +12,10 @@ const TEXT_BOTTOM = OVERLAY.y + OVERLAY.h - 16;
 
 export class LogPanel {
   private latest: Phaser.GameObjects.Text;
+  private latestFull = '';
+  private hover: Phaser.GameObjects.Container;
+  private hoverBg: Phaser.GameObjects.Rectangle;
+  private hoverText: Phaser.GameObjects.Text;
   private overlay: Phaser.GameObjects.Container;
   private body: Phaser.GameObjects.Text;
   private thumb: Phaser.GameObjects.Rectangle;
@@ -28,10 +32,16 @@ export class LogPanel {
     const x = LEFT.x;
     const y = LEFT.tickerY;
     const h = LEFT.tickerH;
-    s.add.rectangle(x, y, LEFT.w, h, COLORS.panel, FLOAT_ALPHA).setOrigin(0, 0).setStrokeStyle(2, COLORS.outline)
-      .setInteractive({ useHandCursor: true }).on('pointerdown', () => this.toggle());
+    const ticker = s.add.rectangle(x, y, LEFT.w, h, COLORS.panel, FLOAT_ALPHA).setOrigin(0, 0).setStrokeStyle(2, COLORS.outline)
+      .setInteractive({ useHandCursor: true });
+    ticker.on('pointerdown', () => this.toggle());
+    ticker.on('pointerover', () => this.showLatest());
+    ticker.on('pointerout', () => this.hover.setVisible(false));
     txt(s, x + 8, y + h / 2, '战报', { size: FS.sm, bold: true, color: HEX.gold, origin: [0, 0.5] });
-    this.latest = txt(s, x + 44, y + h / 2, '', { size: FS.sm, origin: [0, 0.5] });
+    this.latest = txt(s, x + 44, y + h / 2, '', { size: FS.xs, wrap: LEFT.w - 52, lineSpacing: 0, origin: [0, 0.5] });
+    this.hoverBg = s.add.rectangle(x, y, LEFT.w, 10, COLORS.ink, 0.96).setOrigin(0, 0).setStrokeStyle(2, COLORS.gold);
+    this.hoverText = txt(s, x + 8, y, '', { size: FS.sm, wrap: LEFT.w - 16 });
+    this.hover = s.add.container(0, 0, [this.hoverBg, this.hoverText]).setDepth(9601).setVisible(false);
 
     const o = OVERLAY;
     const bg = s.add.rectangle(o.x, o.y, o.w, o.h, COLORS.ink, 0.95).setOrigin(0, 0).setStrokeStyle(3, COLORS.gold).setInteractive();
@@ -61,23 +71,35 @@ export class LogPanel {
   }
 
   toggle(open = !this.overlay.visible): void {
+    this.hover.setVisible(false);
     this.overlay.setVisible(open);
     this.scroll = 0;
     if (open) this.renderOverlay();
   }
 
   log(line: string): void {
+    this.latestFull = line;
     this.entries.push(line);
     this.wrapped.push(this.body.getWrappedText(line));
     if (this.entries.length > MAX_ENTRIES) {
       this.entries.shift();
       this.wrapped.shift();
     }
-    this.latest.setText(ellipsize(this.latest, line, LEFT.w - 52));
+    this.latest.setText(tickerLines(this.latest, line, LEFT.w - 52));
     if (this.overlay.visible) {
       if (this.scroll > 0) this.scroll += this.wrapped[this.wrapped.length - 1].length;
       this.renderOverlay();
     }
+  }
+
+  private showLatest(): void {
+    if (!this.latestFull || this.overlay.visible) return;
+    this.hoverText.setText(this.latestFull);
+    const h = Math.ceil(this.hoverText.height) + 16;
+    const y = LEFT.tickerY - h - 4;
+    this.hoverBg.setPosition(LEFT.x, y).setSize(LEFT.w, h);
+    this.hoverText.setPosition(LEFT.x + 8, y + 8);
+    this.hover.setVisible(true);
   }
 
   private renderOverlay(): void {
@@ -102,4 +124,10 @@ function ellipsize(t: Phaser.GameObjects.Text, line: string, width: number): str
   let n = one.length;
   while (n > 1 && t.context.measureText(`${one.slice(0, n)}…`).width > width) n--;
   return `${one.slice(0, n)}…`;
+}
+
+function tickerLines(t: Phaser.GameObjects.Text, line: string, width: number): string {
+  const rows = t.getWrappedText(line.replace(/\n/g, ' '));
+  if (rows.length <= 2) return rows.join('\n');
+  return `${rows[0]}\n${ellipsize(t, `${rows[1]}…`, width)}`;
 }
