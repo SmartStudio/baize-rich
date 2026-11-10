@@ -24,7 +24,7 @@
 | 闭关成功率只由 `closureOdds` 计算，行动栏、押丹窗口、AI 都读它（fixes 让 AI 也改读这里） | 之前界面和 AI 各算各的，数字对不上 | `src/core/closureOdds.ts` |
 | 买地提示写出过路费；固定的格子提示在弹窗打开时关闭 | 试玩反馈 | `src/ui/choices/prompts.ts`、`src/ui/ChoiceModal.ts` |
 
-验证方式：每次改数值都跑 2000 局模拟，看四名修士胜率是否都在 22–28%，后手是否追平。具体数据和平衡记录在 `game/NOTES.md` §1 和 §5。
+验证方式：每次改数值都跑 2000 局模拟，看四名修士胜率是否都在 22–28%，后手是否追平。具体数据和平衡记录在 `docs/history/notes-v0.4-v0.7.md` §1 和 §5。
 
 ### 2.2 可读性与引导（coach、own、race、pick、readable、guide、clear）
 

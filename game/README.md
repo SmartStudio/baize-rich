@@ -120,7 +120,7 @@ UI 侧（`GameScene`）就是另一个 Controller：`preRoll` / `action` 选择�
 
 **改地图**
 1. `data/board.json` 的 `nodes`：每格写 `id`、`type`、`pos`、`next`（前进方向的后继格，多于一个是岔路，`next[0]` 是主线）。灵田加 `region`、`name`、`price`、`street`（街道写在顶层 `streets`）；路网格（神道和灵台以外）标 `outer: true`；神道格标 `road`，并把内外两个邻格都写进 `next`。
-2. 必须有一个 `start`、一个 `cliff`，以及 id 为 `ALTAR` 的灵台。需要提供的字段和各条规则的对应关系见 `NOTES.md` 第 10 节。
+2. 必须有一个 `start`、一个 `cliff`，以及 id 为 `ALTAR` 的灵台。需要提供的字段和各条规则的对应关系见 `../docs/board-design.md`。
 3. `npm run board` 打印 ASCII 地图并检查：坐标不重叠、边是直线、没有死路、每格都能走到也能回到起点、每个灵域有 ≥2 个岔路和灵泉 / 丹炉 / 历练碑 / 坊市或百宝阁、3 条 3–5 块灵田的街道。`tests/board.test.ts` 在 `npm test` 里跑同一套检查（`src/sim/boardcheck.ts`）。
 4. 规则测试用 `tests/fixtures/ring-board.json`（原 41 格环形地图，`helpers.ts` 的 `ringGame()`），换地图不会影响它们。新地图的走法可以参考 `tests/graph.test.ts` 加测试。
 5. 画面不用改：`grid` 决定世界大小（每格 80 世界像素），格子按 `pos` 摆放，灵台按 `rect` 占格；道路沿 `next` 画，只写了单向的边带箭头；地面颜色取最近的带 `region` 的格子。地图比屏幕大时镜头会自动滚动。

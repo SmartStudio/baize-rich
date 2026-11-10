@@ -10,3 +10,7 @@
 如需举报，请通过 GitHub 私密安全报告渠道（Security → Report a vulnerability）联系维护者。
 
 本准则的精神参考 [Contributor Covenant](https://www.contributor-covenant.org/zh-cn/version/2/1/code_of_conduct/)。
+
+---
+
+In English. Be respectful, keep criticism about the work and not the person, and do not publish other people's private information. Maintainers may remove comments and close issues or pull requests that break these rules. Report problems through GitHub's private **Security → Report a vulnerability** form.

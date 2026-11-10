@@ -4,3 +4,7 @@
 而是通过 GitHub 的 **Security → Report a vulnerability**（私密安全报告）联系维护者。
 
 我们会尽快确认并回复。
+
+---
+
+This is a client-only browser game with no accounts, server or user data, so the attack surface is small. If you find a security problem (for example a supply-chain risk in the build or release pipeline, or a leaked credential), do not open a public issue. Use GitHub's private **Security → Report a vulnerability** form instead.

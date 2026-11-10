@@ -1,10 +1,10 @@
 FROM node:24-alpine@sha256:a34ab6d7f6f4813f4d0c5469d74685604b962fbdbf5793a7bc7b4998ecb867c8 AS build
-WORKDIR /app/baize-prototype/game
-COPY baize-prototype/game/package.json baize-prototype/game/package-lock.json ./
+WORKDIR /app/game
+COPY game/package.json game/package-lock.json ./
 RUN npm ci --no-audit --no-fund
-COPY baize-prototype/game/ ./
-COPY baize-prototype/data/ ../data/
-COPY baize-prototype/assets/ ../assets/
+COPY game/ ./
+COPY data/ ../data/
+COPY assets/ ../assets/
 RUN npm test && npm run build
 ARG APP_VERSION=development
 ARG VCS_REF=unknown
@@ -18,7 +18,7 @@ LABEL org.opencontainers.image.source="https://github.com/SmartStudio/baize-rich
       org.opencontainers.image.version="$APP_VERSION" \
       org.opencontainers.image.revision="$VCS_REF"
 COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=build /app/baize-prototype/game/dist/ /usr/share/nginx/html/
+COPY --from=build /app/game/dist/ /usr/share/nginx/html/
 EXPOSE 80
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD wget -q -O /dev/null http://127.0.0.1/healthz || exit 1

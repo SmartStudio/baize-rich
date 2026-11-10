@@ -4,20 +4,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目
 
-《白泽秘境大富翁》原型资料包：像素风、东方修仙题材的大富翁式桌游。现行规则是 GDD v0.8「凡人问道」，境界是唯一主线：灵田产灵草 → 丹房炼丹 → 押丹闭关突破 → 先化神者胜。所有内容都在 `baize-prototype/` 下：
+《白泽秘境大富翁》原型资料包：像素风、东方修仙题材的大富翁式桌游。现行规则是 GDD v0.11「凡人问道」（v0.8 起的体系，`config.json` 版本 0.11），境界是唯一主线：灵田产灵草 → 丹房炼丹 → 押丹闭关突破 → 先化神者胜。所有内容都在仓库根目录下：
 
 - `docs/GDD.md`：规则的唯一来源（按章节 §N 引用）。`docs/script.md` 是文案，`docs/assets.md` 是资产清单和图集帧名约定。
-- `data/*.json`：全部数值与内容（`board.json` 77 格棋盘、`heroes.json` 四名修士、`spells.json` 8 种符箓、`events.json` 16 张机缘、`config.json` 境界 / 灵田等级 / 修为来源 / 突破 / 斗法 / 白泽现世等全部数值）。v0.7 及以前的天魔、悬赏令、禁制、附身灵体、功能建筑、地段连锁、医馆 / 思过崖 / 双数、地形、灵骰台和 `blessings.json` 已删除（GDD §13）。
+- `data/*.json`：全部数值与内容（`board.json` 77 格棋盘、`heroes.json` 四名修士、`spells.json` 8 种符箓、`events.json` 机缘事件、`config.json` 境界 / 灵田等级 / 修为来源 / 突破 / 斗法 / 白泽现世等全部数值）。v0.7 及以前的天魔、悬赏令、禁制、附身灵体、功能建筑、地段连锁、医馆 / 思过崖 / 双数、地形、灵骰台和 `blessings.json` 已删除（GDD §13）。
 - `assets/`：Phaser 图集 `atlas.png/json`、单帧精灵、效果图。
 - `game/`：可运行原型（Phaser 3.90 + TypeScript + Vite + vitest）。
 
 **约定**
-- GDD 与 JSON 冲突时以 JSON 为准，并同步修正文档。`game/` 只读取 `docs/`、`data/`，不在实现原型时修改它们。规则解读、简化以及发现的文档/数据矛盾记录到 `game/NOTES.md`，方便策划逐条确认。
+- GDD 与 JSON 冲突时以 JSON 为准，并同步修正文档。`game/` 只读取 `docs/`、`data/`，不在实现原型时修改它们。规则解读、简化以及发现的文档/数据矛盾记录到 `game/NOTES.md`，方便策划逐条确认（v0.4–v0.7 的历史记录在 `docs/history/`，已不适用）。
 - 数值都在 `data/config.json`，按主题分块（`realms`、`landLevels`、`cultivation`、`breakthrough`、`alchemy`、`duel`、`manifest` 等），杂项放在 `rules` 块（类型 `RulesConfig`）。引擎通过 `this.cfg.x.y` 读取，不要散落成字面量。
 - 题材只用「凡人修仙」类通用元素，不使用任何具体小说的人名、地名、宗门名。
 - 代码里的面向玩家文本、战报和文档都用中文。
 
-## 命令（在 `baize-prototype/game/` 下执行）
+## 命令（在 `game/` 下执行）
 
 ```bash
 npm install
@@ -40,7 +40,7 @@ BAIZE_NO_ATLAS=1 npm run build      # 强制使用占位图构建
 
 ## 部署
 
-仓库根目录（`baize-rich/`，在 `baize-prototype/` 之上）有 `Dockerfile`、`deploy/nginx.conf` 和 `.github/workflows/release.yml`。Docker 构建以仓库根为上下文，分别拷入 `baize-prototype/game`、`data`、`assets`，并在构建阶段执行 `npm test && npm run build`，所以**测试失败会让镜像构建失败**；产物由 nginx 托管。发布 release（或手动 workflow_dispatch）会推送到 GHCR，可选部署到 Dokploy；目标命名空间和线上地址读仓库变量 `GHCR_NAMESPACE`、`DEPLOY_URL`，未设置时发布 / 部署任务跳过。`.github/workflows/ci.yml` 在每个 PR 上跑 typecheck、test、board、build 和 50 局 sim 冒烟。`game/screenshots/` 已被忽略（README 配图在 `docs/images/`）。`baize-prototype/tools/art/` 是生成 / 像素化美术资源的 Python 脚本（产出 `assets/` 图集），不属于游戏构建。
+仓库根目录有 `Dockerfile`、`deploy/nginx.conf` 和 `.github/workflows/release.yml`。Docker 构建以仓库根为上下文，分别拷入 `game`、`data`、`assets`，并在构建阶段执行 `npm test && npm run build`，所以**测试失败会让镜像构建失败**；产物由 nginx 托管。发布 release（或手动 workflow_dispatch）会推送到 GHCR，可选部署到 Dokploy；目标命名空间和线上地址读仓库变量 `GHCR_NAMESPACE`、`DEPLOY_URL`，未设置时发布 / 部署任务跳过。`.github/workflows/ci.yml` 在每个 PR 上跑 typecheck、test、board、build 和 50 局 sim 冒烟。`game/screenshots/` 已被忽略（README 配图在 `docs/images/`）。`tools/art/` 是生成 / 像素化美术资源的 Python 脚本（产出 `assets/` 图集），不属于游戏构建。
 
 ## 架构
 
@@ -57,7 +57,7 @@ BAIZE_NO_ATLAS=1 npm run build      # 强制使用占位图构建
 **引擎中的关键位置**：`playTurn()`（掷骰前 → 移动 → 斗法 → 结算 → 行动 → `turnEnd()` 吐纳 / 打坐 / 白泽问心）、`settle()`（落点结算，按地块类型 `case`）、`closure()`（闭关突破）、`duel()` / `plunder()`（斗法与夺宝）、`useSkill()`（修士技能）、`addCult()`（修为条，溢出记入 `stats.cultWasted`）。修士被动散落在 `p.hero ===` 的判断里。`core/rules.ts` 放租金、升级费、闭关加成、斗法加成、排名等纯计算，UI 和 AI 共用。
 
 **棋盘（`core/board.ts`）是通用有向路网。** 当前地图是 77 格（`next[0]` 是主线，多于一个后继就是岔路，反向沿 `prev`）。11×11 网格，每条边一个灵域（木底 / 火左 / 水顶 / 土右，编号 `W0–W18` 等）：40 格外环是主线，内侧 24 格长街连成内环，每个灵域两座秘境格把内外环连起来，内山门经 1 格神道（灵泉，双向）通向中央 ALTAR（白泽灵台）。格子类型：灵田 44、山门 8、秘境 6、丹房 6、灵泉 4、坊市 4，宗门、妖兽谷、古修洞府、阵眼、灵台各 1。`npm run board` / `src/sim/boardcheck.ts` 校验地图；规则测试用 `tests/fixtures/ring-board.json`（41 格环形图，已换成 v0.8 格子类型，`ringGame()`），与正式地图解耦。
-双向的神道在 `next` 里写两端并带 `road` 键。新地图必须满足的约束见 `game/NOTES.md` §10 和 README「改地图」。
+双向的神道在 `next` 里写两端并带 `road` 键。新地图必须满足的约束见 `docs/board-design.md` 和 `game/README.md`「改地图」。
 
 **AI 和 UI 都是 Controller。** `ai/ai.ts` 的 `AIController.decide(c)` 在 `switch (c.kind)` 里处理收窄后的选择，难度和性格只调整阈值，困难难度用 `ai/predict.ts` 做一步前瞻。格子、机缘、白泽机缘、闭关成功率的估值是 `ai/evaluate.ts` 里的纯函数。`scenes/GameScene.ts` 持有棋盘和世界相机，`scenes/HudScene.ts` 是叠在上面的固定 HUD（`ui/ActionDock` 行动坞、`ui/PlayerCards` 玩家小卡、`ui/TileInfo` 点击详情）。HUD 只通过 `GameScene.toScreen(rect)` 换算棋盘坐标。`preRoll` / `action` 映射到行动坞按钮、手牌和快捷键，其余决策交给通用的 `ui/ChoiceModal`。场景顺序：Boot → Title → HeroSelect →（Setup = 高级设置）→ Versus → Game → Result。
 

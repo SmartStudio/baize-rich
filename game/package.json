@@ -1,5 +1,5 @@
 {
-  "name": "baize-prototype-game",
+  "name": "baize-rich",
   "version": "0.3.0",
   "private": true,
   "description": "白泽秘境大富翁：像素风、凡人流修仙的大富翁式桌游（Phaser 3 + TypeScript）",
@@ -7,7 +7,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/SmartStudio/baize-rich.git",
-    "directory": "baize-prototype/game"
+    "directory": "game"
   },
   "type": "module",
   "scripts": {

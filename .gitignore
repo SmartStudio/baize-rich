@@ -2,3 +2,5 @@
 node_modules/
 .playwright-mcp/
 .claude/worktrees/
+__pycache__/
+*.pyc

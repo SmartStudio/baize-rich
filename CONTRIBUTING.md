@@ -1,5 +1,7 @@
 # 参与贡献
 
+[English](CONTRIBUTING.en.md)
+
 欢迎提 issue 和 PR。动手前请先读完本页，这个项目有几条和一般代码仓库不同的约定。
 
 ## 开发环境
@@ -7,7 +9,7 @@
 Node.js 22.12 及以上（`.nvmrc` 和 Dockerfile 用 Node 24）。
 
 ```bash
-cd baize-prototype/game
+cd game
 npm install
 npm run dev          # http://localhost:5173
 npm test             # vitest
@@ -15,21 +17,21 @@ npm run typecheck
 npm run build
 ```
 
-PR 提交前请确保 `npm run typecheck`、`npm test`、`npm run board`、`npm run build` 都通过，CI 会跑同样的检查。命令清单见 [`baize-prototype/game/README.md`](baize-prototype/game/README.md)。
+PR 提交前请确保 `npm run typecheck`、`npm test`、`npm run board`、`npm run build` 都通过，CI 会跑同样的检查。命令清单见 [`game/README.md`](game/README.md)。
 
 ## 项目约定
 
 **规则和数值的来源。**
-- 规则以 `baize-prototype/docs/GDD.md` 为准，数值以 `baize-prototype/data/*.json` 为准。两者冲突时以 JSON 为准，并同步修正文档。
+- 规则以 `docs/GDD.md` 为准，数值以 `data/*.json` 为准。两者冲突时以 JSON 为准，并同步修正文档。
 - `game/` 只读取 `docs/` 和 `data/`，实现代码时不要顺手改它们。要改规则或数值，请单独提一个 PR 并说明理由。
-- 对规则的解读、简化和发现的文档矛盾，记到 [`baize-prototype/game/NOTES.md`](baize-prototype/game/NOTES.md)。
+- 对规则的解读、简化和发现的文档矛盾，记到 [`game/NOTES.md`](game/NOTES.md)。
 - 数值放在 `data/config.json`，通过 `this.cfg.x.y` 读取，不要在代码里写字面量。
 
 **架构。**
 - `game/src/core/` 是纯 TypeScript 规则引擎，**不能 import Phaser**。
 - 所有随机都走 `core/rng.ts`，不要用 `Math.random()`，否则对局无法重放（有确定性测试覆盖）。
 - 新增一种需要玩家决定的选择，要同时加 `kind` 和 `ChoiceValueMap` 里的类型。
-- 新增符箓、地块或修士的改动清单见 [`baize-prototype/game/README.md`](baize-prototype/game/README.md) 的「如何扩展」。
+- 新增符箓、地块或修士的改动清单见 [`game/README.md`](game/README.md) 的「如何扩展」。
 
 **平衡改动。** 改了规则或数值后，请跑 `npm run sim -- --games 500 --seed 1`，把结果和 GDD §12 的目标对比，贴在 PR 描述里。
 
