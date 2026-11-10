@@ -40,6 +40,8 @@ BAIZE_NO_ATLAS=1 npm run build      # 强制使用占位图构建
 
 ## 部署
 
+从 issue 到上线的完整流程见 `docs/maintainers.md`。
+
 仓库根目录有 `Dockerfile`、`deploy/nginx.conf` 和 `.github/workflows/release.yml`。Docker 构建以仓库根为上下文，分别拷入 `game`、`data`、`assets`，并在构建阶段执行 `npm test && npm run build`，所以**测试失败会让镜像构建失败**；产物由 nginx 托管。发布 release（或手动 workflow_dispatch）会推送到 GHCR，可选部署到 Dokploy；目标命名空间和线上地址读仓库变量 `GHCR_NAMESPACE`、`DEPLOY_URL`，未设置时发布 / 部署任务跳过。`.github/workflows/ci.yml` 在每个 PR 上跑 typecheck、test、board、build 和 50 局 sim 冒烟。`game/screenshots/` 已被忽略（README 配图在 `docs/images/`）。`tools/art/` 是生成 / 像素化美术资源的 Python 脚本（产出 `assets/` 图集），不属于游戏构建。
 
 ## 架构

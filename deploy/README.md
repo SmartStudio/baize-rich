@@ -1,6 +1,6 @@
 # GHCR 与 Dokploy 发布
 
-本目录说明维护者如何把项目发布成 Docker 镜像并部署。只想运行游戏的话不需要这些，见根目录 README；fork 后不配置下面的仓库变量，发布工作流会自动跳过。
+本目录说明维护者如何把项目发布成 Docker 镜像并部署。从 issue 到上线的完整流程见 [`docs/maintainers.md`](../docs/maintainers.md)。只想运行游戏的话不需要这些，见根目录 README；fork 后不配置下面的仓库变量，发布工作流会自动跳过。
 
 镜像：`ghcr.io/<GHCR_NAMESPACE>/baize-rich`。构建平台：`linux/amd64`。
 Dockerfile 使用仓库根目录作为构建上下文，保留 `game/` 同级的 `data/`、`assets/`，并在镜像构建中运行测试和生产构建。

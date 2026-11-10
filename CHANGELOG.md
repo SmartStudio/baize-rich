@@ -7,6 +7,7 @@
 ### 新增
 - MIT 许可证、根目录 README、贡献指南、行为准则、安全策略、issue 与 PR 模板。
 - `ci.yml`：每个 PR 和 `main` 的 push 运行类型检查、测试、地图校验、构建和 AI 自对弈冒烟。
+- `docs/maintainers.md`：维护者手册，覆盖仓库设置、开发流程、镜像构建、GHCR 与 Dokploy 发布、提 issue 与分流，以及 issue 自动修复的设计（未启用）。
 - 英文 README 与贡献指南（`README.en.md`、`CONTRIBUTING.en.md`）。
 - `package.json` 补充 `license`、`repository`、`engines`，并加入 `.nvmrc`。
 

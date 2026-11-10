@@ -50,7 +50,7 @@ data/     all numbers and content (board, heroes, spells, events, config); the g
 assets/   Phaser atlas (103 frames) and single sprites
 tools/    art generation scripts (not part of the game build)
 game/     the playable prototype: Phaser 3 + TypeScript + Vite + vitest
-deploy/   maintainer notes on image publishing and deployment
+deploy/   maintainer notes on image publishing and deployment (full workflow in [`docs/maintainers.md`](docs/maintainers.md), Chinese only)
 ```
 
 The rules engine (`game/src/core/`) is plain TypeScript and never imports Phaser. One engine drives the UI, the AI and headless simulation. All randomness goes through a reproducible RNG, so any game can be replayed from its setup plus the list of answers.

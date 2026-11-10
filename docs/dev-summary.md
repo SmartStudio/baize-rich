@@ -93,6 +93,8 @@
 
 ## 4. 开发与验证流程
 
+> 本节是 v0.11 开发期的做法。截图已不再入库，合并方式和 CI 要求以 [`maintainers.md`](maintainers.md) 为准。
+
 每条线：
 1. `git worktree add -b <line> ../baize-<line> main`，再把 `game/node_modules` 软链过去。改动文件不重叠的线可以并行。
 2. 改完跑 `npx tsc --noEmit`、`npx vitest run`、`npm run build`。

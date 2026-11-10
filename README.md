@@ -50,7 +50,7 @@ data/     全部数值与内容（棋盘、修士、符箓、机缘、config）�
 assets/   Phaser 图集（103 帧）与单帧精灵
 tools/    美术出图脚本（不参与游戏构建）
 game/     可运行原型：Phaser 3 + TypeScript + Vite + vitest
-deploy/   维护者自用的镜像发布与部署说明
+deploy/   维护者自用的镜像发布与部署说明（总流程见 [`docs/maintainers.md`](docs/maintainers.md)）
 ```
 
 规则引擎（`game/src/core/`）是纯 TypeScript，不依赖 Phaser。同一个引擎同时驱动画面、AI 和无头模拟，所有随机都走可复现的随机数，所以一局可以按「初始设置 + 回答历史」完整重放。
