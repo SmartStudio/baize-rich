@@ -1,6 +1,6 @@
-# 白泽秘境大富翁 · 原型资料包 v0.3
+# 白泽秘境大富翁 · 原型资料包
 
-像素风 · 东方修仙 · 大富翁式桌游。本资料包给开发团队使用，包含规则、数据、美术和一个可运行的 Phaser 原型。
+像素风 · 东方修仙 · 大富翁式桌游。本目录包含规则、数据、美术和一个可运行的 Phaser 原型。现行规则版本见 `docs/GDD.md` 标题（目前 v0.11），项目总览见仓库根目录 README。
 
 ```
 baize-prototype/
@@ -8,14 +8,14 @@ baize-prototype/
 │   ├── GDD.md        游戏设计文档：规则的唯一来源
 │   ├── script.md     旁白、台词、新手引导、系统提示文案
 │   ├── assets.md     资产清单、图集帧名约定、音频清单
-│   └── dev-summary.md 开发总结：本轮改动、架构、验证与出图流程、待决事项
+│   ├── dev-summary.md 开发总结：本轮改动、架构、验证与出图流程、待决事项
+│   └── images/       README 用的截图
 ├── data/             数值与内容配置（原型直接读取）
 │   ├── config.json     全局数值
-│   ├── board.json      地图：41 个节点、坐标、灵域、地价
+│   ├── board.json      地图：77 格有向路网、坐标、灵域
 │   ├── heroes.json     4 名修士
-│   ├── spells.json     12 种符箓
-│   ├── events.json     宗门任务与机缘事件
-│   └── blessings.json  境界、神通、天赐
+│   ├── spells.json     8 种符箓
+│   └── events.json     机缘事件
 ├── assets/
 │   ├── atlas.png / atlas.json   Phaser 图集（103 帧）
 │   ├── sprites/  sprites_x4/    单帧 1× 与 4 倍预览

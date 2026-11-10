@@ -23,13 +23,14 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  IMAGE: ghcr.io/joesmart/baize-rich
+  IMAGE: ghcr.io/${{ vars.GHCR_NAMESPACE }}/baize-rich
 
 jobs:
   publish:
     if: >-
+      vars.GHCR_NAMESPACE != '' && (
       (github.event_name == 'release' && !github.event.release.prerelease) ||
-      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'))
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -44,7 +45,7 @@ jobs:
           GHCR_PUSH_TOKEN: ${{ secrets.GHCR_PUSH_TOKEN }}
         run: |
           if [[ -z "$GHCR_PUSH_TOKEN" ]]; then
-            echo "Configure GHCR_PUSH_TOKEN with write:packages for the joesmart namespace" >&2
+            echo "Configure GHCR_PUSH_TOKEN with write:packages for the GHCR_NAMESPACE account" >&2
             exit 1
           fi
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -99,7 +100,7 @@ jobs:
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
-          username: joesmart
+          username: ${{ vars.GHCR_NAMESPACE }}
           password: ${{ secrets.GHCR_PUSH_TOKEN }}
       - name: Publish tested image
         id: push
@@ -107,13 +108,14 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
           REVISION: ${{ steps.version.outputs.revision }}
           GH_TOKEN: ${{ secrets.GHCR_PUSH_TOKEN }}
+          NAMESPACE: ${{ vars.GHCR_NAMESPACE }}
         run: |
           set -euo pipefail
           for tag in "$VERSION" "sha-$REVISION"; do
             docker tag baize-rich:check "$IMAGE:$tag"
             docker push "$IMAGE:$tag"
           done
-          visibility="$(gh api users/joesmart/packages/container/baize-rich --jq .visibility)"
+          visibility="$(gh api users/$NAMESPACE/packages/container/baize-rich --jq .visibility)"
           if [[ "$visibility" != private ]]; then
             echo "The GHCR package must remain private" >&2
             exit 1
@@ -126,7 +128,7 @@ jobs:
 
   deploy:
     needs: publish
-    if: github.event_name == 'release' || inputs.deploy
+    if: vars.DEPLOY_URL != '' && (github.event_name == 'release' || inputs.deploy)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -146,17 +148,18 @@ jobs:
         env:
           EXPECTED_REVISION: ${{ needs.publish.outputs.revision }}
           EXPECTED_VERSION: ${{ needs.publish.outputs.version }}
+          DEPLOY_URL: ${{ vars.DEPLOY_URL }}
         run: |
           set -euo pipefail
           for attempt in $(seq 1 90); do
             if curl -fsS --max-time 10 --header 'Cache-Control: no-cache' \
-                "https://rich.fxai.ai/version.json?run=$GITHUB_RUN_ID&attempt=$attempt" |
+                "${DEPLOY_URL%/}/version.json?run=$GITHUB_RUN_ID&attempt=$attempt" |
                 jq -e --arg revision "$EXPECTED_REVISION" --arg version "$EXPECTED_VERSION" \
                   '.revision == $revision and .version == $version' >/dev/null; then
-              printf 'Deployed and verified: https://rich.fxai.ai/ (%s)\n' "$EXPECTED_VERSION" >> "$GITHUB_STEP_SUMMARY"
+              printf 'Deployed and verified: %s (%s)\n' "$DEPLOY_URL" "$EXPECTED_VERSION" >> "$GITHUB_STEP_SUMMARY"
               exit 0
             fi
             sleep 3
           done
-          echo "The expected release did not become available at https://rich.fxai.ai/" >&2
+          echo "The expected release did not become available at $DEPLOY_URL" >&2
           exit 1

@@ -1,7 +1,14 @@
 {
   "name": "baize-prototype-game",
-  "private": true,
   "version": "0.3.0",
+  "private": true,
+  "description": "白泽秘境大富翁：像素风、凡人流修仙的大富翁式桌游（Phaser 3 + TypeScript）",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SmartStudio/baize-rich.git",
+    "directory": "baize-prototype/game"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -26,5 +33,8 @@
     "typescript": "7.0.2",
     "vite": "8.3.5",
     "vitest": "5.1.0"
+  },
+  "engines": {
+    "node": "^22.12.0 || ^24.0.0 || >=26.0.0"
   }
 }

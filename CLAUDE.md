@@ -30,12 +30,17 @@ npm run sim -- --games 500 --seed 1 # AI 无头自对弈平衡统计；可加 --
 npm run replay -- record.json        # 复现下载的对局记录（GameRecord）并打印胜者与各席位结果；--log 打印战报、--json
 npm run sweep -- --param breakthrough.pillBonus --values 1,2,3   # 参数扫描，多种子对比 §12 指标
 npm run matchup -- --by difficulty  # AI 混桌胜率，按难度或性格（--by personality）
+npm run lever -- --games 2000       # 灵田杠杆：一个座位从不买地 / 限制升级时的胜率（公平值 25%）
 npm run board                       # 打印 ASCII 地图并检查 data/board.json
 npm run shots                       # 需先 build；用 Playwright 打开 dist、截图到 screenshots/ 并检查控制台报错
 BAIZE_NO_ATLAS=1 npm run build      # 强制使用占位图构建
 ```
 
 `npm run shots` 使用全局预装的 `playwright`（不是项目依赖）。改了平衡相关的规则后，用 `npm run sim` / `npm run sweep` 和 GDD §12 的目标对比（平均 10–12 轮、50–70% 由化神结束、修士胜率 22–28%、座位差 < 3%、人均突破 2.5–3.5 次、每局斗法 ≥ 6、被夺丹回合 ≥ 5%、第 8 轮领先者胜 ≤ 65%），`run.ts` 直接打印这几项。结果更新到 NOTES.md。
+
+## 部署
+
+仓库根目录（`baize-rich/`，在 `baize-prototype/` 之上）有 `Dockerfile`、`deploy/nginx.conf` 和 `.github/workflows/release.yml`。Docker 构建以仓库根为上下文，分别拷入 `baize-prototype/game`、`data`、`assets`，并在构建阶段执行 `npm test && npm run build`，所以**测试失败会让镜像构建失败**；产物由 nginx 托管。发布 release（或手动 workflow_dispatch）会推送到 GHCR，可选部署到 Dokploy；目标命名空间和线上地址读仓库变量 `GHCR_NAMESPACE`、`DEPLOY_URL`，未设置时发布 / 部署任务跳过。`.github/workflows/ci.yml` 在每个 PR 上跑 typecheck、test、board、build 和 50 局 sim 冒烟。`game/screenshots/` 已被忽略（README 配图在 `docs/images/`）。`baize-prototype/tools/art/` 是生成 / 像素化美术资源的 Python 脚本（产出 `assets/` 图集），不属于游戏构建。
 
 ## 架构
 
